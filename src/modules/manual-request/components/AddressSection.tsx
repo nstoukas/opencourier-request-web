@@ -1,0 +1,305 @@
+/**
+ * Address section used in both pickup and dropoff parts of the form.
+ * Includes a Nominatim (OpenStreetMap) geocoding search that auto-fills
+ * all address fields and coordinates when a result is selected.
+ */
+import React, { useRef, useState } from 'react'
+import { Control, FieldValues, Path, useFormContext } from 'react-hook-form'
+import {
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+  Input,
+} from '../../../admin-web-components'
+import { Loader2Icon, MapPinIcon, SearchIcon, XIcon } from 'lucide-react'
+
+// ── Nominatim types ───────────────────────────────────────────────────────────
+
+interface NominatimResult {
+  place_id: number
+  display_name: string
+  lat: string
+  lon: string
+  address: {
+    house_number?: string
+    road?: string
+    city?: string
+    town?: string
+    village?: string
+    suburb?: string
+    state?: string
+    postcode?: string
+    country_code?: string
+  }
+}
+
+// US state full-name → 2-letter code
+const STATE_ABBR: Record<string, string> = {
+  Alabama: 'AL', Alaska: 'AK', Arizona: 'AZ', Arkansas: 'AR',
+  California: 'CA', Colorado: 'CO', Connecticut: 'CT', Delaware: 'DE',
+  Florida: 'FL', Georgia: 'GA', Hawaii: 'HI', Idaho: 'ID',
+  Illinois: 'IL', Indiana: 'IN', Iowa: 'IA', Kansas: 'KS',
+  Kentucky: 'KY', Louisiana: 'LA', Maine: 'ME', Maryland: 'MD',
+  Massachusetts: 'MA', Michigan: 'MI', Minnesota: 'MN', Mississippi: 'MS',
+  Missouri: 'MO', Montana: 'MT', Nebraska: 'NE', Nevada: 'NV',
+  'New Hampshire': 'NH', 'New Jersey': 'NJ', 'New Mexico': 'NM', 'New York': 'NY',
+  'North Carolina': 'NC', 'North Dakota': 'ND', Ohio: 'OH', Oklahoma: 'OK',
+  Oregon: 'OR', Pennsylvania: 'PA', 'Rhode Island': 'RI', 'South Carolina': 'SC',
+  'South Dakota': 'SD', Tennessee: 'TN', Texas: 'TX', Utah: 'UT',
+  Vermont: 'VT', Virginia: 'VA', Washington: 'WA', 'West Virginia': 'WV',
+  Wisconsin: 'WI', Wyoming: 'WY', 'District of Columbia': 'DC',
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
+
+type AddressFieldPrefix = 'pickup' | 'dropoff'
+
+interface AddressSectionProps<T extends FieldValues> {
+  control: Control<T>
+  prefix: AddressFieldPrefix
+  label: string
+}
+
+export function AddressSection<T extends FieldValues>({
+  control,
+  prefix,
+  label,
+}: AddressSectionProps<T>) {
+  const { setValue } = useFormContext<T>()
+  const field = (name: string) => `${prefix}Address.${name}` as Path<T>
+  const coord = (name: string) => `${prefix}${name.charAt(0).toUpperCase()}${name.slice(1)}` as Path<T>
+
+  // ── Geocoding search state ──────────────────────────────────────────────
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState<NominatimResult[]>([])
+  const [isSearching, setIsSearching] = useState(false)
+  const [searchError, setSearchError] = useState<string | null>(null)
+  const [showResults, setShowResults] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  const handleSearch = async () => {
+    const q = query.trim()
+    if (!q) return
+    setIsSearching(true)
+    setSearchError(null)
+    setResults([])
+    try {
+      const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&addressdetails=1&limit=6&countrycodes=us`
+      const res = await fetch(url, { headers: { 'Accept-Language': 'en' } })
+      const data: NominatimResult[] = await res.json()
+      if (data.length === 0) setSearchError('No results found. Try a more specific address.')
+      setResults(data)
+      setShowResults(true)
+    } catch {
+      setSearchError('Search failed. Check your connection and try again.')
+    } finally {
+      setIsSearching(false)
+    }
+  }
+
+  const handleSelect = (r: NominatimResult) => {
+    const a = r.address
+    const street = [a.house_number, a.road].filter(Boolean).join(' ')
+    const city = a.city ?? a.town ?? a.village ?? a.suburb ?? ''
+    const rawState = a.state ?? ''
+    const state = STATE_ABBR[rawState] ?? rawState.slice(0, 2).toUpperCase()
+    const zip = a.postcode?.split('-')[0] ?? ''
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const set = (path: Path<T>, value: any) => setValue(path, value, { shouldValidate: true, shouldDirty: true })
+
+    set(field('streetAddress.0'), street)
+    set(field('city'), city)
+    set(field('state'), state)
+    set(field('zipCode'), zip)
+    if (a.house_number) set(field('houseNumber'), a.house_number)
+    set(coord('Latitude'), parseFloat(r.lat))
+    set(coord('Longitude'), parseFloat(r.lon))
+
+    setQuery(r.display_name)
+    setShowResults(false)
+    setResults([])
+  }
+
+  return (
+    <div className="space-y-3">
+      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">{label}</h3>
+
+      {/* ── Geocoding search ─────────────────────────────────────────────── */}
+      <div ref={containerRef} className="relative">
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <MapPinIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+            <Input
+              type="text"
+              placeholder="Search address to auto-fill…"
+              value={query}
+              className="pl-8 pr-8"
+              onChange={(e) => {
+                setQuery(e.target.value)
+                if (results.length > 0) setShowResults(true)
+              }}
+              onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleSearch())}
+            />
+            {query && (
+              <button
+                type="button"
+                onClick={() => { setQuery(''); setResults([]); setShowResults(false) }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                <XIcon className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={handleSearch}
+            disabled={isSearching || !query.trim()}
+            className="inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm font-medium bg-background hover:bg-accent disabled:opacity-50 transition-colors"
+          >
+            {isSearching
+              ? <Loader2Icon className="h-4 w-4 animate-spin" />
+              : <SearchIcon className="h-4 w-4" />}
+            Search
+          </button>
+        </div>
+
+        {/* Results dropdown */}
+        {showResults && results.length > 0 && (
+          <ul className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-md max-h-56 overflow-auto text-sm">
+            {results.map((r) => (
+              <li key={r.place_id}>
+                <button
+                  type="button"
+                  className="w-full text-left px-3 py-2 hover:bg-accent transition-colors"
+                  onClick={() => handleSelect(r)}
+                >
+                  {r.display_name}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        {searchError && (
+          <p className="text-xs text-destructive mt-1">{searchError}</p>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <FormField
+          control={control}
+          name={field('streetAddress.0')}
+          render={({ field: f }) => (
+            <FormItem className="sm:col-span-2">
+              <FormLabel>Street Address</FormLabel>
+              <FormControl>
+                <Input placeholder="123 Main St" {...f} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={control}
+          name={field('city')}
+          render={({ field: f }) => (
+            <FormItem>
+              <FormLabel>City</FormLabel>
+              <FormControl>
+                <Input placeholder="San Francisco" {...f} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={control}
+          name={field('state')}
+          render={({ field: f }) => (
+            <FormItem>
+              <FormLabel>State</FormLabel>
+              <FormControl>
+                <Input placeholder="CA" maxLength={2} {...f} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={control}
+          name={field('zipCode')}
+          render={({ field: f }) => (
+            <FormItem>
+              <FormLabel>Zip Code</FormLabel>
+              <FormControl>
+                <Input placeholder="94102" {...f} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={control}
+          name={field('houseNumber')}
+          render={({ field: f }) => (
+            <FormItem>
+              <FormLabel>Unit / Apt (optional)</FormLabel>
+              <FormControl>
+                <Input placeholder="Apt 4B" {...f} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      </div>
+
+      {/* Coordinates */}
+      <div className="grid grid-cols-2 gap-3">
+        <FormField
+          control={control}
+          name={coord('Latitude')}
+          render={({ field: f }) => (
+            <FormItem>
+              <FormLabel>Latitude</FormLabel>
+              <FormControl>
+                <Input
+                  type="number"
+                  step="any"
+                  placeholder="37.7749"
+                  {...f}
+                  onChange={(e) => f.onChange(parseFloat(e.target.value))}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={control}
+          name={coord('Longitude')}
+          render={({ field: f }) => (
+            <FormItem>
+              <FormLabel>Longitude</FormLabel>
+              <FormControl>
+                <Input
+                  type="number"
+                  step="any"
+                  placeholder="-122.4194"
+                  {...f}
+                  onChange={(e) => f.onChange(parseFloat(e.target.value))}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      </div>
+    </div>
+  )
+}
