@@ -33,12 +33,17 @@ import {
   useToast,
 } from '../../../admin-web-components'
 import { Loader2Icon } from 'lucide-react'
-import { useCreateManualRequestQuoteMutation, useConfirmManualRequestDeliveryMutation } from '@/api/manualRequestApi'
-import { ManualRequestPackageSize, ManualRequestQuoteDto } from '../types'
+import { useCreateManualRequestQuoteMutation, useConfirmManualRequestDeliveryMutation } from '../../../api/manualRequestApi'
+import {
+  ManualRequestDeliveryInput,
+  ManualRequestPackageSize,
+  ManualRequestQuoteDto,
+  ManualRequestQuoteInput,
+} from '../types'
 import { EstimateSummaryCard } from './EstimateSummaryCard'
 import { AddressSection } from './AddressSection'
 import { ErrorBanner } from './ErrorBanner'
-import { useAdminPageNavigator } from '@/hooks/useAdminPageNavigator'
+import { useRequestPageNavigator } from '../../../hooks/useRequestPageNavigator'
 
 // ─── Validation schema ────────────────────────────────────────────────────────
 
@@ -52,6 +57,8 @@ const addressSchema = z.object({
 })
 
 const formSchema = z.object({
+  partnerId: z.string().min(1, 'Partner ID is required'),
+
   // Pickup
   pickupName: z.string().min(1, 'Pickup contact name is required'),
   pickupPhoneNumber: z.string().min(7, 'Valid phone number required'),
@@ -90,13 +97,26 @@ const defaultAddress = {
   houseNumber: '',
 }
 
-const defaultValues: Partial<CreateDeliveryFormValues> = {
+const defaultValues: CreateDeliveryFormValues = {
+  partnerId: '',
+  pickupName: '',
+  pickupPhoneNumber: '',
+  pickupBusinessName: '',
+  pickupNotes: '',
   pickupAddress: defaultAddress,
+  pickupLatitude: 0,
+  pickupLongitude: 0,
+  dropoffName: '',
+  dropoffPhoneNumber: '',
+  dropoffBusinessName: '',
+  dropoffNotes: '',
   dropoffAddress: defaultAddress,
-  pickupLatitude: undefined as any,
-  pickupLongitude: undefined as any,
-  dropoffLatitude: undefined as any,
-  dropoffLongitude: undefined as any,
+  dropoffLatitude: 0,
+  dropoffLongitude: 0,
+  packageDescription: '',
+  packageSize: ManualRequestPackageSize.SMALL,
+  specialInstructions: '',
+  orderReference: '',
 }
 
 
@@ -104,7 +124,7 @@ const defaultValues: Partial<CreateDeliveryFormValues> = {
 
 export function CreateDeliveryForm() {
   const { toast } = useToast()
-  const navigator = useAdminPageNavigator()
+  const navigator = useRequestPageNavigator()
 
   const [activeQuote, setActiveQuote] = useState<ManualRequestQuoteDto | null>(null)
   const [formSnapshot, setFormSnapshot] = useState<CreateDeliveryFormValues | null>(null)
@@ -122,12 +142,43 @@ export function CreateDeliveryForm() {
     setErrorMessage(null)
     setActiveQuote(null)
     try {
-      const quote = await createQuote({
-        ...values,
-        // Ensure streetAddress is always an array
-        pickupAddress: { ...values.pickupAddress, streetAddress: [values.pickupAddress.streetAddress[0] ?? ''] },
-        dropoffAddress: { ...values.dropoffAddress, streetAddress: [values.dropoffAddress.streetAddress[0] ?? ''] },
-      }).unwrap()
+      const payload: ManualRequestQuoteInput = {
+        partnerId: values.partnerId ?? '',
+        pickupName: values.pickupName ?? '',
+        pickupPhoneNumber: values.pickupPhoneNumber ?? '',
+        pickupBusinessName: values.pickupBusinessName ?? '',
+        pickupNotes: values.pickupNotes,
+        pickupAddress: {
+          streetAddress: [values.pickupAddress.streetAddress[0] ?? ''],
+          city: values.pickupAddress.city,
+          state: values.pickupAddress.state,
+          zipCode: values.pickupAddress.zipCode,
+          countryCode: 'US',
+          houseNumber: values.pickupAddress.houseNumber,
+        },
+        pickupLatitude: values.pickupLatitude,
+        pickupLongitude: values.pickupLongitude,
+        dropoffName: values.dropoffName ?? '',
+        dropoffPhoneNumber: values.dropoffPhoneNumber ?? '',
+        dropoffBusinessName: values.dropoffBusinessName,
+        dropoffNotes: values.dropoffNotes,
+        dropoffAddress: {
+          streetAddress: [values.dropoffAddress.streetAddress[0] ?? ''],
+          city: values.dropoffAddress.city,
+          state: values.dropoffAddress.state,
+          zipCode: values.dropoffAddress.zipCode,
+          countryCode: 'US',
+          houseNumber: values.dropoffAddress.houseNumber,
+        },
+        dropoffLatitude: values.dropoffLatitude,
+        dropoffLongitude: values.dropoffLongitude,
+        packageDescription: values.packageDescription,
+        packageSize: values.packageSize,
+        specialInstructions: values.specialInstructions,
+        orderReference: values.orderReference,
+      }
+
+      const quote = await createQuote(payload)
       setActiveQuote(quote)
       setFormSnapshot(values)
     } catch (err: any) {
@@ -139,18 +190,44 @@ export function CreateDeliveryForm() {
     if (!activeQuote || !formSnapshot) return
     setErrorMessage(null)
     try {
-      const delivery = await confirmDelivery({
-        ...formSnapshot,
+      const payload: ManualRequestDeliveryInput = {
+        partnerId: formSnapshot.partnerId ?? '',
+        pickupName: formSnapshot.pickupName ?? '',
+        pickupPhoneNumber: formSnapshot.pickupPhoneNumber ?? '',
+        pickupBusinessName: formSnapshot.pickupBusinessName ?? '',
+        pickupNotes: formSnapshot.pickupNotes,
         pickupAddress: {
-          ...formSnapshot.pickupAddress,
           streetAddress: [formSnapshot.pickupAddress.streetAddress[0] ?? ''],
+          city: formSnapshot.pickupAddress.city,
+          state: formSnapshot.pickupAddress.state,
+          zipCode: formSnapshot.pickupAddress.zipCode,
+          countryCode: 'US',
+          houseNumber: formSnapshot.pickupAddress.houseNumber,
         },
+        pickupLatitude: formSnapshot.pickupLatitude,
+        pickupLongitude: formSnapshot.pickupLongitude,
+        dropoffName: formSnapshot.dropoffName ?? '',
+        dropoffPhoneNumber: formSnapshot.dropoffPhoneNumber ?? '',
+        dropoffBusinessName: formSnapshot.dropoffBusinessName,
+        dropoffNotes: formSnapshot.dropoffNotes,
         dropoffAddress: {
-          ...formSnapshot.dropoffAddress,
           streetAddress: [formSnapshot.dropoffAddress.streetAddress[0] ?? ''],
+          city: formSnapshot.dropoffAddress.city,
+          state: formSnapshot.dropoffAddress.state,
+          zipCode: formSnapshot.dropoffAddress.zipCode,
+          countryCode: 'US',
+          houseNumber: formSnapshot.dropoffAddress.houseNumber,
         },
+        dropoffLatitude: formSnapshot.dropoffLatitude,
+        dropoffLongitude: formSnapshot.dropoffLongitude,
+        packageDescription: formSnapshot.packageDescription,
+        packageSize: formSnapshot.packageSize,
+        specialInstructions: formSnapshot.specialInstructions,
+        orderReference: formSnapshot.orderReference,
         quoteId: activeQuote.id,
-      }).unwrap()
+      }
+
+      const delivery = await confirmDelivery(payload)
 
       toast({
         title: 'Delivery created',
@@ -197,6 +274,20 @@ export function CreateDeliveryForm() {
               <CardTitle className="text-base">Request Details</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              <FormField
+                control={form.control}
+                name="partnerId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Partner ID</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Partner ID from backend" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
               <div className="grid sm:grid-cols-2 gap-3">
                 <FormField
                   control={form.control}

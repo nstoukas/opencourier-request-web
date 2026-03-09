@@ -1,5 +1,5 @@
 import { useState, createContext, useContext } from 'react'
-import { Realtime, Types } from 'ably/promises'
+import * as Ably from 'ably'
 import { NotificationEventType } from '../../shared-types';
 import { DeliveryAdminDto } from '../../backend-admin-sdk';
 
@@ -8,7 +8,7 @@ type EventCallback<T extends NotificationEvent> = (eventData: T) => void
 type ParseFunction<T> = (data: string) => T
 
 type WebSocketContextType = {
-  ably: Realtime | null
+  ably: Ably.Realtime | null
   connectWebSocket: (accessToken: string) => void
   disconnectWebSocket: () => void
   subscribeToEvent: <T extends NotificationEvent>(
@@ -26,12 +26,12 @@ type WebSocketProviderProps = {
 }
 
 export const WebSocketProvider = ({ children }: WebSocketProviderProps) => {
-  const [ably, setWebSocket] = useState<Realtime | null>(null)
+  const [ably, setWebSocket] = useState<Ably.Realtime | null>(null)
 
   //TODO replace key:key with Ivan token service
   const connectWebSocket = (accessToken: string) => {
     if (!ably) {
-      const newWebSocket = new Realtime.Promise({
+      const newWebSocket = new Ably.Realtime({
         authCallback: async (tokenParams, callback) => {
           try {
             console.log(`WebSocket: Requesting refreshed token`)
@@ -39,7 +39,7 @@ export const WebSocketProvider = ({ children }: WebSocketProviderProps) => {
             callback(null, accessToken)
           } catch (error) {
             console.error(`WebSocket: refreshed token error ${error}`)
-            callback(error as Types.ErrorInfo, null)
+            callback(error as any, null)
           }
         },
       })
@@ -70,7 +70,7 @@ export const WebSocketProvider = ({ children }: WebSocketProviderProps) => {
     }
 
     const channel = ably.channels.get(channelName)
-    await channel.subscribe(eventType, (msg: Types.Message) => {
+    await channel.subscribe(eventType, (msg: any) => {
       try {
         const eventData = parseFunction ? (parseFunction(msg.data) as T) : (JSON.parse(JSON.stringify(msg.data)) as T)
         callback(eventData)

@@ -1,36 +1,40 @@
-import { Tags } from '@/api/utils/tags'
-import { api as baseApi } from '@/api'
-import { AppState } from '@/redux/store'
-import { handleBackendError } from '@/api/utils/api'
+import { useCallback, useEffect, useState } from 'react'
 import {
   ManualRequestDeliveryDto,
   ManualRequestDeliveryInput,
   ManualRequestQuoteDto,
   ManualRequestQuoteInput,
-} from '@/modules/manual-request/types'
-import { EnumDeliveryEventType } from '@/shared-types'
-
-const MANUAL_REQUEST_TAG = 'ManualRequest'
+} from '../modules/manual-request/types'
+import { EnumDeliveryEventType } from '../shared-types'
 
 /**
- * Raw fetch helper that reuses the same base URL as the admin SDK
- * but calls the new manual-request endpoints directly (they are not
- * yet code-generated into the admin SDK).
+ * Standalone fetch helper for request-web.
+ * This app talks directly to opencourier-backend manual-request endpoints.
  */
+const MANUAL_REQUEST_BASE_PATH = '/api/admin/v1/manual-request'
+
+function getApiBaseUrl() {
+  return process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '') || 'http://localhost:3000'
+}
+
+function getAccessToken() {
+  if (typeof window === 'undefined') return ''
+  return window.localStorage.getItem('accessToken') ?? ''
+}
+
 async function manualRequestFetch<T>(
-  accessToken: string,
   path: string,
-  options?: RequestInit,
+  options?: RequestInit & { accessToken?: string },
 ): Promise<T> {
-  const baseUrl =
-    process.env.NEXT_PUBLIC_API_URL?.replace('/v1', '')?.replace(/\/$/, '') ?? ''
-  const url = `${baseUrl}/api/admin/v1/manual-request${path}`
+  const baseUrl = getApiBaseUrl()
+  const url = `${baseUrl}${MANUAL_REQUEST_BASE_PATH}${path}`
+  const accessToken = options?.accessToken ?? getAccessToken()
 
   const response = await fetch(url, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${accessToken}`,
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
       ...(options?.headers ?? {}),
     },
   })
@@ -57,109 +61,89 @@ async function manualRequestFetch<T>(
   return (body?.result ?? body) as T
 }
 
-export const manualRequestApi = baseApi.injectEndpoints({
-  overrideExisting: true,
-  endpoints: (build) => ({
-    // Step 1 – get estimate
-    createManualRequestQuote: build.mutation<ManualRequestQuoteDto, ManualRequestQuoteInput>({
-      queryFn: async (input, api) => {
-        try {
-          const { accessToken } = (api.getState() as AppState).auth
-          const data = await manualRequestFetch<ManualRequestQuoteDto>(
-            accessToken ?? '',
-            '/quote',
-            { method: 'POST', body: JSON.stringify(input) },
-          )
-          return { data }
-        } catch (error) {
-          return { error: handleBackendError(error, api) }
-        }
-      },
-    }),
+type MutationResult = { isLoading: boolean }
 
-    // Step 2 – confirm delivery
-    confirmManualRequestDelivery: build.mutation<ManualRequestDeliveryDto, ManualRequestDeliveryInput>({
-      queryFn: async (input, api) => {
-        try {
-          const { accessToken } = (api.getState() as AppState).auth
-          const data = await manualRequestFetch<ManualRequestDeliveryDto>(
-            accessToken ?? '',
-            '/delivery',
-            { method: 'POST', body: JSON.stringify(input) },
-          )
-          return { data }
-        } catch (error) {
-          return { error: handleBackendError(error, api) }
-        }
-      },
-      invalidatesTags: [Tags.deliveries],
-    }),
+function useStandaloneMutation<TInput, TOutput>(
+  request: (input: TInput) => Promise<TOutput>,
+): [(input: TInput) => Promise<TOutput>, MutationResult] {
+  const [isLoading, setIsLoading] = useState(false)
 
-    // Status polling
-    getManualRequestDelivery: build.query<ManualRequestDeliveryDto, string>({
-      queryFn: async (deliveryId, api) => {
-        try {
-          const { accessToken } = (api.getState() as AppState).auth
-          const data = await manualRequestFetch<ManualRequestDeliveryDto>(
-            accessToken ?? '',
-            `/delivery/${deliveryId}`,
-          )
-          return { data }
-        } catch (error) {
-          return { error: handleBackendError(error, api) }
-        }
-      },
-      providesTags: [Tags.deliveries],
-    }),
+  const trigger = useCallback(
+    async (input: TInput) => {
+      setIsLoading(true)
+      try {
+        return await request(input)
+      } finally {
+        setIsLoading(false)
+      }
+    },
+    [request],
+  )
 
-    // Cancel
-    cancelManualRequestDelivery: build.mutation<ManualRequestDeliveryDto, string>({
-      queryFn: async (deliveryId, api) => {
-        try {
-          const { accessToken } = (api.getState() as AppState).auth
-          const data = await manualRequestFetch<ManualRequestDeliveryDto>(
-            accessToken ?? '',
-            `/delivery/${deliveryId}/cancel`,
-            { method: 'POST' },
-          )
-          return { data }
-        } catch (error) {
-          return { error: handleBackendError(error, api) }
-        }
-      },
-      invalidatesTags: [Tags.deliveries],
-    }),
+  return [trigger, { isLoading }]
+}
 
-    // Submit lifecycle event
-    submitManualRequestEvent: build.mutation<
-      ManualRequestDeliveryDto,
-      { deliveryId: string; eventType: EnumDeliveryEventType }
-    >({
-      queryFn: async ({ deliveryId, eventType }, api) => {
-        try {
-          const { accessToken } = (api.getState() as AppState).auth
-          const data = await manualRequestFetch<ManualRequestDeliveryDto>(
-            accessToken ?? '',
-            `/delivery/${deliveryId}/event`,
-            {
-              method: 'POST',
-              body: JSON.stringify({ deliveryId, eventType }),
-            },
-          )
-          return { data }
-        } catch (error) {
-          return { error: handleBackendError(error, api) }
-        }
-      },
-      invalidatesTags: [Tags.deliveries],
+export function useCreateManualRequestQuoteMutation() {
+  return useStandaloneMutation<ManualRequestQuoteInput, ManualRequestQuoteDto>((input) =>
+    manualRequestFetch('/quote', {
+      method: 'POST',
+      body: JSON.stringify(input),
     }),
-  }),
-})
+  )
+}
 
-export const {
-  useCreateManualRequestQuoteMutation,
-  useConfirmManualRequestDeliveryMutation,
-  useGetManualRequestDeliveryQuery,
-  useCancelManualRequestDeliveryMutation,
-  useSubmitManualRequestEventMutation,
-} = manualRequestApi
+export function useConfirmManualRequestDeliveryMutation() {
+  return useStandaloneMutation<ManualRequestDeliveryInput, ManualRequestDeliveryDto>((input) =>
+    manualRequestFetch('/delivery', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+  )
+}
+
+export function useCancelManualRequestDeliveryMutation() {
+  return useStandaloneMutation<string, ManualRequestDeliveryDto>((deliveryId) =>
+    manualRequestFetch(`/delivery/${deliveryId}/cancel`, {
+      method: 'POST',
+    }),
+  )
+}
+
+export function useSubmitManualRequestEventMutation() {
+  return useStandaloneMutation<{ deliveryId: string; eventType: EnumDeliveryEventType }, ManualRequestDeliveryDto>(
+    ({ deliveryId, eventType }) =>
+      manualRequestFetch(`/delivery/${deliveryId}/event`, {
+        method: 'POST',
+        body: JSON.stringify({ deliveryId, eventType }),
+      }),
+  )
+}
+
+export function useGetManualRequestDeliveryQuery(
+  deliveryId: string,
+  options?: { skip?: boolean },
+) {
+  const [data, setData] = useState<ManualRequestDeliveryDto | undefined>(undefined)
+  const [isLoading, setIsLoading] = useState<boolean>(!options?.skip)
+  const [error, setError] = useState<unknown>(undefined)
+
+  const fetchDelivery = useCallback(async () => {
+    if (!deliveryId || options?.skip) return
+    setIsLoading(true)
+    setError(undefined)
+    try {
+      const response = await manualRequestFetch<ManualRequestDeliveryDto>(`/delivery/${deliveryId}`)
+      setData(response)
+    } catch (err) {
+      setError(err)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [deliveryId, options?.skip])
+
+  useEffect(() => {
+    fetchDelivery()
+  }, [fetchDelivery])
+
+  return { data, isLoading, error, refetch: fetchDelivery }
+}

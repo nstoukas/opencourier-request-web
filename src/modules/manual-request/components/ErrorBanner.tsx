@@ -4,7 +4,10 @@
 import React, { useState } from 'react'
 import { Alert, AlertDescription } from '../../../admin-web-components'
 import { AlertTriangleIcon, ChevronDownIcon, ChevronRightIcon } from 'lucide-react'
-import { cn } from '../../../ui-shared-utils'
+
+function cn(...classes: Array<string | undefined | null | false>) {
+  return classes.filter(Boolean).join(' ')
+}
 
 interface ErrorBannerProps {
   title?: string
