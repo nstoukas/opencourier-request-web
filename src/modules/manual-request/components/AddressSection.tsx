@@ -1,7 +1,7 @@
 /**
  * Address section used in both pickup and dropoff parts of the form.
- * Includes a Nominatim (OpenStreetMap) geocoding search that auto-fills
- * all address fields and coordinates when a result is selected.
+ * Includes geocoding search that auto-fills address fields and coordinates
+ * when a result is selected.
  */
 import React, { useRef, useState } from 'react'
 import { Control, FieldValues, Path, useFormContext } from 'react-hook-form'
@@ -33,23 +33,6 @@ interface NominatimResult {
     postcode?: string
     country_code?: string
   }
-}
-
-// US state full-name → 2-letter code
-const STATE_ABBR: Record<string, string> = {
-  Alabama: 'AL', Alaska: 'AK', Arizona: 'AZ', Arkansas: 'AR',
-  California: 'CA', Colorado: 'CO', Connecticut: 'CT', Delaware: 'DE',
-  Florida: 'FL', Georgia: 'GA', Hawaii: 'HI', Idaho: 'ID',
-  Illinois: 'IL', Indiana: 'IN', Iowa: 'IA', Kansas: 'KS',
-  Kentucky: 'KY', Louisiana: 'LA', Maine: 'ME', Maryland: 'MD',
-  Massachusetts: 'MA', Michigan: 'MI', Minnesota: 'MN', Mississippi: 'MS',
-  Missouri: 'MO', Montana: 'MT', Nebraska: 'NE', Nevada: 'NV',
-  'New Hampshire': 'NH', 'New Jersey': 'NJ', 'New Mexico': 'NM', 'New York': 'NY',
-  'North Carolina': 'NC', 'North Dakota': 'ND', Ohio: 'OH', Oklahoma: 'OK',
-  Oregon: 'OR', Pennsylvania: 'PA', 'Rhode Island': 'RI', 'South Carolina': 'SC',
-  'South Dakota': 'SD', Tennessee: 'TN', Texas: 'TX', Utah: 'UT',
-  Vermont: 'VT', Virginia: 'VA', Washington: 'WA', 'West Virginia': 'WV',
-  Wisconsin: 'WI', Wyoming: 'WY', 'District of Columbia': 'DC',
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -86,7 +69,7 @@ export function AddressSection<T extends FieldValues>({
     setSearchError(null)
     setResults([])
     try {
-      const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&addressdetails=1&limit=6&countrycodes=us`
+      const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&addressdetails=1&limit=6`
       const res = await fetch(url, { headers: { 'Accept-Language': 'en' } })
       const data: NominatimResult[] = await res.json()
       if (data.length === 0) setSearchError('No results found. Try a more specific address.')
@@ -103,17 +86,18 @@ export function AddressSection<T extends FieldValues>({
     const a = r.address
     const street = [a.house_number, a.road].filter(Boolean).join(' ')
     const city = a.city ?? a.town ?? a.village ?? a.suburb ?? ''
-    const rawState = a.state ?? ''
-    const state = STATE_ABBR[rawState] ?? rawState.slice(0, 2).toUpperCase()
-    const zip = a.postcode?.split('-')[0] ?? ''
+    const region = a.state ?? ''
+    const postalCode = a.postcode ?? ''
+    const countryCode = (a.country_code ?? '').toUpperCase()
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const set = (path: Path<T>, value: any) => setValue(path, value, { shouldValidate: true, shouldDirty: true })
 
     set(field('streetAddress.0'), street)
     set(field('city'), city)
-    set(field('state'), state)
-    set(field('zipCode'), zip)
+    set(field('state'), region)
+    set(field('zipCode'), postalCode)
+    if (countryCode) set(field('countryCode'), countryCode)
     if (a.house_number) set(field('houseNumber'), a.house_number)
     set(coord('Latitude'), parseFloat(r.lat))
     set(coord('Longitude'), parseFloat(r.lon))
@@ -134,7 +118,7 @@ export function AddressSection<T extends FieldValues>({
             <MapPinIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
             <Input
               type="text"
-              placeholder="Search address to auto-fill…"
+              placeholder="Search address to auto-fill"
               value={query}
               className="pl-8 pr-8"
               onChange={(e) => {
@@ -185,6 +169,9 @@ export function AddressSection<T extends FieldValues>({
         {searchError && (
           <p className="text-xs text-destructive mt-1">{searchError}</p>
         )}
+        <p className="text-xs text-muted-foreground mt-1">
+          Autofill uses OpenStreetMap geocoding. Google Maps autocomplete can be plugged in with a Places API key.
+        </p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -196,6 +183,25 @@ export function AddressSection<T extends FieldValues>({
               <FormLabel>Street Address</FormLabel>
               <FormControl>
                 <Input placeholder="123 Main St" {...f} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={control}
+          name={field('countryCode')}
+          render={({ field: f }) => (
+            <FormItem>
+              <FormLabel>Country Code</FormLabel>
+              <FormControl>
+                <Input
+                  placeholder="US"
+                  maxLength={2}
+                  value={(f.value ?? '').toUpperCase()}
+                  onChange={(event) => f.onChange(event.target.value.toUpperCase())}
+                />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -221,9 +227,9 @@ export function AddressSection<T extends FieldValues>({
           name={field('state')}
           render={({ field: f }) => (
             <FormItem>
-              <FormLabel>State</FormLabel>
+              <FormLabel>State / Province / Region</FormLabel>
               <FormControl>
-                <Input placeholder="CA" maxLength={2} {...f} />
+                <Input placeholder="CA / ON / Bavaria" {...f} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -235,9 +241,9 @@ export function AddressSection<T extends FieldValues>({
           name={field('zipCode')}
           render={({ field: f }) => (
             <FormItem>
-              <FormLabel>Zip Code</FormLabel>
+              <FormLabel>Postal Code</FormLabel>
               <FormControl>
-                <Input placeholder="94102" {...f} />
+                <Input placeholder="94102 / SW1A 1AA" {...f} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -259,47 +265,9 @@ export function AddressSection<T extends FieldValues>({
         />
       </div>
 
-      {/* Coordinates */}
-      <div className="grid grid-cols-2 gap-3">
-        <FormField
-          control={control}
-          name={coord('Latitude')}
-          render={({ field: f }) => (
-            <FormItem>
-              <FormLabel>Latitude</FormLabel>
-              <FormControl>
-                <Input
-                  type="number"
-                  step="any"
-                  placeholder="37.7749"
-                  {...f}
-                  onChange={(e) => f.onChange(parseFloat(e.target.value))}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={control}
-          name={coord('Longitude')}
-          render={({ field: f }) => (
-            <FormItem>
-              <FormLabel>Longitude</FormLabel>
-              <FormControl>
-                <Input
-                  type="number"
-                  step="any"
-                  placeholder="-122.4194"
-                  {...f}
-                  onChange={(e) => f.onChange(parseFloat(e.target.value))}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-      </div>
+      <p className="text-xs text-muted-foreground">
+        Coordinates are captured automatically from the selected address and saved with the request.
+      </p>
     </div>
   )
 }

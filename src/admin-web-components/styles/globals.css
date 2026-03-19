@@ -75,6 +75,14 @@
   }
 }
 
+style[data-next-hide-fouc] {
+  display: none !important;
+}
+
+body {
+  display: block !important;
+}
+
 /* For Webkit-based browsers (Chrome, Safari and Opera) */
 .scrollbar-hide::-webkit-scrollbar {
   display: none;

@@ -6,38 +6,59 @@ import {
   ManualRequestQuoteInput,
 } from '../modules/manual-request/types'
 import { EnumDeliveryEventType } from '../shared-types'
+import {
+  getManualRequestApiMode,
+  getManualRequestApiBaseUrl,
+  getManualRequestAuthCredential,
+  getManualRequestAuthMode,
+  getManualRequestBasePath,
+} from '../utils/manualRequestAuth'
 
 /**
  * Standalone fetch helper for request-web.
  * This app talks directly to opencourier-backend manual-request endpoints.
  */
-const MANUAL_REQUEST_BASE_PATH = '/api/admin/v1/manual-request'
-
-function getApiBaseUrl() {
-  return process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '') || 'http://localhost:3000'
-}
-
-function getAccessToken() {
-  if (typeof window === 'undefined') return ''
-  return window.localStorage.getItem('accessToken') ?? ''
-}
+const REQUEST_TIMEOUT_MS = 12000
 
 async function manualRequestFetch<T>(
   path: string,
-  options?: RequestInit & { accessToken?: string },
+  options?: RequestInit & { accessToken?: string; apiKey?: string },
 ): Promise<T> {
-  const baseUrl = getApiBaseUrl()
-  const url = `${baseUrl}${MANUAL_REQUEST_BASE_PATH}${path}`
-  const accessToken = options?.accessToken ?? getAccessToken()
+  const baseUrl = getManualRequestApiBaseUrl()
+  const url = `${baseUrl}${getManualRequestBasePath()}${path}`
+  const authCredential = options?.accessToken ?? options?.apiKey ?? getManualRequestAuthCredential()
+  const authMode = getManualRequestAuthMode()
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
 
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-      ...(options?.headers ?? {}),
-    },
-  })
+  if (options?.signal) {
+    if (options.signal.aborted) {
+      controller.abort()
+    } else {
+      options.signal.addEventListener('abort', () => controller.abort(), { once: true })
+    }
+  }
+
+  let response: Response
+  try {
+    response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(authMode === 'bearer' && authCredential ? { Authorization: `Bearer ${authCredential}` } : {}),
+        ...(authMode === 'api-key' && authCredential ? { 'x-api-key': authCredential } : {}),
+        ...(options?.headers ?? {}),
+      },
+    })
+  } catch (error: any) {
+    if (error?.name === 'AbortError') {
+      throw new Error(`Request timed out after ${REQUEST_TIMEOUT_MS / 1000}s. Check backend availability and token.`)
+    }
+    throw error
+  } finally {
+    clearTimeout(timeoutId)
+  }
 
   if (!response.ok) {
     let body: any
@@ -83,39 +104,126 @@ function useStandaloneMutation<TInput, TOutput>(
   return [trigger, { isLoading }]
 }
 
+function toPartnerAddress(input: ManualRequestQuoteInput['pickupAddress']) {
+  return {
+    streetAddress: [input.streetAddress?.[0] ?? ''],
+    city: input.city,
+    state: input.state,
+    zipCode: input.zipCode || '',
+    countryCode: (input.countryCode || 'US').toUpperCase(),
+    houseNumber: input.houseNumber,
+  }
+}
+
+function mapQuoteInputForPartner(input: ManualRequestQuoteInput) {
+  return {
+    pickupAddress: toPartnerAddress(input.pickupAddress),
+    dropoffAddress: toPartnerAddress(input.dropoffAddress),
+    pickupLatitude: input.pickupLatitude,
+    pickupLongitude: input.pickupLongitude,
+    dropoffLatitude: input.dropoffLatitude,
+    dropoffLongitude: input.dropoffLongitude,
+    pickupReadyAt: input.pickupReadyAt,
+    pickupDeadlineAt: input.pickupDeadlineAt,
+    dropoffReadyAt: input.dropoffReadyAt,
+    dropoffDeadlineAt: input.dropoffDeadlineAt,
+    pickupPhoneNumber: input.pickupPhoneNumber,
+    dropoffPhoneNumber: input.dropoffPhoneNumber,
+    orderTotalValue: input.orderTotalValue,
+  }
+}
+
+function mapDeliveryInputForPartner(input: ManualRequestDeliveryInput) {
+  return {
+    quoteId: input.quoteId,
+    idempotencyKey: input.idempotencyKey,
+    pickupAddress: toPartnerAddress(input.pickupAddress),
+    dropoffAddress: toPartnerAddress(input.dropoffAddress),
+    pickupLatitude: input.pickupLatitude,
+    pickupLongitude: input.pickupLongitude,
+    dropoffLatitude: input.dropoffLatitude,
+    dropoffLongitude: input.dropoffLongitude,
+    pickupName: input.pickupName,
+    pickupPhoneNumber: input.pickupPhoneNumber,
+    dropoffName: input.dropoffName,
+    dropoffPhoneNumber: input.dropoffPhoneNumber,
+    orderItems: input.orderItems ?? [
+      {
+        name: input.packageDescription || 'Package',
+        quantity: 1,
+        size: input.packageSize || 'SMALL',
+      },
+    ],
+    pickupBusinessName: input.pickupBusinessName,
+    pickupNotes: input.pickupNotes ?? '',
+    dropoffBusinessName: input.dropoffBusinessName || input.dropoffName,
+    dropoffNotes: input.dropoffNotes ?? '',
+    dropoffSellerNotes: input.specialInstructions ?? '',
+    deliverableAction: 'MEET_AT_DOOR',
+    orderReference: input.orderReference || input.quoteId,
+    orderTotalValue: input.orderTotalValue ?? 0,
+    pickupReadyAt: input.pickupReadyAt,
+    pickupDeadlineAt: input.pickupDeadlineAt,
+    dropoffReadyAt: input.dropoffReadyAt,
+    dropoffDeadlineAt: input.dropoffDeadlineAt,
+    requiresDropoffSignature: false,
+    requiresId: false,
+    tip: 0,
+  }
+}
+
 export function useCreateManualRequestQuoteMutation() {
-  return useStandaloneMutation<ManualRequestQuoteInput, ManualRequestQuoteDto>((input) =>
-    manualRequestFetch('/quote', {
+  return useStandaloneMutation<ManualRequestQuoteInput, ManualRequestQuoteDto>((input) => {
+    const apiMode = getManualRequestApiMode()
+    const path = apiMode === 'partner' ? '/delivery-quotes' : '/quote'
+    const body = apiMode === 'partner' ? mapQuoteInputForPartner(input) : input
+
+    return manualRequestFetch(path, {
       method: 'POST',
-      body: JSON.stringify(input),
-    }),
-  )
+      body: JSON.stringify(body),
+    })
+  })
 }
 
 export function useConfirmManualRequestDeliveryMutation() {
-  return useStandaloneMutation<ManualRequestDeliveryInput, ManualRequestDeliveryDto>((input) =>
-    manualRequestFetch('/delivery', {
+  return useStandaloneMutation<ManualRequestDeliveryInput, ManualRequestDeliveryDto>((input) => {
+    const apiMode = getManualRequestApiMode()
+    const path = apiMode === 'partner' ? '/deliveries' : '/delivery'
+    const body = apiMode === 'partner' ? mapDeliveryInputForPartner(input) : input
+
+    return manualRequestFetch(path, {
       method: 'POST',
-      body: JSON.stringify(input),
-    }),
-  )
+      body: JSON.stringify(body),
+    })
+  })
 }
 
 export function useCancelManualRequestDeliveryMutation() {
-  return useStandaloneMutation<string, ManualRequestDeliveryDto>((deliveryId) =>
-    manualRequestFetch(`/delivery/${deliveryId}/cancel`, {
+  return useStandaloneMutation<string, ManualRequestDeliveryDto>((deliveryId) => {
+    const apiMode = getManualRequestApiMode()
+    const path = apiMode === 'partner'
+      ? `/deliveries/${deliveryId}/cancel`
+      : `/delivery/${deliveryId}/cancel`
+
+    return manualRequestFetch(path, {
       method: 'POST',
-    }),
-  )
+    })
+  })
 }
 
 export function useSubmitManualRequestEventMutation() {
   return useStandaloneMutation<{ deliveryId: string; eventType: EnumDeliveryEventType }, ManualRequestDeliveryDto>(
-    ({ deliveryId, eventType }) =>
-      manualRequestFetch(`/delivery/${deliveryId}/event`, {
+    ({ deliveryId, eventType }) => {
+      const apiMode = getManualRequestApiMode()
+      if (apiMode === 'partner') {
+        throw new Error('Delivery lifecycle event endpoint is not available in partner API mode.')
+      }
+
+      return manualRequestFetch(`/delivery/${deliveryId}/event`, {
         method: 'POST',
         body: JSON.stringify({ deliveryId, eventType }),
-      }),
+      })
+    },
   )
 }
 
@@ -132,7 +240,9 @@ export function useGetManualRequestDeliveryQuery(
     setIsLoading(true)
     setError(undefined)
     try {
-      const response = await manualRequestFetch<ManualRequestDeliveryDto>(`/delivery/${deliveryId}`)
+      const apiMode = getManualRequestApiMode()
+      const path = apiMode === 'partner' ? `/deliveries/${deliveryId}` : `/delivery/${deliveryId}`
+      const response = await manualRequestFetch<ManualRequestDeliveryDto>(path)
       setData(response)
     } catch (err) {
       setError(err)

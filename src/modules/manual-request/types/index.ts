@@ -9,7 +9,7 @@ export interface ManualRequestAddressInput {
   city: string
   state: string
   zipCode: string
-  countryCode: 'US'
+  countryCode: string
   houseNumber?: string
 }
 
@@ -41,8 +41,24 @@ export interface ManualRequestQuoteInput {
   metadata?: Record<string, unknown> | null
 }
 
+export interface ManualRequestOrderItemInput {
+  name: string
+  quantity: number
+  size?: string
+  dimensions?: {
+    length: number
+    height: number
+    depth: number
+  }
+  price?: number
+  weight?: number
+  vatPercentage?: number
+}
+
 export interface ManualRequestDeliveryInput extends ManualRequestQuoteInput {
   quoteId: string
+  idempotencyKey?: string
+  orderItems?: ManualRequestOrderItemInput[]
 }
 
 export interface ManualRequestQuoteDto {

@@ -22,6 +22,11 @@ export default function ManualRequestStatusPage() {
     skip: !deliveryId,
   })
   const [cancelDelivery, { isLoading: isCanceling }] = useCancelManualRequestDeliveryMutation()
+  const statusCode = (error as any)?.statusCode ?? (error as any)?.status
+  const errorMessage =
+    statusCode === 401
+      ? 'Unauthorized (401). Missing or invalid JWT token. Configure accessToken and refresh.'
+      : 'Failed to load delivery status. Check token and backend.'
 
   const handleCancel = async () => {
     if (!deliveryId) return
@@ -49,7 +54,7 @@ export default function ManualRequestStatusPage() {
           <CardContent className="space-y-4">
             {isLoading ? <p className="text-sm text-muted-foreground">Loading delivery status...</p> : null}
             {error ? (
-              <p className="text-sm text-destructive">Failed to load delivery status. Check token and backend.</p>
+              <p className="text-sm text-destructive">{errorMessage}</p>
             ) : null}
 
             {data ? (

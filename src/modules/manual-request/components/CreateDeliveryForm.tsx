@@ -6,7 +6,7 @@
  */
 'use client'
 
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -44,20 +44,32 @@ import { EstimateSummaryCard } from './EstimateSummaryCard'
 import { AddressSection } from './AddressSection'
 import { ErrorBanner } from './ErrorBanner'
 import { useRequestPageNavigator } from '../../../hooks/useRequestPageNavigator'
+import { getManualRequestAuthCredential, getManualRequestAuthMode } from '../../../utils/manualRequestAuth'
 
 // ─── Validation schema ────────────────────────────────────────────────────────
 
 const addressSchema = z.object({
   streetAddress: z.array(z.string().min(1, 'Required')).min(1),
   city: z.string().min(1, 'City is required'),
-  state: z.string().min(1, 'State is required').max(2, 'Use 2-letter state code'),
-  zipCode: z.string().min(4, 'Zip code is required'),
-  countryCode: z.literal('US'),
+  state: z.string().min(1, 'State / province / region is required'),
+  zipCode: z.string().optional(),
+  countryCode: z.string().length(2, 'Use 2-letter country code').transform((value) => value.toUpperCase()),
   houseNumber: z.string().optional(),
 })
 
+const packageTypeOptions = [
+  { value: 'DOCUMENTS', label: 'Documents' },
+  { value: 'FOOD', label: 'Food' },
+  { value: 'GROCERIES', label: 'Groceries' },
+  { value: 'PHARMACY', label: 'Pharmacy' },
+  { value: 'RETAIL', label: 'Retail' },
+  { value: 'OTHER', label: 'Other' },
+] as const
+
+type PackageTypeValue = (typeof packageTypeOptions)[number]['value']
+
 const formSchema = z.object({
-  partnerId: z.string().min(1, 'Partner ID is required'),
+  partnerId: z.string().optional(),
 
   // Pickup
   pickupName: z.string().min(1, 'Pickup contact name is required'),
@@ -78,10 +90,20 @@ const formSchema = z.object({
   dropoffLongitude: z.number({ invalid_type_error: 'Enter a valid longitude' }),
 
   // Package
-  packageDescription: z.string().min(1, 'Package description is required'),
+  packageType: z.enum(['DOCUMENTS', 'FOOD', 'GROCERIES', 'PHARMACY', 'RETAIL', 'OTHER']),
+  packageTypeOther: z.string().optional(),
+  packageDescription: z.string().optional(),
   packageSize: z.nativeEnum(ManualRequestPackageSize, { errorMap: () => ({ message: 'Select a package size' }) }),
   specialInstructions: z.string().optional(),
   orderReference: z.string().optional(),
+}).superRefine((value, ctx) => {
+  if (value.packageType === 'OTHER' && !value.packageTypeOther?.trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['packageTypeOther'],
+      message: 'Please provide package type',
+    })
+  }
 })
 
 export type CreateDeliveryFormValues = z.infer<typeof formSchema>
@@ -93,15 +115,15 @@ const defaultAddress = {
   city: '',
   state: '',
   zipCode: '',
-  countryCode: 'US' as const,
+  countryCode: 'US',
   houseNumber: '',
 }
 
 const defaultValues: CreateDeliveryFormValues = {
-  partnerId: '',
-  pickupName: '',
-  pickupPhoneNumber: '',
-  pickupBusinessName: '',
+  partnerId: process.env.NEXT_PUBLIC_MANUAL_REQUEST_DEFAULT_PARTNER_ID?.trim() ?? '',
+  pickupName: 'Pickup Contact',
+  pickupPhoneNumber: '+10000000000',
+  pickupBusinessName: 'Pickup Location',
   pickupNotes: '',
   pickupAddress: defaultAddress,
   pickupLatitude: 0,
@@ -113,6 +135,8 @@ const defaultValues: CreateDeliveryFormValues = {
   dropoffAddress: defaultAddress,
   dropoffLatitude: 0,
   dropoffLongitude: 0,
+  packageType: 'DOCUMENTS',
+  packageTypeOther: '',
   packageDescription: '',
   packageSize: ManualRequestPackageSize.SMALL,
   specialInstructions: '',
@@ -122,13 +146,59 @@ const defaultValues: CreateDeliveryFormValues = {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function CreateDeliveryForm() {
+interface CreateDeliveryFormProps {
+  requireAccessToken?: boolean
+}
+
+function resolvePackageDescription(values: CreateDeliveryFormValues) {
+  if (values.packageType === 'OTHER') {
+    return values.packageTypeOther?.trim() || values.packageDescription?.trim() || undefined
+  }
+
+  const match = packageTypeOptions.find((item) => item.value === values.packageType)
+  return match?.label ?? values.packageType
+}
+
+function hasValidCoordinates(latitude: number, longitude: number) {
+  return Number.isFinite(latitude) && Number.isFinite(longitude) && !(latitude === 0 && longitude === 0)
+}
+
+async function geocodeCoordinatesFromAddress(address: CreateDeliveryFormValues['pickupAddress']) {
+  const query = [
+    address.streetAddress?.[0],
+    address.city,
+    address.state,
+    address.zipCode,
+    address.countryCode,
+  ]
+    .filter(Boolean)
+    .join(', ')
+
+  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1`
+  const response = await fetch(url, { headers: { 'Accept-Language': 'en' } })
+  if (!response.ok) return null
+
+  const result = (await response.json()) as Array<{ lat: string; lon: string }>
+  const first = result[0]
+  if (!first) return null
+
+  const latitude = parseFloat(first.lat)
+  const longitude = parseFloat(first.lon)
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null
+
+  return { latitude, longitude }
+}
+
+export function CreateDeliveryForm({ requireAccessToken = true }: CreateDeliveryFormProps) {
   const { toast } = useToast()
   const navigator = useRequestPageNavigator()
+  const authMode = getManualRequestAuthMode()
+  const isApiKeyAuth = authMode === 'api-key'
 
   const [activeQuote, setActiveQuote] = useState<ManualRequestQuoteDto | null>(null)
   const [formSnapshot, setFormSnapshot] = useState<CreateDeliveryFormValues | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [hasAccessToken, setHasAccessToken] = useState(true)
 
   const [createQuote, { isLoading: isQuoting }] = useCreateManualRequestQuoteMutation()
   const [confirmDelivery, { isLoading: isConfirming }] = useConfirmManualRequestDeliveryMutation()
@@ -138,26 +208,72 @@ export function CreateDeliveryForm() {
     defaultValues,
   })
 
+  useEffect(() => {
+    const updateTokenState = () => {
+      const credential = getManualRequestAuthCredential()
+      setHasAccessToken(Boolean(credential))
+    }
+
+    updateTokenState()
+    window.addEventListener('storage', updateTokenState)
+    window.addEventListener('focus', updateTokenState)
+    window.addEventListener('opencourier-token-updated', updateTokenState)
+
+    return () => {
+      window.removeEventListener('storage', updateTokenState)
+      window.removeEventListener('focus', updateTokenState)
+      window.removeEventListener('opencourier-token-updated', updateTokenState)
+    }
+  }, [])
+
+  const getDebugErrorMessage = (err: any, fallback: string) => {
+    const statusCode = err?.statusCode ?? err?.status
+    if (statusCode === 401 && requireAccessToken) {
+      return isApiKeyAuth
+        ? 'Unauthorized (401). Missing or invalid API key. Set manualRequestApiKey in localStorage or NEXT_PUBLIC_MANUAL_REQUEST_API_KEY.'
+        : 'Unauthorized (401). Missing or invalid JWT token. Set accessToken in localStorage or NEXT_PUBLIC_MANUAL_REQUEST_ACCESS_TOKEN.'
+    }
+    return err?.message ?? fallback
+  }
+
   const handleGetEstimate = async (values: CreateDeliveryFormValues) => {
     setErrorMessage(null)
     setActiveQuote(null)
     try {
+      const packageDescription = resolvePackageDescription(values)
+      const pickupCoordinates = hasValidCoordinates(values.pickupLatitude, values.pickupLongitude)
+        ? { latitude: values.pickupLatitude, longitude: values.pickupLongitude }
+        : await geocodeCoordinatesFromAddress(values.pickupAddress)
+      const dropoffCoordinates = hasValidCoordinates(values.dropoffLatitude, values.dropoffLongitude)
+        ? { latitude: values.dropoffLatitude, longitude: values.dropoffLongitude }
+        : await geocodeCoordinatesFromAddress(values.dropoffAddress)
+
+      if (!pickupCoordinates || !dropoffCoordinates) {
+        setErrorMessage('Could not determine coordinates from one or more addresses. Use address search and select a result.')
+        return
+      }
+
+      form.setValue('pickupLatitude', pickupCoordinates.latitude, { shouldDirty: true, shouldValidate: true })
+      form.setValue('pickupLongitude', pickupCoordinates.longitude, { shouldDirty: true, shouldValidate: true })
+      form.setValue('dropoffLatitude', dropoffCoordinates.latitude, { shouldDirty: true, shouldValidate: true })
+      form.setValue('dropoffLongitude', dropoffCoordinates.longitude, { shouldDirty: true, shouldValidate: true })
+
       const payload: ManualRequestQuoteInput = {
         partnerId: values.partnerId ?? '',
-        pickupName: values.pickupName ?? '',
-        pickupPhoneNumber: values.pickupPhoneNumber ?? '',
-        pickupBusinessName: values.pickupBusinessName ?? '',
+        pickupName: values.pickupName?.trim() || 'Pickup Contact',
+        pickupPhoneNumber: values.pickupPhoneNumber?.trim() || '+10000000000',
+        pickupBusinessName: values.pickupBusinessName?.trim() || 'Pickup Location',
         pickupNotes: values.pickupNotes,
         pickupAddress: {
           streetAddress: [values.pickupAddress.streetAddress[0] ?? ''],
           city: values.pickupAddress.city,
           state: values.pickupAddress.state,
-          zipCode: values.pickupAddress.zipCode,
-          countryCode: 'US',
+          zipCode: values.pickupAddress.zipCode || '',
+          countryCode: values.pickupAddress.countryCode,
           houseNumber: values.pickupAddress.houseNumber,
         },
-        pickupLatitude: values.pickupLatitude,
-        pickupLongitude: values.pickupLongitude,
+        pickupLatitude: pickupCoordinates.latitude,
+        pickupLongitude: pickupCoordinates.longitude,
         dropoffName: values.dropoffName ?? '',
         dropoffPhoneNumber: values.dropoffPhoneNumber ?? '',
         dropoffBusinessName: values.dropoffBusinessName,
@@ -166,13 +282,13 @@ export function CreateDeliveryForm() {
           streetAddress: [values.dropoffAddress.streetAddress[0] ?? ''],
           city: values.dropoffAddress.city,
           state: values.dropoffAddress.state,
-          zipCode: values.dropoffAddress.zipCode,
-          countryCode: 'US',
+          zipCode: values.dropoffAddress.zipCode || '',
+          countryCode: values.dropoffAddress.countryCode,
           houseNumber: values.dropoffAddress.houseNumber,
         },
-        dropoffLatitude: values.dropoffLatitude,
-        dropoffLongitude: values.dropoffLongitude,
-        packageDescription: values.packageDescription,
+        dropoffLatitude: dropoffCoordinates.latitude,
+        dropoffLongitude: dropoffCoordinates.longitude,
+        packageDescription,
         packageSize: values.packageSize,
         specialInstructions: values.specialInstructions,
         orderReference: values.orderReference,
@@ -180,9 +296,15 @@ export function CreateDeliveryForm() {
 
       const quote = await createQuote(payload)
       setActiveQuote(quote)
-      setFormSnapshot(values)
+      setFormSnapshot({
+        ...values,
+        pickupLatitude: pickupCoordinates.latitude,
+        pickupLongitude: pickupCoordinates.longitude,
+        dropoffLatitude: dropoffCoordinates.latitude,
+        dropoffLongitude: dropoffCoordinates.longitude,
+      })
     } catch (err: any) {
-      setErrorMessage(err?.message ?? 'Failed to get estimate. Check inputs and try again.')
+      setErrorMessage(getDebugErrorMessage(err, 'Failed to get estimate. Check inputs and try again.'))
     }
   }
 
@@ -190,18 +312,20 @@ export function CreateDeliveryForm() {
     if (!activeQuote || !formSnapshot) return
     setErrorMessage(null)
     try {
+      const packageDescription = resolvePackageDescription(formSnapshot)
+
       const payload: ManualRequestDeliveryInput = {
         partnerId: formSnapshot.partnerId ?? '',
-        pickupName: formSnapshot.pickupName ?? '',
-        pickupPhoneNumber: formSnapshot.pickupPhoneNumber ?? '',
-        pickupBusinessName: formSnapshot.pickupBusinessName ?? '',
+        pickupName: formSnapshot.pickupName?.trim() || 'Pickup Contact',
+        pickupPhoneNumber: formSnapshot.pickupPhoneNumber?.trim() || '+10000000000',
+        pickupBusinessName: formSnapshot.pickupBusinessName?.trim() || 'Pickup Location',
         pickupNotes: formSnapshot.pickupNotes,
         pickupAddress: {
           streetAddress: [formSnapshot.pickupAddress.streetAddress[0] ?? ''],
           city: formSnapshot.pickupAddress.city,
           state: formSnapshot.pickupAddress.state,
-          zipCode: formSnapshot.pickupAddress.zipCode,
-          countryCode: 'US',
+          zipCode: formSnapshot.pickupAddress.zipCode || '',
+          countryCode: formSnapshot.pickupAddress.countryCode,
           houseNumber: formSnapshot.pickupAddress.houseNumber,
         },
         pickupLatitude: formSnapshot.pickupLatitude,
@@ -214,16 +338,17 @@ export function CreateDeliveryForm() {
           streetAddress: [formSnapshot.dropoffAddress.streetAddress[0] ?? ''],
           city: formSnapshot.dropoffAddress.city,
           state: formSnapshot.dropoffAddress.state,
-          zipCode: formSnapshot.dropoffAddress.zipCode,
-          countryCode: 'US',
+          zipCode: formSnapshot.dropoffAddress.zipCode || '',
+          countryCode: formSnapshot.dropoffAddress.countryCode,
           houseNumber: formSnapshot.dropoffAddress.houseNumber,
         },
         dropoffLatitude: formSnapshot.dropoffLatitude,
         dropoffLongitude: formSnapshot.dropoffLongitude,
-        packageDescription: formSnapshot.packageDescription,
+        packageDescription,
         packageSize: formSnapshot.packageSize,
         specialInstructions: formSnapshot.specialInstructions,
         orderReference: formSnapshot.orderReference,
+        idempotencyKey: formSnapshot.orderReference?.trim() || `${activeQuote.id}-${Date.now()}`,
         quoteId: activeQuote.id,
       }
 
@@ -236,7 +361,7 @@ export function CreateDeliveryForm() {
 
       navigator.goToManualRequestStatus(delivery.id)
     } catch (err: any) {
-      setErrorMessage(err?.message ?? 'Failed to confirm delivery. The quote may have expired.')
+      setErrorMessage(getDebugErrorMessage(err, 'Failed to confirm delivery. The quote may have expired.'))
     }
   }
 
@@ -245,8 +370,22 @@ export function CreateDeliveryForm() {
     setFormSnapshot(null)
   }
 
+  const selectedPackageType = form.watch('packageType') as PackageTypeValue
+
   return (
     <div className="space-y-6 max-w-3xl">
+      {requireAccessToken && !hasAccessToken && (
+        <ErrorBanner
+          title={isApiKeyAuth ? 'Missing API key' : 'Missing access token'}
+          message={isApiKeyAuth
+            ? 'No API key is configured. API requests will fail with Unauthorized until a key is provided.'
+            : 'No JWT token is configured. API requests will fail with Unauthorized until a token is provided.'}
+          detail={isApiKeyAuth
+            ? 'Set localStorage key manualRequestApiKey or configure NEXT_PUBLIC_MANUAL_REQUEST_API_KEY in local.env and restart request-web.'
+            : 'Set localStorage key accessToken or configure NEXT_PUBLIC_MANUAL_REQUEST_ACCESS_TOKEN in local.env and restart request-web.'}
+        />
+      )}
+
       {errorMessage && (
         <ErrorBanner
           title="Could not process request"
@@ -283,26 +422,37 @@ export function CreateDeliveryForm() {
                     <FormControl>
                       <Input placeholder="Partner ID from backend" {...field} />
                     </FormControl>
+                    <p className="text-xs text-muted-foreground">
+                      Required. Use a valid partner ID from your instance database or Postman environment.
+                    </p>
                     <FormMessage />
                   </FormItem>
                 )}
               />
 
-              <div className="grid sm:grid-cols-2 gap-3">
-                <FormField
-                  control={form.control}
-                  name="packageDescription"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Package Description</FormLabel>
-                      <FormControl>
-                        <Input placeholder="e.g. Prescription medication" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+              <FormField
+                control={form.control}
+                name="orderReference"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Order Reference (optional)</FormLabel>
+                    <FormControl>
+                      <Input placeholder="ORD-12345" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </CardContent>
+          </Card>
 
+          {/* ── Package ─────────────────────────────────────────────────── */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Package</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid sm:grid-cols-2 gap-3">
                 <FormField
                   control={form.control}
                   name="packageSize"
@@ -325,7 +475,48 @@ export function CreateDeliveryForm() {
                     </FormItem>
                   )}
                 />
+
+                <FormField
+                  control={form.control}
+                  name="packageType"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Package Type</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select package type" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {packageTypeOptions.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               </div>
+
+              {selectedPackageType === 'OTHER' && (
+                <FormField
+                  control={form.control}
+                  name="packageTypeOther"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Other Package Type</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Short type name" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
 
               <FormField
                 control={form.control}
@@ -335,7 +526,7 @@ export function CreateDeliveryForm() {
                     <FormLabel>Special Instructions (optional)</FormLabel>
                     <FormControl>
                       <Textarea
-                        placeholder="e.g. Keep upright, handle with care"
+                        placeholder="Handle with care"
                         className="resize-none"
                         rows={2}
                         {...field}
@@ -348,12 +539,12 @@ export function CreateDeliveryForm() {
 
               <FormField
                 control={form.control}
-                name="orderReference"
+                name="packageDescription"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Order Reference (optional)</FormLabel>
+                    <FormLabel>Additional Package Details (optional)</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g. ORD-12345" {...field} />
+                      <Input placeholder="Optional short details" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -365,53 +556,9 @@ export function CreateDeliveryForm() {
           {/* ── Pickup ──────────────────────────────────────────────────── */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Pickup Information</CardTitle>
+              <CardTitle className="text-base">Pickup</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid sm:grid-cols-2 gap-3">
-                <FormField
-                  control={form.control}
-                  name="pickupName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Contact Name</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Jane Smith" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="pickupPhoneNumber"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Phone Number</FormLabel>
-                      <FormControl>
-                        <Input type="tel" placeholder="+1 555 000 0000" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="pickupBusinessName"
-                  render={({ field }) => (
-                    <FormItem className="sm:col-span-2">
-                      <FormLabel>Business Name</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Acme Pharmacy" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <Separator />
-
               <AddressSection control={form.control} prefix="pickup" label="Pickup Address" />
 
               <FormField
@@ -421,7 +568,12 @@ export function CreateDeliveryForm() {
                   <FormItem>
                     <FormLabel>Pickup Notes (optional)</FormLabel>
                     <FormControl>
-                      <Textarea placeholder="e.g. Ring doorbell, ask for Mark" className="resize-none" rows={2} {...field} />
+                      <Textarea
+                        placeholder="Ring bell, ask for front desk"
+                        className="resize-none"
+                        rows={2}
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -433,7 +585,7 @@ export function CreateDeliveryForm() {
           {/* ── Dropoff ─────────────────────────────────────────────────── */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Dropoff Information</CardTitle>
+              <CardTitle className="text-base">Dropoff</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid sm:grid-cols-2 gap-3">
@@ -457,7 +609,7 @@ export function CreateDeliveryForm() {
                     <FormItem>
                       <FormLabel>Phone Number</FormLabel>
                       <FormControl>
-                        <Input type="tel" placeholder="+1 555 000 0001" {...field} />
+                        <Input type="tel" placeholder="+1 555 000 0000" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -470,7 +622,7 @@ export function CreateDeliveryForm() {
                     <FormItem className="sm:col-span-2">
                       <FormLabel>Business Name (optional)</FormLabel>
                       <FormControl>
-                        <Input placeholder="e.g. Customer home" {...field} />
+                        <Input placeholder="Company or building name" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -489,7 +641,7 @@ export function CreateDeliveryForm() {
                   <FormItem>
                     <FormLabel>Dropoff Notes (optional)</FormLabel>
                     <FormControl>
-                      <Textarea placeholder="e.g. Leave at front desk" className="resize-none" rows={2} {...field} />
+                      <Textarea placeholder="Leave at reception" className="resize-none" rows={2} {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
