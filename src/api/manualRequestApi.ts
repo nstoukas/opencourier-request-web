@@ -77,7 +77,9 @@ async function manualRequestFetch<T>(
     throw err
   }
 
-  const body = await response.json()
+  const text = await response.text()
+  if (!text) return undefined as T
+  const body = JSON.parse(text)
   // Backend wraps in { result: ... } envelope
   return (body?.result ?? body) as T
 }
