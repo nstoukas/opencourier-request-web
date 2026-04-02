@@ -4,6 +4,9 @@ import {
   ManualRequestDeliveryInput,
   ManualRequestQuoteDto,
   ManualRequestQuoteInput,
+  ManualRequestUpdateDeliveryInput,
+  PartnerDeliveryDto,
+  PartnerDeliveryPaginatedDto,
 } from '../modules/manual-request/types'
 import { EnumDeliveryEventType } from '../shared-types'
 import {
@@ -224,6 +227,81 @@ export function useSubmitManualRequestEventMutation() {
       return manualRequestFetch(`/delivery/${deliveryId}/event`, {
         method: 'POST',
         body: JSON.stringify({ deliveryId, eventType }),
+      })
+    },
+  )
+}
+
+export async function fetchPartnerDelivery(deliveryId: string): Promise<PartnerDeliveryDto> {
+  return manualRequestFetch<PartnerDeliveryDto>(`/deliveries/${deliveryId}`)
+}
+
+export function useListManualRequestDeliveriesQuery(options?: { page?: number; perPage?: number; skip?: boolean }) {
+  const [data, setData] = useState<PartnerDeliveryPaginatedDto | undefined>(undefined)
+  const [isLoading, setIsLoading] = useState<boolean>(!options?.skip)
+  const [error, setError] = useState<unknown>(undefined)
+
+  const fetchDeliveries = useCallback(async () => {
+    if (options?.skip) return
+    setIsLoading(true)
+    setError(undefined)
+    try {
+      const apiMode = getManualRequestApiMode()
+      if (apiMode !== 'partner') {
+        throw new Error('Listing deliveries is only supported in partner API mode.')
+      }
+      const params = new URLSearchParams()
+      if (options?.page != null) params.set('page', String(options.page))
+      if (options?.perPage != null) params.set('perPage', String(options.perPage))
+      const query = params.toString() ? `?${params}` : ''
+      const response = await manualRequestFetch<PartnerDeliveryPaginatedDto>(`/deliveries${query}`)
+      setData(response)
+    } catch (err) {
+      setError(err)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [options?.skip, options?.page, options?.perPage])
+
+  useEffect(() => {
+    fetchDeliveries()
+  }, [fetchDeliveries])
+
+  return { data, isLoading, error, refetch: fetchDeliveries }
+}
+
+const SAFE_VERIFICATION_DEFAULT = {
+  signature: false,
+  signatureRequirement: { enabled: false, collectSignerName: false, collectSignerRelationship: false },
+  barcodes: [],
+  identification: { minAge: 0, noSobrietyCheck: true },
+  picture: false,
+}
+
+export function useUpdateManualRequestDeliveryMutation() {
+  return useStandaloneMutation<ManualRequestUpdateDeliveryInput, PartnerDeliveryDto>(
+    ({ deliveryId, orderReference, pickupNotes, pickupReadyAt, pickupDeadlineAt,
+       dropoffNotes, dropoffLatitude, dropoffLongitude, dropoffReadyAt, dropoffDeadlineAt }) => {
+      const apiMode = getManualRequestApiMode()
+      if (apiMode !== 'partner') {
+        throw new Error('Updating deliveries is only supported in partner API mode.')
+      }
+      return manualRequestFetch(`/deliveries/${deliveryId}`, {
+        method: 'POST',
+        body: JSON.stringify({
+          orderReference,
+          pickupNotes,
+          pickupReadyAt,
+          pickupDeadlineAt,
+          dropoffNotes,
+          dropoffLatitude,
+          dropoffLongitude,
+          dropoffReadyAt,
+          dropoffDeadlineAt,
+          tipByCustomer: 0,
+          pickupVerification: SAFE_VERIFICATION_DEFAULT,
+          dropoffVerification: SAFE_VERIFICATION_DEFAULT,
+        }),
       })
     },
   )

@@ -79,6 +79,8 @@ const formSchema = z.object({
   pickupAddress: addressSchema,
   pickupLatitude: z.number({ invalid_type_error: 'Enter a valid latitude' }),
   pickupLongitude: z.number({ invalid_type_error: 'Enter a valid longitude' }),
+  pickupReadyAt: z.string().optional(),
+  pickupDeadlineAt: z.string().optional(),
 
   // Dropoff
   dropoffName: z.string().min(1, 'Dropoff contact name is required'),
@@ -88,6 +90,8 @@ const formSchema = z.object({
   dropoffAddress: addressSchema,
   dropoffLatitude: z.number({ invalid_type_error: 'Enter a valid latitude' }),
   dropoffLongitude: z.number({ invalid_type_error: 'Enter a valid longitude' }),
+  dropoffReadyAt: z.string().optional(),
+  dropoffDeadlineAt: z.string().optional(),
 
   // Package
   packageType: z.enum(['DOCUMENTS', 'FOOD', 'GROCERIES', 'PHARMACY', 'RETAIL', 'OTHER']),
@@ -119,28 +123,41 @@ const defaultAddress = {
   houseNumber: '',
 }
 
-const defaultValues: CreateDeliveryFormValues = {
-  partnerId: process.env.NEXT_PUBLIC_MANUAL_REQUEST_DEFAULT_PARTNER_ID?.trim() ?? '',
-  pickupName: 'Pickup Contact',
-  pickupPhoneNumber: '+10000000000',
-  pickupBusinessName: 'Pickup Location',
-  pickupNotes: '',
-  pickupAddress: defaultAddress,
-  pickupLatitude: 0,
-  pickupLongitude: 0,
-  dropoffName: '',
-  dropoffPhoneNumber: '',
-  dropoffBusinessName: '',
-  dropoffNotes: '',
-  dropoffAddress: defaultAddress,
-  dropoffLatitude: 0,
-  dropoffLongitude: 0,
-  packageType: 'DOCUMENTS',
-  packageTypeOther: '',
-  packageDescription: '',
-  packageSize: ManualRequestPackageSize.SMALL,
-  specialInstructions: '',
-  orderReference: '',
+function defaultDeadlineDatetimeLocal(): string {
+  const d = new Date()
+  d.setHours(d.getHours() + 1)
+  return d.toISOString().slice(0, 16)
+}
+
+function buildDefaultValues(): CreateDeliveryFormValues {
+  const deadline = defaultDeadlineDatetimeLocal()
+  return {
+    partnerId: process.env.NEXT_PUBLIC_MANUAL_REQUEST_DEFAULT_PARTNER_ID?.trim() ?? '',
+    pickupName: 'Pickup Contact',
+    pickupPhoneNumber: '+10000000000',
+    pickupBusinessName: 'Pickup Location',
+    pickupNotes: '',
+    pickupAddress: defaultAddress,
+    pickupLatitude: 0,
+    pickupLongitude: 0,
+    pickupReadyAt: '',
+    pickupDeadlineAt: deadline,
+    dropoffName: '',
+    dropoffPhoneNumber: '',
+    dropoffBusinessName: '',
+    dropoffNotes: '',
+    dropoffAddress: defaultAddress,
+    dropoffLatitude: 0,
+    dropoffLongitude: 0,
+    dropoffReadyAt: '',
+    dropoffDeadlineAt: deadline,
+    packageType: 'DOCUMENTS',
+    packageTypeOther: '',
+    packageDescription: '',
+    packageSize: ManualRequestPackageSize.SMALL,
+    specialInstructions: '',
+    orderReference: '',
+  }
 }
 
 
@@ -157,6 +174,11 @@ function resolvePackageDescription(values: CreateDeliveryFormValues) {
 
   const match = packageTypeOptions.find((item) => item.value === values.packageType)
   return match?.label ?? values.packageType
+}
+
+function fromDatetimeLocal(value: string | undefined): string | null {
+  if (!value) return null
+  return new Date(value).toISOString()
 }
 
 function hasValidCoordinates(latitude: number, longitude: number) {
@@ -205,7 +227,7 @@ export function CreateDeliveryForm({ requireAccessToken = true }: CreateDelivery
 
   const form = useForm<CreateDeliveryFormValues>({
     resolver: zodResolver(formSchema),
-    defaultValues,
+    defaultValues: buildDefaultValues(),
   })
 
   useEffect(() => {
@@ -274,6 +296,8 @@ export function CreateDeliveryForm({ requireAccessToken = true }: CreateDelivery
         },
         pickupLatitude: pickupCoordinates.latitude,
         pickupLongitude: pickupCoordinates.longitude,
+        pickupReadyAt: fromDatetimeLocal(values.pickupReadyAt),
+        pickupDeadlineAt: fromDatetimeLocal(values.pickupDeadlineAt),
         dropoffName: values.dropoffName ?? '',
         dropoffPhoneNumber: values.dropoffPhoneNumber ?? '',
         dropoffBusinessName: values.dropoffBusinessName,
@@ -288,6 +312,8 @@ export function CreateDeliveryForm({ requireAccessToken = true }: CreateDelivery
         },
         dropoffLatitude: dropoffCoordinates.latitude,
         dropoffLongitude: dropoffCoordinates.longitude,
+        dropoffReadyAt: fromDatetimeLocal(values.dropoffReadyAt),
+        dropoffDeadlineAt: fromDatetimeLocal(values.dropoffDeadlineAt),
         packageDescription,
         packageSize: values.packageSize,
         specialInstructions: values.specialInstructions,
@@ -330,6 +356,8 @@ export function CreateDeliveryForm({ requireAccessToken = true }: CreateDelivery
         },
         pickupLatitude: formSnapshot.pickupLatitude,
         pickupLongitude: formSnapshot.pickupLongitude,
+        pickupReadyAt: fromDatetimeLocal(formSnapshot.pickupReadyAt),
+        pickupDeadlineAt: fromDatetimeLocal(formSnapshot.pickupDeadlineAt),
         dropoffName: formSnapshot.dropoffName ?? '',
         dropoffPhoneNumber: formSnapshot.dropoffPhoneNumber ?? '',
         dropoffBusinessName: formSnapshot.dropoffBusinessName,
@@ -344,6 +372,8 @@ export function CreateDeliveryForm({ requireAccessToken = true }: CreateDelivery
         },
         dropoffLatitude: formSnapshot.dropoffLatitude,
         dropoffLongitude: formSnapshot.dropoffLongitude,
+        dropoffReadyAt: fromDatetimeLocal(formSnapshot.dropoffReadyAt),
+        dropoffDeadlineAt: fromDatetimeLocal(formSnapshot.dropoffDeadlineAt),
         packageDescription,
         packageSize: formSnapshot.packageSize,
         specialInstructions: formSnapshot.specialInstructions,
@@ -406,45 +436,6 @@ export function CreateDeliveryForm({ requireAccessToken = true }: CreateDelivery
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(handleGetEstimate)} className="space-y-6">
-
-          {/* ── Request Details ──────────────────────────────────────── */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Request Details</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <FormField
-                control={form.control}
-                name="partnerId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Partner ID</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Partner ID from backend" {...field} />
-                    </FormControl>
-                    <p className="text-xs text-muted-foreground">
-                      Required. Use a valid partner ID from your instance database or Postman environment.
-                    </p>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="orderReference"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Order Reference (optional)</FormLabel>
-                    <FormControl>
-                      <Input placeholder="ORD-12345" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </CardContent>
-          </Card>
 
           {/* ── Package ─────────────────────────────────────────────────── */}
           <Card>
@@ -579,6 +570,35 @@ export function CreateDeliveryForm({ requireAccessToken = true }: CreateDelivery
                   </FormItem>
                 )}
               />
+
+              <div className="grid sm:grid-cols-2 gap-3">
+                <FormField
+                  control={form.control}
+                  name="pickupReadyAt"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Ready At (optional)</FormLabel>
+                      <FormControl>
+                        <Input type="datetime-local" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="pickupDeadlineAt"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Deadline (optional)</FormLabel>
+                      <FormControl>
+                        <Input type="datetime-local" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
             </CardContent>
           </Card>
 
@@ -647,6 +667,35 @@ export function CreateDeliveryForm({ requireAccessToken = true }: CreateDelivery
                   </FormItem>
                 )}
               />
+
+              <div className="grid sm:grid-cols-2 gap-3">
+                <FormField
+                  control={form.control}
+                  name="dropoffReadyAt"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Ready At (optional)</FormLabel>
+                      <FormControl>
+                        <Input type="datetime-local" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="dropoffDeadlineAt"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Deadline (optional)</FormLabel>
+                      <FormControl>
+                        <Input type="datetime-local" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
             </CardContent>
           </Card>
 

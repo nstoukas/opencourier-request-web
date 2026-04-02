@@ -83,7 +83,7 @@ export function EstimateSummaryCard({
               Distance
             </p>
             <p className="text-2xl font-bold">
-              {quote.distance.toFixed(1)}
+              {quote.distance != null ? quote.distance.toFixed(1) : '—'}
               <span className="text-base font-normal text-muted-foreground ml-1 lowercase">
                 {quote.distanceUnit}
               </span>

@@ -5,6 +5,7 @@ export enum ERequestRoutes {
   LOGIN = '/login',
   MANUAL_REQUEST = '/manual-request',
   MANUAL_REQUEST_STATUS = '/manual-request/[deliveryId]/status',
+  DELIVERIES = '/manual-request/deliveries',
 }
 
 export const RequestRoutes = Object.values(ERequestRoutes)
@@ -21,6 +22,7 @@ export const useRequestPageNavigator = () => {
     goHome: (args?: NavigationArgs) => router.push({ pathname: ERequestRoutes.HOME, ...args }),
     goToLogin: (args?: NavigationArgs) => router.push({ pathname: ERequestRoutes.LOGIN, ...args }),
     goToManualRequest: (args?: NavigationArgs) => router.push({ pathname: ERequestRoutes.MANUAL_REQUEST, ...args }),
+    goToDeliveries: (args?: NavigationArgs) => router.push({ pathname: ERequestRoutes.DELIVERIES, ...args }),
     goToManualRequestStatus: (deliveryId: string, args?: NavigationArgs) => {
       const { query = {}, ...otherArgs } = args ?? {}
       return router.push({
