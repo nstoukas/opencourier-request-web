@@ -10,6 +10,7 @@ import {
   Label,
 } from '../../admin-web-components'
 import { CreateDeliveryForm } from '../../modules/manual-request/components/CreateDeliveryForm'
+import { fetchPartnerMe } from '../../api/manualRequestApi'
 import {
   clearManualRequestAccessToken,
   clearManualRequestApiKey,
@@ -35,7 +36,10 @@ export default function ManualRequestPage() {
   )
 
   useEffect(() => {
-    setIsSignedIn(Boolean(getManualRequestAuthCredential()))
+    if (getManualRequestAuthCredential()) {
+      setIsSignedIn(true)
+      fetchPartnerMe().then((me) => setSignedInAs(me.email)).catch(() => {})
+    }
   }, [])
 
   const notifyTokenUpdated = () => {

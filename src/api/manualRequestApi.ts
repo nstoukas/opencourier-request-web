@@ -236,6 +236,10 @@ export async function fetchPartnerDelivery(deliveryId: string): Promise<PartnerD
   return manualRequestFetch<PartnerDeliveryDto>(`/deliveries/${deliveryId}`)
 }
 
+export async function fetchPartnerMe(): Promise<{ email: string }> {
+  return manualRequestFetch<{ email: string }>('/auth/me')
+}
+
 export function useListManualRequestDeliveriesQuery(options?: { page?: number; perPage?: number; skip?: boolean }) {
   const [data, setData] = useState<PartnerDeliveryPaginatedDto | undefined>(undefined)
   const [isLoading, setIsLoading] = useState<boolean>(!options?.skip)
