@@ -63,17 +63,33 @@ export interface ManualRequestDeliveryInput extends ManualRequestQuoteInput {
 
 // ─── Partner API delivery types (nested structure returned by partner endpoints) ──
 
+export interface PartnerDeliveryCourierDto {
+  id?: string | null
+  firstName?: string | null
+  lastName?: string | null
+  phoneNumber?: string | null
+  vehicleType?: string | null
+}
+
 export interface PartnerDeliveryPickupDto {
   id: string
   latitude: number | null
   longitude: number | null
   formattedAddress: string | null
+  addressLine1?: string | null
+  addressLine2?: string | null
+  street?: string | null
   city: string | null
   state: string | null
+  zipCode?: string | null
+  countryCode?: string | null
+  stateCode?: string | null
+  houseNumber?: string | null
   pickupName: string
   pickupPhoneNumber: string
   pickupBusinessName: string
   pickupNotes: string | null
+  pickupTypes?: string[]
 }
 
 export interface PartnerDeliveryDropoffDto {
@@ -81,30 +97,59 @@ export interface PartnerDeliveryDropoffDto {
   latitude: number | null
   longitude: number | null
   formattedAddress: string | null
+  addressLine1?: string | null
+  addressLine2?: string | null
+  street?: string | null
   city: string | null
   state: string | null
+  zipCode?: string | null
+  countryCode?: string | null
+  stateCode?: string | null
+  houseNumber?: string | null
   dropoffName: string
   dropoffPhoneNumber: string
   dropoffBusinessName: string | null
   dropoffNotes: string | null
+  dropoffSellerNotes?: string | null
+}
+
+export interface PartnerDeliveryOrderItemDto {
+  name: string
+  quantity: number
+  size?: string
 }
 
 export interface PartnerDeliveryDto {
   id: string
+  quoteId?: string | null
   status: string
   pickup?: PartnerDeliveryPickupDto | null
   dropoff?: PartnerDeliveryDropoffDto | null
-  courier?: { id?: string } | null
+  courier?: PartnerDeliveryCourierDto | null
   orderReference: string | null
   currencyCode: string
   totalCost: number | null
-  tips: number
+  fee?: number | null
+  tips?: number
+  totalCompensation?: number | null
   createdAt: string
   pickupReadyAt: string | null
   pickupDeadlineAt: string | null
   dropoffEta: string | null
   dropoffReadyAt: string | null
   dropoffDeadlineAt: string | null
+  deliverableAction?: string | null
+  undeliverableAction?: string | null
+  undeliverableReason?: string | null
+  orderTotalValue?: number | null
+  orderItems?: PartnerDeliveryOrderItemDto[]
+  customerNotes?: unknown[] | null
+  idempotencyKey?: string | null
+  externalStoreId?: string | null
+  externalUserInfo?: unknown | null
+  externalId?: string | null
+  requiresId?: boolean | null
+  deliveryQuoteId?: string | null
 }
 
 export interface PartnerPaginationDto {
@@ -147,6 +192,9 @@ export interface ManualRequestQuoteDto {
   dropoffEta: string | null
   createdAt: string
 }
+
+/** Response from GET `/deliveries/:id` (partner) or GET `/delivery/:id` (admin). */
+export type ManualRequestDeliveryFetchResult = PartnerDeliveryDto | ManualRequestDeliveryDto
 
 export interface ManualRequestDeliveryDto {
   id: string

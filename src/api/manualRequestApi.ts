@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
   ManualRequestDeliveryDto,
+  ManualRequestDeliveryFetchResult,
   ManualRequestDeliveryInput,
   ManualRequestQuoteDto,
   ManualRequestQuoteInput,
@@ -315,7 +316,7 @@ export function useGetManualRequestDeliveryQuery(
   deliveryId: string,
   options?: { skip?: boolean },
 ) {
-  const [data, setData] = useState<ManualRequestDeliveryDto | undefined>(undefined)
+  const [data, setData] = useState<ManualRequestDeliveryFetchResult | undefined>(undefined)
   const [isLoading, setIsLoading] = useState<boolean>(!options?.skip)
   const [error, setError] = useState<unknown>(undefined)
 
@@ -326,7 +327,7 @@ export function useGetManualRequestDeliveryQuery(
     try {
       const apiMode = getManualRequestApiMode()
       const path = apiMode === 'partner' ? `/deliveries/${deliveryId}` : `/delivery/${deliveryId}`
-      const response = await manualRequestFetch<ManualRequestDeliveryDto>(path)
+      const response = await manualRequestFetch<ManualRequestDeliveryFetchResult>(path)
       setData(response)
     } catch (err) {
       setError(err)
