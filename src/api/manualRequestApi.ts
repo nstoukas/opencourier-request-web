@@ -125,8 +125,35 @@ function toPartnerAddress(input: ManualRequestQuoteInput['pickupAddress']) {
   }
 }
 
+/** Aligns with backend fields that populate order + location `formattedAddress`. */
+function withRootLocationFormattedAddresses<T extends ManualRequestQuoteInput>(input: T) {
+  const pickupLocationFormattedAddress =
+    input.pickupLocationFormattedAddress?.trim() ||
+    input.pickupAddress.formattedAddress?.trim() ||
+    buildManualRequestFormattedAddress(input.pickupAddress)
+  const dropoffLocationFormattedAddress =
+    input.dropoffLocationFormattedAddress?.trim() ||
+    input.dropoffAddress.formattedAddress?.trim() ||
+    buildManualRequestFormattedAddress(input.dropoffAddress)
+  return {
+    ...input,
+    pickupAddress: {
+      ...input.pickupAddress,
+      formattedAddress: pickupLocationFormattedAddress,
+    },
+    dropoffAddress: {
+      ...input.dropoffAddress,
+      formattedAddress: dropoffLocationFormattedAddress,
+    },
+    pickupLocationFormattedAddress,
+    dropoffLocationFormattedAddress,
+  }
+}
+
 function mapQuoteInputForPartner(input: ManualRequestQuoteInput) {
   return {
+    pickupLocationFormattedAddress: input.pickupLocationFormattedAddress ?? '',
+    dropoffLocationFormattedAddress: input.dropoffLocationFormattedAddress ?? '',
     pickupAddress: toPartnerAddress(input.pickupAddress),
     dropoffAddress: toPartnerAddress(input.dropoffAddress),
     pickupLatitude: input.pickupLatitude,
@@ -145,6 +172,8 @@ function mapQuoteInputForPartner(input: ManualRequestQuoteInput) {
 
 function mapDeliveryInputForPartner(input: ManualRequestDeliveryInput) {
   return {
+    pickupLocationFormattedAddress: input.pickupLocationFormattedAddress ?? '',
+    dropoffLocationFormattedAddress: input.dropoffLocationFormattedAddress ?? '',
     quoteId: input.quoteId,
     idempotencyKey: input.idempotencyKey,
     pickupAddress: toPartnerAddress(input.pickupAddress),
@@ -186,7 +215,8 @@ export function useCreateManualRequestQuoteMutation() {
   return useStandaloneMutation<ManualRequestQuoteInput, ManualRequestQuoteDto>((input) => {
     const apiMode = getManualRequestApiMode()
     const path = apiMode === 'partner' ? '/delivery-quotes' : '/quote'
-    const body = apiMode === 'partner' ? mapQuoteInputForPartner(input) : input
+    const ready = withRootLocationFormattedAddresses(input)
+    const body = apiMode === 'partner' ? mapQuoteInputForPartner(ready) : ready
 
     return manualRequestFetch(path, {
       method: 'POST',
@@ -199,7 +229,8 @@ export function useConfirmManualRequestDeliveryMutation() {
   return useStandaloneMutation<ManualRequestDeliveryInput, ManualRequestDeliveryDto>((input) => {
     const apiMode = getManualRequestApiMode()
     const path = apiMode === 'partner' ? '/deliveries' : '/delivery'
-    const body = apiMode === 'partner' ? mapDeliveryInputForPartner(input) : input
+    const ready = withRootLocationFormattedAddresses(input)
+    const body = apiMode === 'partner' ? mapDeliveryInputForPartner(ready) : ready
 
     return manualRequestFetch(path, {
       method: 'POST',

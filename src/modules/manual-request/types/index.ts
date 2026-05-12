@@ -23,7 +23,13 @@ export function buildManualRequestFormattedAddress(
 ): string {
   const street = (a.streetAddress?.[0] ?? '').trim()
   const house = (a.houseNumber ?? '').trim()
-  const line1 = [house, street].filter(Boolean).join(' ').trim()
+  let line1 = ''
+  if (street) {
+    line1 =
+      house && street.startsWith(`${house} `) ? street : [house, street].filter(Boolean).join(' ').trim()
+  } else {
+    line1 = house
+  }
   const cityState = [a.city?.trim(), a.state?.trim()].filter(Boolean).join(', ')
   const zipCountry = [a.zipCode?.trim(), a.countryCode?.trim()].filter(Boolean).join(' ')
   return [line1, cityState, zipCountry].filter(Boolean).join(' · ')
@@ -31,6 +37,10 @@ export function buildManualRequestFormattedAddress(
 
 export interface ManualRequestQuoteInput {
   partnerId?: string
+  /** Backend field for full pickup display (mirrors persisted `pickupLocationFormattedAddress`). */
+  pickupLocationFormattedAddress?: string | null
+  /** Backend field for full dropoff display (mirrors persisted `dropoffLocationFormattedAddress`). */
+  dropoffLocationFormattedAddress?: string | null
   pickupName: string
   pickupPhoneNumber: string
   pickupBusinessName: string
