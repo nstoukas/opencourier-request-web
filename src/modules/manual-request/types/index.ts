@@ -11,6 +11,22 @@ export interface ManualRequestAddressInput {
   zipCode: string
   countryCode: string
   houseNumber?: string
+  /** Single-line human-readable address for APIs that store a formatted string. */
+  formattedAddress?: string | null
+}
+
+/** Builds a display line from structured fields (house + street · city, state · zip country). */
+export function buildManualRequestFormattedAddress(
+  a: Pick<ManualRequestAddressInput, 'streetAddress' | 'city' | 'state' | 'zipCode' | 'countryCode'> & {
+    houseNumber?: string | null
+  },
+): string {
+  const street = (a.streetAddress?.[0] ?? '').trim()
+  const house = (a.houseNumber ?? '').trim()
+  const line1 = [house, street].filter(Boolean).join(' ').trim()
+  const cityState = [a.city?.trim(), a.state?.trim()].filter(Boolean).join(', ')
+  const zipCountry = [a.zipCode?.trim(), a.countryCode?.trim()].filter(Boolean).join(' ')
+  return [line1, cityState, zipCountry].filter(Boolean).join(' · ')
 }
 
 export interface ManualRequestQuoteInput {

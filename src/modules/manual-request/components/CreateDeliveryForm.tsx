@@ -35,6 +35,7 @@ import {
 import { Loader2Icon } from 'lucide-react'
 import { useCreateManualRequestQuoteMutation, useConfirmManualRequestDeliveryMutation } from '../../../api/manualRequestApi'
 import {
+  buildManualRequestFormattedAddress,
   ManualRequestDeliveryInput,
   ManualRequestPackageSize,
   ManualRequestQuoteDto,
@@ -293,6 +294,7 @@ export function CreateDeliveryForm({ requireAccessToken = true }: CreateDelivery
           zipCode: values.pickupAddress.zipCode || '',
           countryCode: values.pickupAddress.countryCode,
           houseNumber: values.pickupAddress.houseNumber,
+          formattedAddress: buildManualRequestFormattedAddress(values.pickupAddress),
         },
         pickupLatitude: pickupCoordinates.latitude,
         pickupLongitude: pickupCoordinates.longitude,
@@ -309,6 +311,7 @@ export function CreateDeliveryForm({ requireAccessToken = true }: CreateDelivery
           zipCode: values.dropoffAddress.zipCode || '',
           countryCode: values.dropoffAddress.countryCode,
           houseNumber: values.dropoffAddress.houseNumber,
+          formattedAddress: buildManualRequestFormattedAddress(values.dropoffAddress),
         },
         dropoffLatitude: dropoffCoordinates.latitude,
         dropoffLongitude: dropoffCoordinates.longitude,
@@ -353,6 +356,7 @@ export function CreateDeliveryForm({ requireAccessToken = true }: CreateDelivery
           zipCode: formSnapshot.pickupAddress.zipCode || '',
           countryCode: formSnapshot.pickupAddress.countryCode,
           houseNumber: formSnapshot.pickupAddress.houseNumber,
+          formattedAddress: buildManualRequestFormattedAddress(formSnapshot.pickupAddress),
         },
         pickupLatitude: formSnapshot.pickupLatitude,
         pickupLongitude: formSnapshot.pickupLongitude,
@@ -369,6 +373,7 @@ export function CreateDeliveryForm({ requireAccessToken = true }: CreateDelivery
           zipCode: formSnapshot.dropoffAddress.zipCode || '',
           countryCode: formSnapshot.dropoffAddress.countryCode,
           houseNumber: formSnapshot.dropoffAddress.houseNumber,
+          formattedAddress: buildManualRequestFormattedAddress(formSnapshot.dropoffAddress),
         },
         dropoffLatitude: formSnapshot.dropoffLatitude,
         dropoffLongitude: formSnapshot.dropoffLongitude,

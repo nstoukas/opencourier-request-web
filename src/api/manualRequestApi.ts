@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
+  buildManualRequestFormattedAddress,
   ManualRequestDeliveryDto,
   ManualRequestDeliveryFetchResult,
   ManualRequestDeliveryInput,
@@ -111,6 +112,8 @@ function useStandaloneMutation<TInput, TOutput>(
 }
 
 function toPartnerAddress(input: ManualRequestQuoteInput['pickupAddress']) {
+  const formattedAddress =
+    (input.formattedAddress?.trim() || buildManualRequestFormattedAddress(input)) || ''
   return {
     streetAddress: [input.streetAddress?.[0] ?? ''],
     city: input.city,
@@ -118,6 +121,7 @@ function toPartnerAddress(input: ManualRequestQuoteInput['pickupAddress']) {
     zipCode: input.zipCode || '',
     countryCode: (input.countryCode || 'US').toUpperCase(),
     houseNumber: input.houseNumber,
+    formattedAddress,
   }
 }
 
