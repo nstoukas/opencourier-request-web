@@ -29,6 +29,8 @@ interface NominatimResult {
     town?: string
     village?: string
     suburb?: string
+    neighbourhood?: string
+    city_district?: string
     state?: string
     postcode?: string
     country_code?: string
@@ -70,7 +72,12 @@ export function AddressSection<T extends FieldValues>({
     setResults([])
     try {
       const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&addressdetails=1&limit=6`
-      const res = await fetch(url, { headers: { 'Accept-Language': 'en' } })
+      const res = await fetch(url, {
+        headers: {
+          'Accept-Language': 'en',
+          'User-Agent': 'opencourier-request-web/1.0 (manual delivery form)',
+        },
+      })
       const data: NominatimResult[] = await res.json()
       if (data.length === 0) setSearchError('No results found. Try a more specific address.')
       setResults(data)
@@ -84,8 +91,16 @@ export function AddressSection<T extends FieldValues>({
 
   const handleSelect = (r: NominatimResult) => {
     const a = r.address
-    const street = [a.house_number, a.road].filter(Boolean).join(' ')
-    const city = a.city ?? a.town ?? a.village ?? a.suburb ?? ''
+    const road = (a.road ?? '').trim()
+    const hn = (a.house_number ?? '').trim()
+    const city =
+      a.city?.trim() ||
+      a.town?.trim() ||
+      a.village?.trim() ||
+      a.suburb?.trim() ||
+      a.neighbourhood?.trim() ||
+      a.city_district?.trim() ||
+      ''
     const region = a.state ?? ''
     const postalCode = a.postcode ?? ''
     const countryCode = (a.country_code ?? '').toUpperCase()
@@ -93,12 +108,13 @@ export function AddressSection<T extends FieldValues>({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const set = (path: Path<T>, value: any) => setValue(path, value, { shouldValidate: true, shouldDirty: true })
 
-    set(field('streetAddress.0'), street)
+    set(field('streetAddress.0'), road || hn)
+    set(field('houseNumber'), road ? hn : '')
     set(field('city'), city)
     set(field('state'), region)
     set(field('zipCode'), postalCode)
     if (countryCode) set(field('countryCode'), countryCode)
-    if (a.house_number) set(field('houseNumber'), a.house_number)
+    set(field('formattedAddress'), r.display_name.trim())
     set(coord('Latitude'), parseFloat(r.lat))
     set(coord('Longitude'), parseFloat(r.lon))
 
@@ -255,9 +271,9 @@ export function AddressSection<T extends FieldValues>({
           name={field('houseNumber')}
           render={({ field: f }) => (
             <FormItem>
-              <FormLabel>Unit / Apt (optional)</FormLabel>
+              <FormLabel>Street number</FormLabel>
               <FormControl>
-                <Input placeholder="Apt 4B" {...f} />
+                <Input placeholder="11 (from map search)" {...f} />
               </FormControl>
               <FormMessage />
             </FormItem>

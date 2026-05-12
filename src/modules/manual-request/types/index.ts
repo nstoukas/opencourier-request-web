@@ -32,7 +32,7 @@ export function buildManualRequestFormattedAddress(
   }
   const cityState = [a.city?.trim(), a.state?.trim()].filter(Boolean).join(', ')
   const zipCountry = [a.zipCode?.trim(), a.countryCode?.trim()].filter(Boolean).join(' ')
-  return [line1, cityState, zipCountry].filter(Boolean).join(' · ')
+  return [line1, cityState, zipCountry].filter(Boolean).join(', ')
 }
 
 export interface ManualRequestQuoteInput {

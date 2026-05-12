@@ -56,6 +56,8 @@ const addressSchema = z.object({
   zipCode: z.string().optional(),
   countryCode: z.string().length(2, 'Use 2-letter country code').transform((value) => value.toUpperCase()),
   houseNumber: z.string().optional(),
+  /** OpenStreetMap Nominatim `display_name` when chosen from search or geocoder fallback. */
+  formattedAddress: z.string().optional(),
 })
 
 const packageTypeOptions = [
@@ -122,6 +124,7 @@ const defaultAddress = {
   zipCode: '',
   countryCode: 'US',
   houseNumber: '',
+  formattedAddress: '',
 }
 
 function defaultDeadlineDatetimeLocal(): string {
@@ -186,9 +189,26 @@ function hasValidCoordinates(latitude: number, longitude: number) {
   return Number.isFinite(latitude) && Number.isFinite(longitude) && !(latitude === 0 && longitude === 0)
 }
 
-async function geocodeCoordinatesFromAddress(address: CreateDeliveryFormValues['pickupAddress']) {
+type GeocodeCoordinatesResult = { latitude: number; longitude: number; displayName?: string }
+
+/** Prefer Nominatim display line (same style as OSM search results). */
+function resolveSubmittedFormattedAddress(
+  addr: CreateDeliveryFormValues['pickupAddress'],
+  geocode: GeocodeCoordinatesResult | null | undefined,
+): string {
+  return (
+    geocode?.displayName?.trim() ||
+    addr.formattedAddress?.trim() ||
+    buildManualRequestFormattedAddress(addr)
+  )
+}
+
+async function geocodeCoordinatesFromAddress(
+  address: CreateDeliveryFormValues['pickupAddress'],
+): Promise<GeocodeCoordinatesResult | null> {
   const query = [
     address.streetAddress?.[0],
+    address.houseNumber,
     address.city,
     address.state,
     address.zipCode,
@@ -197,11 +217,16 @@ async function geocodeCoordinatesFromAddress(address: CreateDeliveryFormValues['
     .filter(Boolean)
     .join(', ')
 
-  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1`
-  const response = await fetch(url, { headers: { 'Accept-Language': 'en' } })
+  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&addressdetails=1&limit=1`
+  const response = await fetch(url, {
+    headers: {
+      'Accept-Language': 'en',
+      'User-Agent': 'opencourier-request-web/1.0 (manual delivery form)',
+    },
+  })
   if (!response.ok) return null
 
-  const result = (await response.json()) as Array<{ lat: string; lon: string }>
+  const result = (await response.json()) as Array<{ lat: string; lon: string; display_name?: string }>
   const first = result[0]
   if (!first) return null
 
@@ -209,7 +234,11 @@ async function geocodeCoordinatesFromAddress(address: CreateDeliveryFormValues['
   const longitude = parseFloat(first.lon)
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null
 
-  return { latitude, longitude }
+  return {
+    latitude,
+    longitude,
+    displayName: first.display_name?.trim() || undefined,
+  }
 }
 
 export function CreateDeliveryForm({ requireAccessToken = true }: CreateDeliveryFormProps) {
@@ -276,10 +305,19 @@ export function CreateDeliveryForm({ requireAccessToken = true }: CreateDelivery
         return
       }
 
+      const pickupFormatted = resolveSubmittedFormattedAddress(values.pickupAddress, pickupCoordinates)
+      const dropoffFormatted = resolveSubmittedFormattedAddress(values.dropoffAddress, dropoffCoordinates)
+
       form.setValue('pickupLatitude', pickupCoordinates.latitude, { shouldDirty: true, shouldValidate: true })
       form.setValue('pickupLongitude', pickupCoordinates.longitude, { shouldDirty: true, shouldValidate: true })
       form.setValue('dropoffLatitude', dropoffCoordinates.latitude, { shouldDirty: true, shouldValidate: true })
       form.setValue('dropoffLongitude', dropoffCoordinates.longitude, { shouldDirty: true, shouldValidate: true })
+      if (pickupFormatted) {
+        form.setValue('pickupAddress.formattedAddress', pickupFormatted, { shouldDirty: true, shouldValidate: true })
+      }
+      if (dropoffFormatted) {
+        form.setValue('dropoffAddress.formattedAddress', dropoffFormatted, { shouldDirty: true, shouldValidate: true })
+      }
 
       const payload: ManualRequestQuoteInput = {
         partnerId: values.partnerId ?? '',
@@ -294,7 +332,7 @@ export function CreateDeliveryForm({ requireAccessToken = true }: CreateDelivery
           zipCode: values.pickupAddress.zipCode || '',
           countryCode: values.pickupAddress.countryCode,
           houseNumber: values.pickupAddress.houseNumber,
-          formattedAddress: buildManualRequestFormattedAddress(values.pickupAddress),
+          formattedAddress: pickupFormatted,
         },
         pickupLatitude: pickupCoordinates.latitude,
         pickupLongitude: pickupCoordinates.longitude,
@@ -311,7 +349,7 @@ export function CreateDeliveryForm({ requireAccessToken = true }: CreateDelivery
           zipCode: values.dropoffAddress.zipCode || '',
           countryCode: values.dropoffAddress.countryCode,
           houseNumber: values.dropoffAddress.houseNumber,
-          formattedAddress: buildManualRequestFormattedAddress(values.dropoffAddress),
+          formattedAddress: dropoffFormatted,
         },
         dropoffLatitude: dropoffCoordinates.latitude,
         dropoffLongitude: dropoffCoordinates.longitude,
@@ -331,6 +369,14 @@ export function CreateDeliveryForm({ requireAccessToken = true }: CreateDelivery
         pickupLongitude: pickupCoordinates.longitude,
         dropoffLatitude: dropoffCoordinates.latitude,
         dropoffLongitude: dropoffCoordinates.longitude,
+        pickupAddress: {
+          ...values.pickupAddress,
+          formattedAddress: pickupFormatted,
+        },
+        dropoffAddress: {
+          ...values.dropoffAddress,
+          formattedAddress: dropoffFormatted,
+        },
       })
     } catch (err: any) {
       setErrorMessage(getDebugErrorMessage(err, 'Failed to get estimate. Check inputs and try again.'))
@@ -356,7 +402,9 @@ export function CreateDeliveryForm({ requireAccessToken = true }: CreateDelivery
           zipCode: formSnapshot.pickupAddress.zipCode || '',
           countryCode: formSnapshot.pickupAddress.countryCode,
           houseNumber: formSnapshot.pickupAddress.houseNumber,
-          formattedAddress: buildManualRequestFormattedAddress(formSnapshot.pickupAddress),
+          formattedAddress:
+            formSnapshot.pickupAddress.formattedAddress?.trim() ||
+            buildManualRequestFormattedAddress(formSnapshot.pickupAddress),
         },
         pickupLatitude: formSnapshot.pickupLatitude,
         pickupLongitude: formSnapshot.pickupLongitude,
@@ -373,7 +421,9 @@ export function CreateDeliveryForm({ requireAccessToken = true }: CreateDelivery
           zipCode: formSnapshot.dropoffAddress.zipCode || '',
           countryCode: formSnapshot.dropoffAddress.countryCode,
           houseNumber: formSnapshot.dropoffAddress.houseNumber,
-          formattedAddress: buildManualRequestFormattedAddress(formSnapshot.dropoffAddress),
+          formattedAddress:
+            formSnapshot.dropoffAddress.formattedAddress?.trim() ||
+            buildManualRequestFormattedAddress(formSnapshot.dropoffAddress),
         },
         dropoffLatitude: formSnapshot.dropoffLatitude,
         dropoffLongitude: formSnapshot.dropoffLongitude,
