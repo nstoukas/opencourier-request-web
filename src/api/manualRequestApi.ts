@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
+  buildManualRequestFormattedAddress,
   ManualRequestDeliveryDto,
+  ManualRequestDeliveryFetchResult,
   ManualRequestDeliveryInput,
   ManualRequestQuoteDto,
   ManualRequestQuoteInput,
@@ -110,6 +112,8 @@ function useStandaloneMutation<TInput, TOutput>(
 }
 
 function toPartnerAddress(input: ManualRequestQuoteInput['pickupAddress']) {
+  const formattedAddress =
+    (input.formattedAddress?.trim() || buildManualRequestFormattedAddress(input)) || ''
   return {
     streetAddress: [input.streetAddress?.[0] ?? ''],
     city: input.city,
@@ -117,11 +121,39 @@ function toPartnerAddress(input: ManualRequestQuoteInput['pickupAddress']) {
     zipCode: input.zipCode || '',
     countryCode: (input.countryCode || 'US').toUpperCase(),
     houseNumber: input.houseNumber,
+    formattedAddress,
+  }
+}
+
+/** Aligns with backend fields that populate order + location `formattedAddress`. */
+function withRootLocationFormattedAddresses<T extends ManualRequestQuoteInput>(input: T) {
+  const pickupLocationFormattedAddress =
+    input.pickupLocationFormattedAddress?.trim() ||
+    input.pickupAddress.formattedAddress?.trim() ||
+    buildManualRequestFormattedAddress(input.pickupAddress)
+  const dropoffLocationFormattedAddress =
+    input.dropoffLocationFormattedAddress?.trim() ||
+    input.dropoffAddress.formattedAddress?.trim() ||
+    buildManualRequestFormattedAddress(input.dropoffAddress)
+  return {
+    ...input,
+    pickupAddress: {
+      ...input.pickupAddress,
+      formattedAddress: pickupLocationFormattedAddress,
+    },
+    dropoffAddress: {
+      ...input.dropoffAddress,
+      formattedAddress: dropoffLocationFormattedAddress,
+    },
+    pickupLocationFormattedAddress,
+    dropoffLocationFormattedAddress,
   }
 }
 
 function mapQuoteInputForPartner(input: ManualRequestQuoteInput) {
   return {
+    pickupLocationFormattedAddress: input.pickupLocationFormattedAddress ?? '',
+    dropoffLocationFormattedAddress: input.dropoffLocationFormattedAddress ?? '',
     pickupAddress: toPartnerAddress(input.pickupAddress),
     dropoffAddress: toPartnerAddress(input.dropoffAddress),
     pickupLatitude: input.pickupLatitude,
@@ -140,6 +172,8 @@ function mapQuoteInputForPartner(input: ManualRequestQuoteInput) {
 
 function mapDeliveryInputForPartner(input: ManualRequestDeliveryInput) {
   return {
+    pickupLocationFormattedAddress: input.pickupLocationFormattedAddress ?? '',
+    dropoffLocationFormattedAddress: input.dropoffLocationFormattedAddress ?? '',
     quoteId: input.quoteId,
     idempotencyKey: input.idempotencyKey,
     pickupAddress: toPartnerAddress(input.pickupAddress),
@@ -181,7 +215,8 @@ export function useCreateManualRequestQuoteMutation() {
   return useStandaloneMutation<ManualRequestQuoteInput, ManualRequestQuoteDto>((input) => {
     const apiMode = getManualRequestApiMode()
     const path = apiMode === 'partner' ? '/delivery-quotes' : '/quote'
-    const body = apiMode === 'partner' ? mapQuoteInputForPartner(input) : input
+    const ready = withRootLocationFormattedAddresses(input)
+    const body = apiMode === 'partner' ? mapQuoteInputForPartner(ready) : ready
 
     return manualRequestFetch(path, {
       method: 'POST',
@@ -194,7 +229,8 @@ export function useConfirmManualRequestDeliveryMutation() {
   return useStandaloneMutation<ManualRequestDeliveryInput, ManualRequestDeliveryDto>((input) => {
     const apiMode = getManualRequestApiMode()
     const path = apiMode === 'partner' ? '/deliveries' : '/delivery'
-    const body = apiMode === 'partner' ? mapDeliveryInputForPartner(input) : input
+    const ready = withRootLocationFormattedAddresses(input)
+    const body = apiMode === 'partner' ? mapDeliveryInputForPartner(ready) : ready
 
     return manualRequestFetch(path, {
       method: 'POST',
@@ -315,7 +351,7 @@ export function useGetManualRequestDeliveryQuery(
   deliveryId: string,
   options?: { skip?: boolean },
 ) {
-  const [data, setData] = useState<ManualRequestDeliveryDto | undefined>(undefined)
+  const [data, setData] = useState<ManualRequestDeliveryFetchResult | undefined>(undefined)
   const [isLoading, setIsLoading] = useState<boolean>(!options?.skip)
   const [error, setError] = useState<unknown>(undefined)
 
@@ -326,7 +362,7 @@ export function useGetManualRequestDeliveryQuery(
     try {
       const apiMode = getManualRequestApiMode()
       const path = apiMode === 'partner' ? `/deliveries/${deliveryId}` : `/delivery/${deliveryId}`
-      const response = await manualRequestFetch<ManualRequestDeliveryDto>(path)
+      const response = await manualRequestFetch<ManualRequestDeliveryFetchResult>(path)
       setData(response)
     } catch (err) {
       setError(err)

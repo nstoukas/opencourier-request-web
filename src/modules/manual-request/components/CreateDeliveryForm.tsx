@@ -35,6 +35,7 @@ import {
 import { Loader2Icon } from 'lucide-react'
 import { useCreateManualRequestQuoteMutation, useConfirmManualRequestDeliveryMutation } from '../../../api/manualRequestApi'
 import {
+  buildManualRequestFormattedAddress,
   ManualRequestDeliveryInput,
   ManualRequestPackageSize,
   ManualRequestQuoteDto,
@@ -45,6 +46,13 @@ import { AddressSection } from './AddressSection'
 import { ErrorBanner } from './ErrorBanner'
 import { useRequestPageNavigator } from '../../../hooks/useRequestPageNavigator'
 import { getManualRequestAuthCredential, getManualRequestAuthMode } from '../../../utils/manualRequestAuth'
+import {
+  clearManualRequestDefaultPickup,
+  MANUAL_REQUEST_DEFAULT_PICKUP_STORAGE_KEY,
+  readManualRequestDefaultPickup,
+  writeManualRequestDefaultPickup,
+  type ManualRequestDefaultPickupSnapshot,
+} from '../../../utils/manualRequestDefaultPickup'
 
 // ─── Validation schema ────────────────────────────────────────────────────────
 
@@ -55,6 +63,8 @@ const addressSchema = z.object({
   zipCode: z.string().optional(),
   countryCode: z.string().length(2, 'Use 2-letter country code').transform((value) => value.toUpperCase()),
   houseNumber: z.string().optional(),
+  /** OpenStreetMap Nominatim `display_name` when chosen from search or geocoder fallback. */
+  formattedAddress: z.string().optional(),
 })
 
 const packageTypeOptions = [
@@ -121,12 +131,40 @@ const defaultAddress = {
   zipCode: '',
   countryCode: 'US',
   houseNumber: '',
+  formattedAddress: '',
 }
 
 function defaultDeadlineDatetimeLocal(): string {
   const d = new Date()
   d.setHours(d.getHours() + 1)
   return d.toISOString().slice(0, 16)
+}
+
+function mergePickupSnapshotIntoDefaults(
+  base: CreateDeliveryFormValues,
+  snapshot: ManualRequestDefaultPickupSnapshot,
+): CreateDeliveryFormValues {
+  const street =
+    snapshot.pickupAddress.streetAddress.length > 0 &&
+    (snapshot.pickupAddress.streetAddress[0] ?? '').trim() !== ''
+      ? snapshot.pickupAddress.streetAddress
+      : base.pickupAddress.streetAddress
+  return {
+    ...base,
+    pickupName: snapshot.pickupName,
+    pickupPhoneNumber: snapshot.pickupPhoneNumber,
+    pickupBusinessName: snapshot.pickupBusinessName,
+    pickupNotes: snapshot.pickupNotes,
+    pickupAddress: {
+      ...base.pickupAddress,
+      ...snapshot.pickupAddress,
+      streetAddress: street,
+    },
+    pickupLatitude: snapshot.pickupLatitude,
+    pickupLongitude: snapshot.pickupLongitude,
+    pickupReadyAt: snapshot.pickupReadyAt,
+    pickupDeadlineAt: base.pickupDeadlineAt,
+  }
 }
 
 function buildDefaultValues(): CreateDeliveryFormValues {
@@ -185,9 +223,26 @@ function hasValidCoordinates(latitude: number, longitude: number) {
   return Number.isFinite(latitude) && Number.isFinite(longitude) && !(latitude === 0 && longitude === 0)
 }
 
-async function geocodeCoordinatesFromAddress(address: CreateDeliveryFormValues['pickupAddress']) {
+type GeocodeCoordinatesResult = { latitude: number; longitude: number; displayName?: string }
+
+/** Prefer Nominatim display line (same style as OSM search results). */
+function resolveSubmittedFormattedAddress(
+  addr: CreateDeliveryFormValues['pickupAddress'],
+  geocode: GeocodeCoordinatesResult | null | undefined,
+): string {
+  return (
+    geocode?.displayName?.trim() ||
+    addr.formattedAddress?.trim() ||
+    buildManualRequestFormattedAddress(addr)
+  )
+}
+
+async function geocodeCoordinatesFromAddress(
+  address: CreateDeliveryFormValues['pickupAddress'],
+): Promise<GeocodeCoordinatesResult | null> {
   const query = [
     address.streetAddress?.[0],
+    address.houseNumber,
     address.city,
     address.state,
     address.zipCode,
@@ -196,11 +251,16 @@ async function geocodeCoordinatesFromAddress(address: CreateDeliveryFormValues['
     .filter(Boolean)
     .join(', ')
 
-  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1`
-  const response = await fetch(url, { headers: { 'Accept-Language': 'en' } })
+  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&addressdetails=1&limit=1`
+  const response = await fetch(url, {
+    headers: {
+      'Accept-Language': 'en',
+      'User-Agent': 'opencourier-request-web/1.0 (manual delivery form)',
+    },
+  })
   if (!response.ok) return null
 
-  const result = (await response.json()) as Array<{ lat: string; lon: string }>
+  const result = (await response.json()) as Array<{ lat: string; lon: string; display_name?: string }>
   const first = result[0]
   if (!first) return null
 
@@ -208,7 +268,11 @@ async function geocodeCoordinatesFromAddress(address: CreateDeliveryFormValues['
   const longitude = parseFloat(first.lon)
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null
 
-  return { latitude, longitude }
+  return {
+    latitude,
+    longitude,
+    displayName: first.display_name?.trim() || undefined,
+  }
 }
 
 export function CreateDeliveryForm({ requireAccessToken = true }: CreateDeliveryFormProps) {
@@ -221,6 +285,7 @@ export function CreateDeliveryForm({ requireAccessToken = true }: CreateDelivery
   const [formSnapshot, setFormSnapshot] = useState<CreateDeliveryFormValues | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [hasAccessToken, setHasAccessToken] = useState(true)
+  const [hasSavedDefaultPickup, setHasSavedDefaultPickup] = useState(false)
 
   const [createQuote, { isLoading: isQuoting }] = useCreateManualRequestQuoteMutation()
   const [confirmDelivery, { isLoading: isConfirming }] = useConfirmManualRequestDeliveryMutation()
@@ -248,6 +313,25 @@ export function CreateDeliveryForm({ requireAccessToken = true }: CreateDelivery
     }
   }, [])
 
+  useEffect(() => {
+    const saved = readManualRequestDefaultPickup()
+    setHasSavedDefaultPickup(Boolean(saved))
+    if (!saved) return
+    const base = buildDefaultValues()
+    form.reset(mergePickupSnapshotIntoDefaults(base, saved))
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- apply saved pickup once on mount
+  }, [])
+
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === MANUAL_REQUEST_DEFAULT_PICKUP_STORAGE_KEY || e.key === null) {
+        setHasSavedDefaultPickup(Boolean(readManualRequestDefaultPickup()))
+      }
+    }
+    window.addEventListener('storage', onStorage)
+    return () => window.removeEventListener('storage', onStorage)
+  }, [])
+
   const getDebugErrorMessage = (err: any, fallback: string) => {
     const statusCode = err?.statusCode ?? err?.status
     if (statusCode === 401 && requireAccessToken) {
@@ -256,6 +340,83 @@ export function CreateDeliveryForm({ requireAccessToken = true }: CreateDelivery
         : 'Unauthorized (401). Missing or invalid JWT token. Set accessToken in localStorage or NEXT_PUBLIC_MANUAL_REQUEST_ACCESS_TOKEN.'
     }
     return err?.message ?? fallback
+  }
+
+  const handleSaveDefaultPickup = async () => {
+    const ok = await form.trigger([
+      'pickupName',
+      'pickupPhoneNumber',
+      'pickupBusinessName',
+      'pickupAddress.streetAddress.0',
+      'pickupAddress.city',
+      'pickupAddress.state',
+      'pickupAddress.countryCode',
+    ])
+    if (!ok) {
+      toast({
+        title: 'Fix pickup fields first',
+        description: 'Enter a valid name, phone, business, and address before saving as default.',
+        variant: 'destructive',
+      })
+      return
+    }
+    const v = form.getValues()
+    const snapshot: ManualRequestDefaultPickupSnapshot = {
+      pickupName: v.pickupName.trim(),
+      pickupPhoneNumber: v.pickupPhoneNumber.trim(),
+      pickupBusinessName: v.pickupBusinessName.trim(),
+      pickupNotes: (v.pickupNotes ?? '').trim(),
+      pickupAddress: {
+        streetAddress: [v.pickupAddress.streetAddress[0] ?? ''],
+        city: v.pickupAddress.city,
+        state: v.pickupAddress.state,
+        zipCode: v.pickupAddress.zipCode ?? '',
+        countryCode: v.pickupAddress.countryCode,
+        houseNumber: v.pickupAddress.houseNumber ?? '',
+        formattedAddress: v.pickupAddress.formattedAddress ?? '',
+      },
+      pickupLatitude: v.pickupLatitude,
+      pickupLongitude: v.pickupLongitude,
+      pickupReadyAt: v.pickupReadyAt ?? '',
+      pickupDeadlineAt: v.pickupDeadlineAt ?? '',
+    }
+    try {
+      writeManualRequestDefaultPickup(snapshot)
+      setHasSavedDefaultPickup(true)
+      toast({
+        title: 'Default pickup saved',
+        description: 'Pickup will pre-fill on return visits in this browser.',
+      })
+    } catch {
+      toast({
+        title: 'Could not save',
+        description: 'Your browser may block local storage. Check site settings.',
+        variant: 'destructive',
+      })
+    }
+  }
+
+  const handleClearSavedPickup = () => {
+    clearManualRequestDefaultPickup()
+    setHasSavedDefaultPickup(false)
+    const current = form.getValues()
+    const base = buildDefaultValues()
+    form.reset({
+      ...current,
+      pickupName: base.pickupName,
+      pickupPhoneNumber: base.pickupPhoneNumber,
+      pickupBusinessName: base.pickupBusinessName,
+      pickupNotes: base.pickupNotes,
+      pickupAddress: { ...defaultAddress },
+      pickupLatitude: base.pickupLatitude,
+      pickupLongitude: base.pickupLongitude,
+      pickupReadyAt: base.pickupReadyAt,
+      pickupDeadlineAt: base.pickupDeadlineAt,
+    })
+    toast({
+      title: 'Saved pickup removed',
+      description: 'Pickup fields use generic defaults again.',
+    })
   }
 
   const handleGetEstimate = async (values: CreateDeliveryFormValues) => {
@@ -275,10 +436,19 @@ export function CreateDeliveryForm({ requireAccessToken = true }: CreateDelivery
         return
       }
 
+      const pickupFormatted = resolveSubmittedFormattedAddress(values.pickupAddress, pickupCoordinates)
+      const dropoffFormatted = resolveSubmittedFormattedAddress(values.dropoffAddress, dropoffCoordinates)
+
       form.setValue('pickupLatitude', pickupCoordinates.latitude, { shouldDirty: true, shouldValidate: true })
       form.setValue('pickupLongitude', pickupCoordinates.longitude, { shouldDirty: true, shouldValidate: true })
       form.setValue('dropoffLatitude', dropoffCoordinates.latitude, { shouldDirty: true, shouldValidate: true })
       form.setValue('dropoffLongitude', dropoffCoordinates.longitude, { shouldDirty: true, shouldValidate: true })
+      if (pickupFormatted) {
+        form.setValue('pickupAddress.formattedAddress', pickupFormatted, { shouldDirty: true, shouldValidate: true })
+      }
+      if (dropoffFormatted) {
+        form.setValue('dropoffAddress.formattedAddress', dropoffFormatted, { shouldDirty: true, shouldValidate: true })
+      }
 
       const payload: ManualRequestQuoteInput = {
         partnerId: values.partnerId ?? '',
@@ -293,6 +463,7 @@ export function CreateDeliveryForm({ requireAccessToken = true }: CreateDelivery
           zipCode: values.pickupAddress.zipCode || '',
           countryCode: values.pickupAddress.countryCode,
           houseNumber: values.pickupAddress.houseNumber,
+          formattedAddress: pickupFormatted,
         },
         pickupLatitude: pickupCoordinates.latitude,
         pickupLongitude: pickupCoordinates.longitude,
@@ -309,6 +480,7 @@ export function CreateDeliveryForm({ requireAccessToken = true }: CreateDelivery
           zipCode: values.dropoffAddress.zipCode || '',
           countryCode: values.dropoffAddress.countryCode,
           houseNumber: values.dropoffAddress.houseNumber,
+          formattedAddress: dropoffFormatted,
         },
         dropoffLatitude: dropoffCoordinates.latitude,
         dropoffLongitude: dropoffCoordinates.longitude,
@@ -328,6 +500,14 @@ export function CreateDeliveryForm({ requireAccessToken = true }: CreateDelivery
         pickupLongitude: pickupCoordinates.longitude,
         dropoffLatitude: dropoffCoordinates.latitude,
         dropoffLongitude: dropoffCoordinates.longitude,
+        pickupAddress: {
+          ...values.pickupAddress,
+          formattedAddress: pickupFormatted,
+        },
+        dropoffAddress: {
+          ...values.dropoffAddress,
+          formattedAddress: dropoffFormatted,
+        },
       })
     } catch (err: any) {
       setErrorMessage(getDebugErrorMessage(err, 'Failed to get estimate. Check inputs and try again.'))
@@ -353,6 +533,9 @@ export function CreateDeliveryForm({ requireAccessToken = true }: CreateDelivery
           zipCode: formSnapshot.pickupAddress.zipCode || '',
           countryCode: formSnapshot.pickupAddress.countryCode,
           houseNumber: formSnapshot.pickupAddress.houseNumber,
+          formattedAddress:
+            formSnapshot.pickupAddress.formattedAddress?.trim() ||
+            buildManualRequestFormattedAddress(formSnapshot.pickupAddress),
         },
         pickupLatitude: formSnapshot.pickupLatitude,
         pickupLongitude: formSnapshot.pickupLongitude,
@@ -369,6 +552,9 @@ export function CreateDeliveryForm({ requireAccessToken = true }: CreateDelivery
           zipCode: formSnapshot.dropoffAddress.zipCode || '',
           countryCode: formSnapshot.dropoffAddress.countryCode,
           houseNumber: formSnapshot.dropoffAddress.houseNumber,
+          formattedAddress:
+            formSnapshot.dropoffAddress.formattedAddress?.trim() ||
+            buildManualRequestFormattedAddress(formSnapshot.dropoffAddress),
         },
         dropoffLatitude: formSnapshot.dropoffLatitude,
         dropoffLongitude: formSnapshot.dropoffLongitude,
@@ -550,7 +736,49 @@ export function CreateDeliveryForm({ requireAccessToken = true }: CreateDelivery
               <CardTitle className="text-base">Pickup</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <AddressSection control={form.control} prefix="pickup" label="Pickup Address" />
+              <div className="grid sm:grid-cols-2 gap-3">
+                <FormField
+                  control={form.control}
+                  name="pickupName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Pickup contact name</FormLabel>
+                      <FormControl>
+                        <Input placeholder="e.g. JOHN DOE" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="pickupPhoneNumber"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Phone number</FormLabel>
+                      <FormControl>
+                        <Input type="tel" placeholder="+1 555 000 0000" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="pickupBusinessName"
+                  render={({ field }) => (
+                    <FormItem className="sm:col-span-2">
+                      <FormLabel>Business or building name</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Company or location name" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <AddressSection control={form.control} prefix="pickup" label="Pickup address" />
 
               <FormField
                 control={form.control}
@@ -599,6 +827,20 @@ export function CreateDeliveryForm({ requireAccessToken = true }: CreateDelivery
                   )}
                 />
               </div>
+
+              <div className="flex flex-wrap items-center gap-2 border-t pt-4">
+                <Button type="button" variant="outline" size="sm" onClick={handleSaveDefaultPickup}>
+                  Save pickup as default
+                </Button>
+                {hasSavedDefaultPickup ? (
+                  <Button type="button" variant="ghost" size="sm" onClick={handleClearSavedPickup}>
+                    Clear saved pickup
+                  </Button>
+                ) : null}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Saved only in this browser on your device; it is not sent to a server until you request a quote.
+              </p>
             </CardContent>
           </Card>
 
@@ -614,9 +856,9 @@ export function CreateDeliveryForm({ requireAccessToken = true }: CreateDelivery
                   name="dropoffName"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Contact Name</FormLabel>
+                      <FormLabel>Recipient name</FormLabel>
                       <FormControl>
-                        <Input placeholder="John Doe" {...field} />
+                        <Input placeholder="e.g. JOHN DOE" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -627,7 +869,7 @@ export function CreateDeliveryForm({ requireAccessToken = true }: CreateDelivery
                   name="dropoffPhoneNumber"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Phone Number</FormLabel>
+                      <FormLabel>Phone number</FormLabel>
                       <FormControl>
                         <Input type="tel" placeholder="+1 555 000 0000" {...field} />
                       </FormControl>
@@ -640,7 +882,7 @@ export function CreateDeliveryForm({ requireAccessToken = true }: CreateDelivery
                   name="dropoffBusinessName"
                   render={({ field }) => (
                     <FormItem className="sm:col-span-2">
-                      <FormLabel>Business Name (optional)</FormLabel>
+                      <FormLabel>Business or building name (optional)</FormLabel>
                       <FormControl>
                         <Input placeholder="Company or building name" {...field} />
                       </FormControl>
@@ -650,9 +892,7 @@ export function CreateDeliveryForm({ requireAccessToken = true }: CreateDelivery
                 />
               </div>
 
-              <Separator />
-
-              <AddressSection control={form.control} prefix="dropoff" label="Dropoff Address" />
+              <AddressSection control={form.control} prefix="dropoff" label="Dropoff address" />
 
               <FormField
                 control={form.control}
