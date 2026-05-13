@@ -605,7 +605,49 @@ export function CreateDeliveryForm({ requireAccessToken = true }: CreateDelivery
               <CardTitle className="text-base">Pickup</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <AddressSection control={form.control} prefix="pickup" label="Pickup Address" />
+              <div className="grid sm:grid-cols-2 gap-3">
+                <FormField
+                  control={form.control}
+                  name="pickupName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Recipient name</FormLabel>
+                      <FormControl>
+                        <Input placeholder="e.g. JOHN DOE" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="pickupPhoneNumber"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Phone number</FormLabel>
+                      <FormControl>
+                        <Input type="tel" placeholder="+1 555 000 0000" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="pickupBusinessName"
+                  render={({ field }) => (
+                    <FormItem className="sm:col-span-2">
+                      <FormLabel>Business or building name</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Company or location name" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <AddressSection control={form.control} prefix="pickup" label="Pickup address" />
 
               <FormField
                 control={form.control}
@@ -669,9 +711,9 @@ export function CreateDeliveryForm({ requireAccessToken = true }: CreateDelivery
                   name="dropoffName"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Contact Name</FormLabel>
+                      <FormLabel>Recipient name</FormLabel>
                       <FormControl>
-                        <Input placeholder="John Doe" {...field} />
+                        <Input placeholder="e.g. JOHN DOE" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -682,7 +724,7 @@ export function CreateDeliveryForm({ requireAccessToken = true }: CreateDelivery
                   name="dropoffPhoneNumber"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Phone Number</FormLabel>
+                      <FormLabel>Phone number</FormLabel>
                       <FormControl>
                         <Input type="tel" placeholder="+1 555 000 0000" {...field} />
                       </FormControl>
@@ -695,7 +737,7 @@ export function CreateDeliveryForm({ requireAccessToken = true }: CreateDelivery
                   name="dropoffBusinessName"
                   render={({ field }) => (
                     <FormItem className="sm:col-span-2">
-                      <FormLabel>Business Name (optional)</FormLabel>
+                      <FormLabel>Business or building name (optional)</FormLabel>
                       <FormControl>
                         <Input placeholder="Company or building name" {...field} />
                       </FormControl>
@@ -705,9 +747,7 @@ export function CreateDeliveryForm({ requireAccessToken = true }: CreateDelivery
                 />
               </div>
 
-              <Separator />
-
-              <AddressSection control={form.control} prefix="dropoff" label="Dropoff Address" />
+              <AddressSection control={form.control} prefix="dropoff" label="Dropoff address" />
 
               <FormField
                 control={form.control}

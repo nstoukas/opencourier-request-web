@@ -93,6 +93,7 @@ export function AddressSection<T extends FieldValues>({
     const a = r.address
     const road = (a.road ?? '').trim()
     const hn = (a.house_number ?? '').trim()
+    const streetLine = [hn, road].filter(Boolean).join(' ').trim()
     const city =
       a.city?.trim() ||
       a.town?.trim() ||
@@ -108,8 +109,8 @@ export function AddressSection<T extends FieldValues>({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const set = (path: Path<T>, value: any) => setValue(path, value, { shouldValidate: true, shouldDirty: true })
 
-    set(field('streetAddress.0'), road || hn)
-    set(field('houseNumber'), road ? hn : '')
+    set(field('streetAddress.0'), streetLine)
+    set(field('houseNumber'), '')
     set(field('city'), city)
     set(field('state'), region)
     set(field('zipCode'), postalCode)
@@ -190,15 +191,17 @@ export function AddressSection<T extends FieldValues>({
         </p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-6 gap-3">
         <FormField
           control={control}
-          name={field('streetAddress.0')}
+          name={field('houseNumber')}
           render={({ field: f }) => (
-            <FormItem className="sm:col-span-2">
-              <FormLabel>Street Address</FormLabel>
+            <FormItem className="sm:col-span-6">
+              <FormLabel>
+                Unit / Apt <span className="text-muted-foreground font-normal">(optional)</span>
+              </FormLabel>
               <FormControl>
-                <Input placeholder="123 Main St" {...f} />
+                <Input placeholder="Apt 4, Suite 200" {...f} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -207,17 +210,12 @@ export function AddressSection<T extends FieldValues>({
 
         <FormField
           control={control}
-          name={field('countryCode')}
+          name={field('streetAddress.0')}
           render={({ field: f }) => (
-            <FormItem>
-              <FormLabel>Country Code</FormLabel>
+            <FormItem className="sm:col-span-6">
+              <FormLabel>Street address or PO Box</FormLabel>
               <FormControl>
-                <Input
-                  placeholder="US"
-                  maxLength={2}
-                  value={(f.value ?? '').toUpperCase()}
-                  onChange={(event) => f.onChange(event.target.value.toUpperCase())}
-                />
+                <Input placeholder="e.g. 123 MAIN ST" {...f} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -228,10 +226,10 @@ export function AddressSection<T extends FieldValues>({
           control={control}
           name={field('city')}
           render={({ field: f }) => (
-            <FormItem>
+            <FormItem className="sm:col-span-2">
               <FormLabel>City</FormLabel>
               <FormControl>
-                <Input placeholder="San Francisco" {...f} />
+                <Input placeholder="e.g. NEW YORK" {...f} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -242,10 +240,10 @@ export function AddressSection<T extends FieldValues>({
           control={control}
           name={field('state')}
           render={({ field: f }) => (
-            <FormItem>
-              <FormLabel>State / Province / Region</FormLabel>
+            <FormItem className="sm:col-span-2">
+              <FormLabel>State / Province</FormLabel>
               <FormControl>
-                <Input placeholder="CA / ON / Bavaria" {...f} />
+                <Input placeholder="e.g. NY" {...f} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -256,10 +254,10 @@ export function AddressSection<T extends FieldValues>({
           control={control}
           name={field('zipCode')}
           render={({ field: f }) => (
-            <FormItem>
-              <FormLabel>Postal Code</FormLabel>
+            <FormItem className="sm:col-span-2">
+              <FormLabel>ZIP / Postal code</FormLabel>
               <FormControl>
-                <Input placeholder="94102 / SW1A 1AA" {...f} />
+                <Input placeholder="e.g. 10001" {...f} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -268,12 +266,17 @@ export function AddressSection<T extends FieldValues>({
 
         <FormField
           control={control}
-          name={field('houseNumber')}
+          name={field('countryCode')}
           render={({ field: f }) => (
-            <FormItem>
-              <FormLabel>Street number</FormLabel>
+            <FormItem className="sm:col-span-6">
+              <FormLabel>Country</FormLabel>
               <FormControl>
-                <Input placeholder="11 (from map search)" {...f} />
+                <Input
+                  placeholder="e.g. US (ISO code for USA)"
+                  maxLength={2}
+                  value={(f.value ?? '').toUpperCase()}
+                  onChange={(event) => f.onChange(event.target.value.toUpperCase())}
+                />
               </FormControl>
               <FormMessage />
             </FormItem>
