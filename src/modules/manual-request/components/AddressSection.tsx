@@ -194,14 +194,12 @@ export function AddressSection<T extends FieldValues>({
       <div className="grid grid-cols-1 sm:grid-cols-6 gap-3">
         <FormField
           control={control}
-          name={field('houseNumber')}
+          name={field('streetAddress.0')}
           render={({ field: f }) => (
             <FormItem className="sm:col-span-6">
-              <FormLabel>
-                Unit / Apt <span className="text-muted-foreground font-normal">(optional)</span>
-              </FormLabel>
+              <FormLabel>Street address or PO Box</FormLabel>
               <FormControl>
-                <Input placeholder="Apt 4, Suite 200" {...f} />
+                <Input placeholder="e.g. 123 MAIN ST" {...f} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -210,12 +208,14 @@ export function AddressSection<T extends FieldValues>({
 
         <FormField
           control={control}
-          name={field('streetAddress.0')}
+          name={field('houseNumber')}
           render={({ field: f }) => (
             <FormItem className="sm:col-span-6">
-              <FormLabel>Street address or PO Box</FormLabel>
+              <FormLabel>
+                Unit / Apt <span className="text-muted-foreground font-normal">(optional)</span>
+              </FormLabel>
               <FormControl>
-                <Input placeholder="e.g. 123 MAIN ST" {...f} />
+                <Input placeholder="Apt 4, Suite 200" {...f} />
               </FormControl>
               <FormMessage />
             </FormItem>
