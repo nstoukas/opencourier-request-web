@@ -37,6 +37,7 @@ export function EstimateSummaryCard({
 }: EstimateSummaryCardProps) {
   const priceFrom = formatCents(quote.quoteRangeFrom, quote.currency)
   const priceTo = formatCents(quote.quoteRangeTo, quote.currency)
+  const isSinglePrice = quote.quoteRangeFrom === quote.quoteRangeTo
   const etaLabel = quote.dropoffEta
     ? dayjs(quote.dropoffEta).format('h:mm A')
     : `~${quote.duration} min`
@@ -61,9 +62,16 @@ export function EstimateSummaryCard({
           <div className="space-y-0.5">
             <p className="text-xs text-muted-foreground uppercase tracking-wide">Estimated Price</p>
             <p className="text-2xl font-bold tabular-nums">
-              {priceFrom}
-              <span className="text-base font-normal text-muted-foreground"> – {priceTo}</span>
+              {isSinglePrice ? (
+                priceFrom
+              ) : (
+                <>
+                  {priceFrom}
+                  <span className="text-base font-normal text-muted-foreground"> – {priceTo}</span>
+                </>
+              )}
             </p>
+
           </div>
 
           {/* ETA */}
@@ -73,7 +81,7 @@ export function EstimateSummaryCard({
               ETA
             </p>
             <p className="text-2xl font-bold">{etaLabel}</p>
-            <p className="text-xs text-muted-foreground">{quote.duration} min delivery window</p>
+            {/* <p className="text-xs text-muted-foreground">{quote.duration} min delivery window</p> */}
           </div>
 
           {/* Distance */}
@@ -83,7 +91,7 @@ export function EstimateSummaryCard({
               Distance
             </p>
             <p className="text-2xl font-bold">
-              {quote.distance != null ? quote.distance.toFixed(1) : '—'}
+              {quote.distance != null ? quote.distance.toFixed(2) : '—'}
               <span className="text-base font-normal text-muted-foreground ml-1 lowercase">
                 {quote.distanceUnit}
               </span>
