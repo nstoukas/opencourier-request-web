@@ -46,6 +46,13 @@ import { AddressSection } from './AddressSection'
 import { ErrorBanner } from './ErrorBanner'
 import { useRequestPageNavigator } from '../../../hooks/useRequestPageNavigator'
 import { getManualRequestAuthCredential, getManualRequestAuthMode } from '../../../utils/manualRequestAuth'
+import {
+  clearManualRequestDefaultPickup,
+  MANUAL_REQUEST_DEFAULT_PICKUP_STORAGE_KEY,
+  readManualRequestDefaultPickup,
+  writeManualRequestDefaultPickup,
+  type ManualRequestDefaultPickupSnapshot,
+} from '../../../utils/manualRequestDefaultPickup'
 
 // ─── Validation schema ────────────────────────────────────────────────────────
 
@@ -131,6 +138,33 @@ function defaultDeadlineDatetimeLocal(): string {
   const d = new Date()
   d.setHours(d.getHours() + 1)
   return d.toISOString().slice(0, 16)
+}
+
+function mergePickupSnapshotIntoDefaults(
+  base: CreateDeliveryFormValues,
+  snapshot: ManualRequestDefaultPickupSnapshot,
+): CreateDeliveryFormValues {
+  const street =
+    snapshot.pickupAddress.streetAddress.length > 0 &&
+    (snapshot.pickupAddress.streetAddress[0] ?? '').trim() !== ''
+      ? snapshot.pickupAddress.streetAddress
+      : base.pickupAddress.streetAddress
+  return {
+    ...base,
+    pickupName: snapshot.pickupName,
+    pickupPhoneNumber: snapshot.pickupPhoneNumber,
+    pickupBusinessName: snapshot.pickupBusinessName,
+    pickupNotes: snapshot.pickupNotes,
+    pickupAddress: {
+      ...base.pickupAddress,
+      ...snapshot.pickupAddress,
+      streetAddress: street,
+    },
+    pickupLatitude: snapshot.pickupLatitude,
+    pickupLongitude: snapshot.pickupLongitude,
+    pickupReadyAt: snapshot.pickupReadyAt,
+    pickupDeadlineAt: base.pickupDeadlineAt,
+  }
 }
 
 function buildDefaultValues(): CreateDeliveryFormValues {
@@ -251,6 +285,7 @@ export function CreateDeliveryForm({ requireAccessToken = true }: CreateDelivery
   const [formSnapshot, setFormSnapshot] = useState<CreateDeliveryFormValues | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [hasAccessToken, setHasAccessToken] = useState(true)
+  const [hasSavedDefaultPickup, setHasSavedDefaultPickup] = useState(false)
 
   const [createQuote, { isLoading: isQuoting }] = useCreateManualRequestQuoteMutation()
   const [confirmDelivery, { isLoading: isConfirming }] = useConfirmManualRequestDeliveryMutation()
@@ -278,6 +313,25 @@ export function CreateDeliveryForm({ requireAccessToken = true }: CreateDelivery
     }
   }, [])
 
+  useEffect(() => {
+    const saved = readManualRequestDefaultPickup()
+    setHasSavedDefaultPickup(Boolean(saved))
+    if (!saved) return
+    const base = buildDefaultValues()
+    form.reset(mergePickupSnapshotIntoDefaults(base, saved))
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- apply saved pickup once on mount
+  }, [])
+
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === MANUAL_REQUEST_DEFAULT_PICKUP_STORAGE_KEY || e.key === null) {
+        setHasSavedDefaultPickup(Boolean(readManualRequestDefaultPickup()))
+      }
+    }
+    window.addEventListener('storage', onStorage)
+    return () => window.removeEventListener('storage', onStorage)
+  }, [])
+
   const getDebugErrorMessage = (err: any, fallback: string) => {
     const statusCode = err?.statusCode ?? err?.status
     if (statusCode === 401 && requireAccessToken) {
@@ -286,6 +340,83 @@ export function CreateDeliveryForm({ requireAccessToken = true }: CreateDelivery
         : 'Unauthorized (401). Missing or invalid JWT token. Set accessToken in localStorage or NEXT_PUBLIC_MANUAL_REQUEST_ACCESS_TOKEN.'
     }
     return err?.message ?? fallback
+  }
+
+  const handleSaveDefaultPickup = async () => {
+    const ok = await form.trigger([
+      'pickupName',
+      'pickupPhoneNumber',
+      'pickupBusinessName',
+      'pickupAddress.streetAddress.0',
+      'pickupAddress.city',
+      'pickupAddress.state',
+      'pickupAddress.countryCode',
+    ])
+    if (!ok) {
+      toast({
+        title: 'Fix pickup fields first',
+        description: 'Enter a valid name, phone, business, and address before saving as default.',
+        variant: 'destructive',
+      })
+      return
+    }
+    const v = form.getValues()
+    const snapshot: ManualRequestDefaultPickupSnapshot = {
+      pickupName: v.pickupName.trim(),
+      pickupPhoneNumber: v.pickupPhoneNumber.trim(),
+      pickupBusinessName: v.pickupBusinessName.trim(),
+      pickupNotes: (v.pickupNotes ?? '').trim(),
+      pickupAddress: {
+        streetAddress: [v.pickupAddress.streetAddress[0] ?? ''],
+        city: v.pickupAddress.city,
+        state: v.pickupAddress.state,
+        zipCode: v.pickupAddress.zipCode ?? '',
+        countryCode: v.pickupAddress.countryCode,
+        houseNumber: v.pickupAddress.houseNumber ?? '',
+        formattedAddress: v.pickupAddress.formattedAddress ?? '',
+      },
+      pickupLatitude: v.pickupLatitude,
+      pickupLongitude: v.pickupLongitude,
+      pickupReadyAt: v.pickupReadyAt ?? '',
+      pickupDeadlineAt: v.pickupDeadlineAt ?? '',
+    }
+    try {
+      writeManualRequestDefaultPickup(snapshot)
+      setHasSavedDefaultPickup(true)
+      toast({
+        title: 'Default pickup saved',
+        description: 'Pickup will pre-fill on return visits in this browser.',
+      })
+    } catch {
+      toast({
+        title: 'Could not save',
+        description: 'Your browser may block local storage. Check site settings.',
+        variant: 'destructive',
+      })
+    }
+  }
+
+  const handleClearSavedPickup = () => {
+    clearManualRequestDefaultPickup()
+    setHasSavedDefaultPickup(false)
+    const current = form.getValues()
+    const base = buildDefaultValues()
+    form.reset({
+      ...current,
+      pickupName: base.pickupName,
+      pickupPhoneNumber: base.pickupPhoneNumber,
+      pickupBusinessName: base.pickupBusinessName,
+      pickupNotes: base.pickupNotes,
+      pickupAddress: { ...defaultAddress },
+      pickupLatitude: base.pickupLatitude,
+      pickupLongitude: base.pickupLongitude,
+      pickupReadyAt: base.pickupReadyAt,
+      pickupDeadlineAt: base.pickupDeadlineAt,
+    })
+    toast({
+      title: 'Saved pickup removed',
+      description: 'Pickup fields use generic defaults again.',
+    })
   }
 
   const handleGetEstimate = async (values: CreateDeliveryFormValues) => {
@@ -611,7 +742,7 @@ export function CreateDeliveryForm({ requireAccessToken = true }: CreateDelivery
                   name="pickupName"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Recipient name</FormLabel>
+                      <FormLabel>Pickup contact name</FormLabel>
                       <FormControl>
                         <Input placeholder="e.g. JOHN DOE" {...field} />
                       </FormControl>
@@ -696,6 +827,20 @@ export function CreateDeliveryForm({ requireAccessToken = true }: CreateDelivery
                   )}
                 />
               </div>
+
+              <div className="flex flex-wrap items-center gap-2 border-t pt-4">
+                <Button type="button" variant="outline" size="sm" onClick={handleSaveDefaultPickup}>
+                  Save pickup as default
+                </Button>
+                {hasSavedDefaultPickup ? (
+                  <Button type="button" variant="ghost" size="sm" onClick={handleClearSavedPickup}>
+                    Clear saved pickup
+                  </Button>
+                ) : null}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Saved only in this browser on your device; it is not sent to a server until you request a quote.
+              </p>
             </CardContent>
           </Card>
 
