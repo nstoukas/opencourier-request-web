@@ -37,3 +37,7 @@ next-env.d.ts
 
 # VS Code workspace files
 *.code-workspace
+
+# aiflow pipeline artifacts (see ../aiflow.sh) — working files, not source
+.aiflow/
+plan.md
