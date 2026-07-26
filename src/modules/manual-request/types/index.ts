@@ -17,7 +17,12 @@ export interface ManualRequestAddressInput {
 
 /** Builds a display line from structured fields (house + street · city, state · zip country). */
 export function buildManualRequestFormattedAddress(
-  a: Pick<ManualRequestAddressInput, 'streetAddress' | 'city' | 'state' | 'zipCode' | 'countryCode'> & {
+  a: {
+    streetAddress?: string[] | null
+    city?: string | null
+    state?: string | null
+    zipCode?: string | null
+    countryCode?: string | null
     houseNumber?: string | null
   },
 ): string {
