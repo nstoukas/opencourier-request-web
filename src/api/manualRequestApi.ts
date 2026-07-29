@@ -13,26 +13,21 @@ import {
 import { EnumDeliveryEventType } from '../shared-types'
 import {
   getManualRequestApiMode,
-  getManualRequestApiBaseUrl,
-  getManualRequestAuthCredential,
-  getManualRequestAuthMode,
-  getManualRequestBasePath,
+  PARTNER_AUTH_BASE_URL,
+  PARTNER_PROXY_BASE_URL,
 } from '../utils/manualRequestAuth'
 
 /**
  * Standalone fetch helper for request-web.
- * This app talks directly to opencourier-backend manual-request endpoints.
+ * This app talks directly to opencourier-backend manual-request endpoints via server proxy.
  */
 const REQUEST_TIMEOUT_MS = 12000
 
 async function manualRequestFetch<T>(
   path: string,
-  options?: RequestInit & { accessToken?: string; apiKey?: string },
+  options?: RequestInit,
 ): Promise<T> {
-  const baseUrl = getManualRequestApiBaseUrl()
-  const url = `${baseUrl}${getManualRequestBasePath()}${path}`
-  const authCredential = options?.accessToken ?? options?.apiKey ?? getManualRequestAuthCredential()
-  const authMode = getManualRequestAuthMode()
+  const url = `${PARTNER_PROXY_BASE_URL}${path}`
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
 
@@ -48,11 +43,11 @@ async function manualRequestFetch<T>(
   try {
     response = await fetch(url, {
       ...options,
+      // Same-origin credentials send our httpOnly cookie to authenticate requests via server proxy.
+      credentials: 'same-origin',
       signal: controller.signal,
       headers: {
         'Content-Type': 'application/json',
-        ...(authMode === 'bearer' && authCredential ? { Authorization: `Bearer ${authCredential}` } : {}),
-        ...(authMode === 'api-key' && authCredential ? { 'x-api-key': authCredential } : {}),
         ...(options?.headers ?? {}),
       },
     })
@@ -272,8 +267,37 @@ export async function fetchPartnerDelivery(deliveryId: string): Promise<PartnerD
   return manualRequestFetch<PartnerDeliveryDto>(`/deliveries/${deliveryId}`)
 }
 
-export async function fetchPartnerMe(): Promise<{ email: string }> {
-  return manualRequestFetch<{ email: string }>('/auth/me')
+export async function loginPartner(email: string, password: string): Promise<{ email: string | null }> {
+  const response = await fetch(`${PARTNER_AUTH_BASE_URL}/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  })
+  const body = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    throw new Error(body?.message ?? 'Sign in failed.')
+  }
+  return { email: body?.email ?? null }
+}
+
+export async function logoutPartner(): Promise<void> {
+  await fetch(`${PARTNER_AUTH_BASE_URL}/logout`, {
+    method: 'POST',
+  }).catch(() => {})
+}
+
+export async function fetchPartnerSession(): Promise<{ signedIn: boolean; email: string | null }> {
+  try {
+    const response = await fetch(`${PARTNER_AUTH_BASE_URL}/session`)
+    if (!response.ok) return { signedIn: false, email: null }
+    const body = await response.json().catch(() => ({}))
+    return {
+      signedIn: Boolean(body?.signedIn),
+      email: body?.email ?? null,
+    }
+  } catch {
+    return { signedIn: false, email: null }
+  }
 }
 
 export function useListManualRequestDeliveriesQuery(options?: { page?: number; perPage?: number; skip?: boolean }) {

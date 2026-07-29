@@ -28,7 +28,6 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-  Separator,
   Textarea,
   useToast,
 } from '../../../admin-web-components'
@@ -45,7 +44,6 @@ import { EstimateSummaryCard } from './EstimateSummaryCard'
 import { AddressSection } from './AddressSection'
 import { ErrorBanner } from './ErrorBanner'
 import { useRequestPageNavigator } from '../../../hooks/useRequestPageNavigator'
-import { getManualRequestAuthCredential, getManualRequestAuthMode } from '../../../utils/manualRequestAuth'
 import {
   clearManualRequestDefaultPickup,
   MANUAL_REQUEST_DEFAULT_PICKUP_STORAGE_KEY,
@@ -201,10 +199,6 @@ function buildDefaultValues(): CreateDeliveryFormValues {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-interface CreateDeliveryFormProps {
-  requireAccessToken?: boolean
-}
-
 function resolvePackageDescription(values: CreateDeliveryFormValues) {
   if (values.packageType === 'OTHER') {
     return values.packageTypeOther?.trim() || values.packageDescription?.trim() || undefined
@@ -275,16 +269,13 @@ async function geocodeCoordinatesFromAddress(
   }
 }
 
-export function CreateDeliveryForm({ requireAccessToken = true }: CreateDeliveryFormProps) {
+export function CreateDeliveryForm() {
   const { toast } = useToast()
   const navigator = useRequestPageNavigator()
-  const authMode = getManualRequestAuthMode()
-  const isApiKeyAuth = authMode === 'api-key'
 
   const [activeQuote, setActiveQuote] = useState<ManualRequestQuoteDto | null>(null)
   const [formSnapshot, setFormSnapshot] = useState<CreateDeliveryFormValues | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  const [hasAccessToken, setHasAccessToken] = useState(true)
   const [hasSavedDefaultPickup, setHasSavedDefaultPickup] = useState(false)
 
   const [createQuote, { isLoading: isQuoting }] = useCreateManualRequestQuoteMutation()
@@ -294,24 +285,6 @@ export function CreateDeliveryForm({ requireAccessToken = true }: CreateDelivery
     resolver: zodResolver(formSchema),
     defaultValues: buildDefaultValues(),
   })
-
-  useEffect(() => {
-    const updateTokenState = () => {
-      const credential = getManualRequestAuthCredential()
-      setHasAccessToken(Boolean(credential))
-    }
-
-    updateTokenState()
-    window.addEventListener('storage', updateTokenState)
-    window.addEventListener('focus', updateTokenState)
-    window.addEventListener('opencourier-token-updated', updateTokenState)
-
-    return () => {
-      window.removeEventListener('storage', updateTokenState)
-      window.removeEventListener('focus', updateTokenState)
-      window.removeEventListener('opencourier-token-updated', updateTokenState)
-    }
-  }, [])
 
   useEffect(() => {
     const saved = readManualRequestDefaultPickup()
@@ -334,10 +307,8 @@ export function CreateDeliveryForm({ requireAccessToken = true }: CreateDelivery
 
   const getDebugErrorMessage = (err: any, fallback: string) => {
     const statusCode = err?.statusCode ?? err?.status
-    if (statusCode === 401 && requireAccessToken) {
-      return isApiKeyAuth
-        ? 'Unauthorized (401). Missing or invalid API key. Set manualRequestApiKey in localStorage or NEXT_PUBLIC_MANUAL_REQUEST_API_KEY.'
-        : 'Unauthorized (401). Missing or invalid JWT token. Set accessToken in localStorage or NEXT_PUBLIC_MANUAL_REQUEST_ACCESS_TOKEN.'
+    if (statusCode === 401) {
+      return 'Your session has expired or is not valid. Please sign in again.'
     }
     return err?.message ?? fallback
   }
@@ -590,18 +561,6 @@ export function CreateDeliveryForm({ requireAccessToken = true }: CreateDelivery
 
   return (
     <div className="space-y-6 max-w-3xl">
-      {requireAccessToken && !hasAccessToken && (
-        <ErrorBanner
-          title={isApiKeyAuth ? 'Missing API key' : 'Missing access token'}
-          message={isApiKeyAuth
-            ? 'No API key is configured. API requests will fail with Unauthorized until a key is provided.'
-            : 'No JWT token is configured. API requests will fail with Unauthorized until a token is provided.'}
-          detail={isApiKeyAuth
-            ? 'Set localStorage key manualRequestApiKey or configure NEXT_PUBLIC_MANUAL_REQUEST_API_KEY in local.env and restart request-web.'
-            : 'Set localStorage key accessToken or configure NEXT_PUBLIC_MANUAL_REQUEST_ACCESS_TOKEN in local.env and restart request-web.'}
-        />
-      )}
-
       {errorMessage && (
         <ErrorBanner
           title="Could not process request"

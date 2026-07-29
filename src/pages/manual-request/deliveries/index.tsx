@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import Head from 'next/head'
 import Link from 'next/link'
 import {
@@ -25,7 +25,7 @@ import {
   useCancelManualRequestDeliveryMutation,
 } from '../../../api/manualRequestApi'
 import { PartnerDeliveryDto } from '../../../modules/manual-request/types'
-import { getManualRequestAuthCredential } from '../../../utils/manualRequestAuth'
+import { usePartnerSession } from '../../../hooks/usePartnerSession'
 
 // Statuses where cancel is no longer possible
 const TERMINAL_STATUSES = new Set(['DROPPED_OFF', 'CANCELED', 'FAILED'])
@@ -228,24 +228,12 @@ function EditDialog({ delivery, onClose, onSaved }: EditDialogProps) {
 export default function DeliveriesPage() {
   const [page, setPage] = useState(1)
   const PER_PAGE = 20
-  const [isSignedIn, setIsSignedIn] = useState(false)
-
-  useEffect(() => {
-    setIsSignedIn(Boolean(getManualRequestAuthCredential()))
-
-    const handleTokenUpdate = () => setIsSignedIn(Boolean(getManualRequestAuthCredential()))
-    window.addEventListener('opencourier-token-updated', handleTokenUpdate)
-    window.addEventListener('storage', handleTokenUpdate)
-    return () => {
-      window.removeEventListener('opencourier-token-updated', handleTokenUpdate)
-      window.removeEventListener('storage', handleTokenUpdate)
-    }
-  }, [])
+  const { isSignedIn, isLoading: isSessionLoading } = usePartnerSession()
 
   const { data, isLoading, error, refetch } = useListManualRequestDeliveriesQuery({
     page,
     perPage: PER_PAGE,
-    skip: !isSignedIn,
+    skip: !isSignedIn || isSessionLoading,
   })
 
   const [cancelDelivery, { isLoading: isCanceling }] = useCancelManualRequestDeliveryMutation()
@@ -291,7 +279,7 @@ export default function DeliveriesPage() {
       <main className="container py-6 space-y-4">
         <h1 className="text-xl font-semibold">Deliveries</h1>
 
-        {!isSignedIn ? (
+        {!isSignedIn && !isSessionLoading ? (
           <p className="text-sm text-muted-foreground">
             Please{' '}
             <Link href="/manual-request" className="underline">
@@ -299,7 +287,7 @@ export default function DeliveriesPage() {
             </Link>{' '}
             to view your deliveries.
           </p>
-        ) : isLoading ? (
+        ) : isLoading || isSessionLoading ? (
           <p className="text-sm text-muted-foreground">Loading deliveries...</p>
         ) : error ? (
           <p className="text-sm text-destructive">

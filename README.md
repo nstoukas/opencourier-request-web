@@ -5,36 +5,23 @@ Standalone manual request web interface for OpenCourier.
 ## Runtime connection
 
 - This app is standalone from `opencourier-adminweb`.
-- It connects directly to `opencourier-backend` via `NEXT_PUBLIC_API_URL`.
+- It proxies partner requests to `opencourier-backend` server-side.
 - Local backend default: `http://localhost:3000`.
 
 ## Manual request auth + routing
 
-- `NEXT_PUBLIC_MANUAL_REQUEST_API_MODE` (optional): `admin` (default) or `partner`.
-	- `admin` uses `/api/admin/v1/manual-request`.
-	- `partner` uses `/api/partner/v1`.
-- `NEXT_PUBLIC_MANUAL_REQUEST_BASE_PATH` (optional): explicit override for API base path.
-- `NEXT_PUBLIC_MANUAL_REQUEST_AUTH_MODE` (optional): `bearer` (default), `api-key`, or `none`.
-	- `bearer`: sends `Authorization: Bearer <token>`.
-	- `api-key`: sends `x-api-key: <api key>`.
-	- `none`: skips bearer token and hides debug auth UI.
-- `NEXT_PUBLIC_MANUAL_REQUEST_DEFAULT_PARTNER_ID` (optional): pre-fills `Request Details -> Partner ID`.
-- `NEXT_PUBLIC_MANUAL_REQUEST_API_KEY`: partner API key for `api-key` auth mode.
+- Sign in with the co-op-issued email and password.
+- The access token is stored on the server in an httpOnly cookie and is never exposed to browser JavaScript.
+- Accounts are created by an administrator (self-service signup is disabled).
+- The server API proxy forwards authenticated requests to the backend partner API (`/api/partner/v1`).
 
-### Debug auth workflow
+### Environment variables
 
-- In `bearer` mode: use `Login & Set Token` and validate against `/api/admin/v1/auth/me`.
-- In `api-key` mode: set partner key and validate against `/api/partner/v1/auth/me`.
-- `Token Source` shows whether active credential comes from `localStorage` or env.
-- If credential validation fails, refresh JWT/API key before testing quote/delivery APIs.
-
-### Partner-first sign in workflow
-
-- Use `Sign In Partner` with partner username/password.
-- If the partner account does not exist, use `Sign Up Partner` to create it.
-- The backend returns the partner `apiKey` associated with that account, and request-web stores it for subsequent manual request API calls.
-- Keep local env aligned:
-	- `NEXT_PUBLIC_MANUAL_REQUEST_API_KEY=<your partner key>`
+- `MANUAL_REQUEST_PROXY_TARGET`: backend server URL (server-side only, default `http://localhost:3000`).
+- `MANUAL_REQUEST_BASE_PATH`: partner API base path (server-side only, default `/api/partner/v1`).
+- `NEXT_PUBLIC_MANUAL_REQUEST_API_MODE`: API mode (`partner`).
+- `NEXT_PUBLIC_MANUAL_REQUEST_DEFAULT_PARTNER_ID`: pre-fills partner ID field.
+- `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`: optional Google Maps API key.
 
 ## Address autofill
 
