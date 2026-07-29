@@ -274,10 +274,13 @@ export default function DeliveriesPage() {
   return (
     <>
       <Head>
-        <title>Deliveries</title>
+        <title>My Orders</title>
       </Head>
       <main className="container py-6 space-y-4">
-        <h1 className="text-xl font-semibold">Deliveries</h1>
+        <div>
+          <h1 className="text-xl font-semibold">My Orders</h1>
+          <p className="text-xs text-muted-foreground">Only your restaurant&apos;s deliveries appear here.</p>
+        </div>
 
         {!isSignedIn && !isSessionLoading ? (
           <p className="text-sm text-muted-foreground">
@@ -294,7 +297,7 @@ export default function DeliveriesPage() {
             {(error as any)?.message ?? 'Failed to load deliveries. Check your credentials and try again.'}
           </p>
         ) : deliveries.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No deliveries found.</p>
+          <p className="text-sm text-muted-foreground">No orders yet.</p>
         ) : (
           <div className="space-y-3">
             {deliveries.map((delivery) => {

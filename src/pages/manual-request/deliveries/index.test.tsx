@@ -55,11 +55,11 @@ describe('DeliveriesPage (/manual-request/deliveries/index.tsx)', () => {
     render(<DeliveriesPage />)
 
     expect(screen.getByText('Loading deliveries...')).toBeInTheDocument()
-    expect(useListManualRequestDeliveriesQuery).toHaveBeenCalledWith(
-      expect.objectContaining({
-        skip: true,
-      }),
-    )
+    expect(useListManualRequestDeliveriesQuery).toHaveBeenCalledWith({
+      page: 1,
+      perPage: 20,
+      skip: true,
+    })
   })
 
   it('renders "Please sign in to view your deliveries." when user is signed out', () => {
@@ -79,14 +79,16 @@ describe('DeliveriesPage (/manual-request/deliveries/index.tsx)', () => {
     expect(screen.getByText(/Please/i)).toBeInTheDocument()
     expect(screen.getByText('sign in')).toBeInTheDocument()
     expect(screen.getByText(/to view your deliveries\./i)).toBeInTheDocument()
-    expect(useListManualRequestDeliveriesQuery).toHaveBeenCalledWith(
-      expect.objectContaining({
-        skip: true,
-      }),
-    )
+    expect(useListManualRequestDeliveriesQuery).toHaveBeenCalledWith({
+      page: 1,
+      perPage: 20,
+      skip: true,
+    })
   })
 
-  it('renders deliveries list when user is signed in and query hook is active', () => {
+  // Test Plan case 13: Signed in heading is "My Orders" and query called with exact object { page: 1, perPage: 20, skip: false }
+  // Test Plan case 14: Given two deliveries in mocked response, both render without browser-side filtering
+  it('renders My Orders heading and all deliveries returned from partner API query', () => {
     ;(usePartnerSession as jest.Mock).mockReturnValue({
       isSignedIn: true,
       isLoading: false,
@@ -101,7 +103,17 @@ describe('DeliveriesPage (/manual-request/deliveries/index.tsx)', () => {
             totalCost: 500,
             currencyCode: 'EUR',
             createdAt: '2026-07-29T10:00:00Z',
-            pickup: { pickupName: 'Store A', city: 'Volos' },
+            pickup: { pickupName: 'Nosh', city: 'Volos' },
+            dropoff: { dropoffName: 'Customer A', city: 'Volos' },
+          },
+          {
+            id: 'del-002',
+            status: 'IN_TRANSIT',
+            orderReference: 'ORD-1000',
+            totalCost: 750,
+            currencyCode: 'EUR',
+            createdAt: '2026-07-29T11:00:00Z',
+            pickup: { pickupName: 'Nosh', city: 'Volos' },
             dropoff: { dropoffName: 'Customer B', city: 'Volos' },
           },
         ],
@@ -114,14 +126,21 @@ describe('DeliveriesPage (/manual-request/deliveries/index.tsx)', () => {
 
     render(<DeliveriesPage />)
 
-    expect(useListManualRequestDeliveriesQuery).toHaveBeenCalledWith(
-      expect.objectContaining({
-        skip: false,
-      }),
-    )
+    // Case 13 assertions: "My Orders" heading and exact query argument (no partnerId)
+    expect(screen.getByRole('heading', { name: 'My Orders' })).toBeInTheDocument()
+    expect(screen.getByText("Only your restaurant's deliveries appear here.")).toBeInTheDocument()
+    expect(useListManualRequestDeliveriesQuery).toHaveBeenCalledWith({
+      page: 1,
+      perPage: 20,
+      skip: false,
+    })
+
+    // Case 14 assertion: Both deliveries render (nothing filtered in browser)
     expect(screen.getByText('del-001')).toBeInTheDocument()
     expect(screen.getByText('ORD-999')).toBeInTheDocument()
-    expect(screen.getByText('Store A')).toBeInTheDocument()
+    expect(screen.getByText('del-002')).toBeInTheDocument()
+    expect(screen.getByText('ORD-1000')).toBeInTheDocument()
+    expect(screen.getByText('Customer A')).toBeInTheDocument()
     expect(screen.getByText('Customer B')).toBeInTheDocument()
   })
 })

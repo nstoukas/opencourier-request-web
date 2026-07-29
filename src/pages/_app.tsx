@@ -16,7 +16,7 @@ export default function App({ Component, pageProps }: AppProps) {
               <Button variant="ghost" size="sm">New Delivery</Button>
             </Link>
             <Link href="/manual-request/deliveries">
-              <Button variant="outline" size="sm">Deliveries</Button>
+              <Button variant="outline" size="sm">My Orders</Button>
             </Link>
           </nav>
         </div>

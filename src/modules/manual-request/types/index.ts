@@ -258,3 +258,26 @@ export interface ManualRequestDeliveryDto {
   createdAt: string
   updatedAt: string
 }
+
+/** GET /api/partner/v1/partner/profile → `pickupAddress`. Mirrors PickupAddressPartnerDto:
+ *  it exposes `street` + `houseNumber` and has NO `addressLine1`. */
+export interface PartnerPickupAddressDto {
+  street: string | null
+  houseNumber: string | null
+  city: string | null
+  state: string | null
+  zipCode: string | null
+  countryCode: string
+  latitude: number
+  longitude: number
+  formattedAddress: string | null
+}
+
+/** GET /api/partner/v1/partner/profile. Read-only: there is no partner-side write endpoint,
+ *  because only a system admin may change a restaurant's details. */
+export interface PartnerProfileDto {
+  name: string
+  phoneNumber: string | null
+  pickupAddress: PartnerPickupAddressDto | null
+}
+

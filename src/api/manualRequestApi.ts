@@ -9,6 +9,7 @@ import {
   ManualRequestUpdateDeliveryInput,
   PartnerDeliveryDto,
   PartnerDeliveryPaginatedDto,
+  PartnerProfileDto,
 } from '../modules/manual-request/types'
 import { EnumDeliveryEventType } from '../shared-types'
 import {
@@ -266,6 +267,41 @@ export function useSubmitManualRequestEventMutation() {
 export async function fetchPartnerDelivery(deliveryId: string): Promise<PartnerDeliveryDto> {
   return manualRequestFetch<PartnerDeliveryDto>(`/deliveries/${deliveryId}`)
 }
+
+// The path is /partner/profile, so the full upstream URL is /api/partner/v1/partner/profile — the doubled partner is deliberate; /api/partner/v1/profile 404s.
+export async function fetchPartnerProfile(): Promise<PartnerProfileDto> {
+  return manualRequestFetch<PartnerProfileDto>('/partner/profile')
+}
+
+export function usePartnerProfileQuery() {
+  const [data, setData] = useState<PartnerProfileDto | undefined>(undefined)
+  const [isLoading, setIsLoading] = useState<boolean>(true)
+  const [error, setError] = useState<unknown>(undefined)
+
+  const fetchProfile = useCallback(async () => {
+    setIsLoading(true)
+    setError(undefined)
+    try {
+      const apiMode = getManualRequestApiMode()
+      if (apiMode !== 'partner') {
+        throw new Error('Partner profile is only available in partner API mode.')
+      }
+      const response = await fetchPartnerProfile()
+      setData(response)
+    } catch (err) {
+      setError(err)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchProfile()
+  }, [fetchProfile])
+
+  return { data, isLoading, error, refetch: fetchProfile }
+}
+
 
 export async function loginPartner(email: string, password: string): Promise<{ email: string | null }> {
   const response = await fetch(`${PARTNER_AUTH_BASE_URL}/login`, {

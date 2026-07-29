@@ -3,6 +3,7 @@ import {
   logoutPartner,
   fetchPartnerSession,
   fetchPartnerDelivery,
+  fetchPartnerProfile,
 } from './manualRequestApi'
 
 describe('manualRequestApi helper functions', () => {
@@ -107,6 +108,69 @@ describe('manualRequestApi helper functions', () => {
         }),
       )
       expect(result).toEqual(mockDelivery)
+    })
+  })
+
+  describe('fetchPartnerProfile', () => {
+    // Test Plan case 5: fetchPartnerProfile calls exact literal path /api/partner-proxy/partner/profile with credentials same-origin and no extra headers
+    it('calls proxy profile endpoint with exact literal path /api/partner-proxy/partner/profile and no credentials/keys in headers', async () => {
+      const mockFixture = {
+        name: 'Nosh',
+        phoneNumber: '+302421012345',
+        pickupAddress: {
+          street: 'Ermou',
+          houseNumber: '120',
+          city: 'Volos',
+          state: 'Thessaly',
+          zipCode: '38221',
+          countryCode: 'GR',
+          latitude: 39.3628,
+          longitude: 22.9435,
+          formattedAddress: 'Ermou 120, Volos, Thessaly, 38221, GR',
+        },
+      }
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        text: jest.fn().mockResolvedValue(JSON.stringify({ result: mockFixture })),
+      } as any)
+
+      await fetchPartnerProfile()
+
+      // Exact assertion on URL literal and exact headers object to prove no Authorization/API key headers are sent
+      expect(global.fetch).toHaveBeenCalledWith('/api/partner-proxy/partner/profile', {
+        credentials: 'same-origin',
+        signal: expect.any(Object),
+        headers: { 'Content-Type': 'application/json' },
+      })
+    })
+
+    // Test Plan case 6: fetchPartnerProfile unwraps the { result: ... } envelope and preserves numbers
+    it('unwraps profile response envelope and preserves coordinates', async () => {
+      const mockFixture = {
+        name: 'Nosh',
+        phoneNumber: '+302421012345',
+        pickupAddress: {
+          street: 'Ermou',
+          houseNumber: '120',
+          city: 'Volos',
+          state: 'Thessaly',
+          zipCode: '38221',
+          countryCode: 'GR',
+          latitude: 39.3628,
+          longitude: 22.9435,
+          formattedAddress: 'Ermou 120, Volos, Thessaly, 38221, GR',
+        },
+      }
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        text: jest.fn().mockResolvedValue(JSON.stringify({ result: mockFixture })),
+      } as any)
+
+      const profile = await fetchPartnerProfile()
+
+      expect(profile).toEqual(mockFixture)
+      expect(profile.pickupAddress?.latitude).toBe(39.3628)
+      expect(profile.pickupAddress?.longitude).toBe(22.9435)
     })
   })
 })

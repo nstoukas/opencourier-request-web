@@ -6,7 +6,7 @@
  */
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -32,7 +32,11 @@ import {
   useToast,
 } from '../../../admin-web-components'
 import { Loader2Icon } from 'lucide-react'
-import { useCreateManualRequestQuoteMutation, useConfirmManualRequestDeliveryMutation } from '../../../api/manualRequestApi'
+import {
+  useCreateManualRequestQuoteMutation,
+  useConfirmManualRequestDeliveryMutation,
+  usePartnerProfileQuery,
+} from '../../../api/manualRequestApi'
 import {
   buildManualRequestFormattedAddress,
   ManualRequestDeliveryInput,
@@ -45,12 +49,9 @@ import { AddressSection } from './AddressSection'
 import { ErrorBanner } from './ErrorBanner'
 import { useRequestPageNavigator } from '../../../hooks/useRequestPageNavigator'
 import {
-  clearManualRequestDefaultPickup,
-  MANUAL_REQUEST_DEFAULT_PICKUP_STORAGE_KEY,
-  readManualRequestDefaultPickup,
-  writeManualRequestDefaultPickup,
-  type ManualRequestDefaultPickupSnapshot,
-} from '../../../utils/manualRequestDefaultPickup'
+  checkPartnerPickupUsable,
+  mapPartnerProfileToPickupValues,
+} from '../../../utils/partnerProfilePickup'
 
 // ─── Validation schema ────────────────────────────────────────────────────────
 
@@ -77,8 +78,6 @@ const packageTypeOptions = [
 type PackageTypeValue = (typeof packageTypeOptions)[number]['value']
 
 const formSchema = z.object({
-  partnerId: z.string().optional(),
-
   // Pickup
   pickupName: z.string().min(1, 'Pickup contact name is required'),
   pickupPhoneNumber: z.string().min(7, 'Valid phone number required'),
@@ -138,37 +137,9 @@ function defaultDeadlineDatetimeLocal(): string {
   return d.toISOString().slice(0, 16)
 }
 
-function mergePickupSnapshotIntoDefaults(
-  base: CreateDeliveryFormValues,
-  snapshot: ManualRequestDefaultPickupSnapshot,
-): CreateDeliveryFormValues {
-  const street =
-    snapshot.pickupAddress.streetAddress.length > 0 &&
-    (snapshot.pickupAddress.streetAddress[0] ?? '').trim() !== ''
-      ? snapshot.pickupAddress.streetAddress
-      : base.pickupAddress.streetAddress
-  return {
-    ...base,
-    pickupName: snapshot.pickupName,
-    pickupPhoneNumber: snapshot.pickupPhoneNumber,
-    pickupBusinessName: snapshot.pickupBusinessName,
-    pickupNotes: snapshot.pickupNotes,
-    pickupAddress: {
-      ...base.pickupAddress,
-      ...snapshot.pickupAddress,
-      streetAddress: street,
-    },
-    pickupLatitude: snapshot.pickupLatitude,
-    pickupLongitude: snapshot.pickupLongitude,
-    pickupReadyAt: snapshot.pickupReadyAt,
-    pickupDeadlineAt: base.pickupDeadlineAt,
-  }
-}
-
 function buildDefaultValues(): CreateDeliveryFormValues {
   const deadline = defaultDeadlineDatetimeLocal()
   return {
-    partnerId: process.env.NEXT_PUBLIC_MANUAL_REQUEST_DEFAULT_PARTNER_ID?.trim() ?? '',
     pickupName: 'Pickup Contact',
     pickupPhoneNumber: '+10000000000',
     pickupBusinessName: 'Pickup Location',
@@ -276,10 +247,15 @@ export function CreateDeliveryForm() {
   const [activeQuote, setActiveQuote] = useState<ManualRequestQuoteDto | null>(null)
   const [formSnapshot, setFormSnapshot] = useState<CreateDeliveryFormValues | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  const [hasSavedDefaultPickup, setHasSavedDefaultPickup] = useState(false)
 
+  const { data: profile, isLoading: isProfileLoading, error: profileError } = usePartnerProfileQuery()
   const [createQuote, { isLoading: isQuoting }] = useCreateManualRequestQuoteMutation()
   const [confirmDelivery, { isLoading: isConfirming }] = useConfirmManualRequestDeliveryMutation()
+
+  const pickupMapped = useMemo(
+    () => (profile ? mapPartnerProfileToPickupValues(profile) : null),
+    [profile]
+  )
 
   const form = useForm<CreateDeliveryFormValues>({
     resolver: zodResolver(formSchema),
@@ -287,23 +263,15 @@ export function CreateDeliveryForm() {
   })
 
   useEffect(() => {
-    const saved = readManualRequestDefaultPickup()
-    setHasSavedDefaultPickup(Boolean(saved))
-    if (!saved) return
-    const base = buildDefaultValues()
-    form.reset(mergePickupSnapshotIntoDefaults(base, saved))
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- apply saved pickup once on mount
-  }, [])
-
-  useEffect(() => {
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === MANUAL_REQUEST_DEFAULT_PICKUP_STORAGE_KEY || e.key === null) {
-        setHasSavedDefaultPickup(Boolean(readManualRequestDefaultPickup()))
-      }
+    if (pickupMapped) {
+      form.reset({
+        ...form.getValues(),
+        ...pickupMapped,
+      })
     }
-    window.addEventListener('storage', onStorage)
-    return () => window.removeEventListener('storage', onStorage)
-  }, [])
+  }, [pickupMapped, form])
+
+  const pickupCheck = checkPartnerPickupUsable(profile)
 
   const getDebugErrorMessage = (err: any, fallback: string) => {
     const statusCode = err?.statusCode ?? err?.status
@@ -313,91 +281,27 @@ export function CreateDeliveryForm() {
     return err?.message ?? fallback
   }
 
-  const handleSaveDefaultPickup = async () => {
-    const ok = await form.trigger([
-      'pickupName',
-      'pickupPhoneNumber',
-      'pickupBusinessName',
-      'pickupAddress.streetAddress.0',
-      'pickupAddress.city',
-      'pickupAddress.state',
-      'pickupAddress.countryCode',
-    ])
-    if (!ok) {
-      toast({
-        title: 'Fix pickup fields first',
-        description: 'Enter a valid name, phone, business, and address before saving as default.',
-        variant: 'destructive',
-      })
-      return
-    }
-    const v = form.getValues()
-    const snapshot: ManualRequestDefaultPickupSnapshot = {
-      pickupName: v.pickupName.trim(),
-      pickupPhoneNumber: v.pickupPhoneNumber.trim(),
-      pickupBusinessName: v.pickupBusinessName.trim(),
-      pickupNotes: (v.pickupNotes ?? '').trim(),
-      pickupAddress: {
-        streetAddress: [v.pickupAddress.streetAddress[0] ?? ''],
-        city: v.pickupAddress.city,
-        state: v.pickupAddress.state,
-        zipCode: v.pickupAddress.zipCode ?? '',
-        countryCode: v.pickupAddress.countryCode,
-        houseNumber: v.pickupAddress.houseNumber ?? '',
-        formattedAddress: v.pickupAddress.formattedAddress ?? '',
-      },
-      pickupLatitude: v.pickupLatitude,
-      pickupLongitude: v.pickupLongitude,
-      pickupReadyAt: v.pickupReadyAt ?? '',
-      pickupDeadlineAt: v.pickupDeadlineAt ?? '',
-    }
-    try {
-      writeManualRequestDefaultPickup(snapshot)
-      setHasSavedDefaultPickup(true)
-      toast({
-        title: 'Default pickup saved',
-        description: 'Pickup will pre-fill on return visits in this browser.',
-      })
-    } catch {
-      toast({
-        title: 'Could not save',
-        description: 'Your browser may block local storage. Check site settings.',
-        variant: 'destructive',
-      })
-    }
-  }
-
-  const handleClearSavedPickup = () => {
-    clearManualRequestDefaultPickup()
-    setHasSavedDefaultPickup(false)
-    const current = form.getValues()
-    const base = buildDefaultValues()
-    form.reset({
-      ...current,
-      pickupName: base.pickupName,
-      pickupPhoneNumber: base.pickupPhoneNumber,
-      pickupBusinessName: base.pickupBusinessName,
-      pickupNotes: base.pickupNotes,
-      pickupAddress: { ...defaultAddress },
-      pickupLatitude: base.pickupLatitude,
-      pickupLongitude: base.pickupLongitude,
-      pickupReadyAt: base.pickupReadyAt,
-      pickupDeadlineAt: base.pickupDeadlineAt,
-    })
-    toast({
-      title: 'Saved pickup removed',
-      description: 'Pickup fields use generic defaults again.',
-    })
-  }
-
   const handleGetEstimate = async (values: CreateDeliveryFormValues) => {
     setErrorMessage(null)
     setActiveQuote(null)
+
+    if (!pickupCheck.usable) {
+      setErrorMessage(pickupCheck.reason ?? 'Your restaurant profile pickup address is not usable.')
+      return
+    }
+
     try {
+      const pickupAddressSource = pickupMapped?.pickupAddress ?? values.pickupAddress
+      const pickupLatSource = pickupMapped?.pickupLatitude ?? values.pickupLatitude
+      const pickupLngSource = pickupMapped?.pickupLongitude ?? values.pickupLongitude
+      const pickupNameSource = pickupMapped?.pickupName ?? values.pickupName
+      const pickupPhoneSource = pickupMapped?.pickupPhoneNumber ?? values.pickupPhoneNumber
+      const pickupBusinessSource = pickupMapped?.pickupBusinessName ?? values.pickupBusinessName
+
       const packageDescription = resolvePackageDescription(values)
-      const pickupCoordinates = hasValidCoordinates(values.pickupLatitude, values.pickupLongitude)
-        ? { latitude: values.pickupLatitude, longitude: values.pickupLongitude }
-        : await geocodeCoordinatesFromAddress(values.pickupAddress)
+      const pickupCoordinates = hasValidCoordinates(pickupLatSource, pickupLngSource)
+        ? { latitude: pickupLatSource, longitude: pickupLngSource }
+        : await geocodeCoordinatesFromAddress(pickupAddressSource)
       const dropoffCoordinates = hasValidCoordinates(values.dropoffLatitude, values.dropoffLongitude)
         ? { latitude: values.dropoffLatitude, longitude: values.dropoffLongitude }
         : await geocodeCoordinatesFromAddress(values.dropoffAddress)
@@ -407,7 +311,7 @@ export function CreateDeliveryForm() {
         return
       }
 
-      const pickupFormatted = resolveSubmittedFormattedAddress(values.pickupAddress, pickupCoordinates)
+      const pickupFormatted = resolveSubmittedFormattedAddress(pickupAddressSource, pickupCoordinates)
       const dropoffFormatted = resolveSubmittedFormattedAddress(values.dropoffAddress, dropoffCoordinates)
 
       form.setValue('pickupLatitude', pickupCoordinates.latitude, { shouldDirty: true, shouldValidate: true })
@@ -422,18 +326,17 @@ export function CreateDeliveryForm() {
       }
 
       const payload: ManualRequestQuoteInput = {
-        partnerId: values.partnerId ?? '',
-        pickupName: values.pickupName?.trim() || 'Pickup Contact',
-        pickupPhoneNumber: values.pickupPhoneNumber?.trim() || '+10000000000',
-        pickupBusinessName: values.pickupBusinessName?.trim() || 'Pickup Location',
+        pickupName: pickupNameSource?.trim() || 'Pickup Contact',
+        pickupPhoneNumber: pickupPhoneSource?.trim() || '+10000000000',
+        pickupBusinessName: pickupBusinessSource?.trim() || 'Pickup Location',
         pickupNotes: values.pickupNotes,
         pickupAddress: {
-          streetAddress: [values.pickupAddress.streetAddress[0] ?? ''],
-          city: values.pickupAddress.city,
-          state: values.pickupAddress.state,
-          zipCode: values.pickupAddress.zipCode || '',
-          countryCode: values.pickupAddress.countryCode,
-          houseNumber: values.pickupAddress.houseNumber,
+          streetAddress: [pickupAddressSource.streetAddress[0] ?? ''],
+          city: pickupAddressSource.city,
+          state: pickupAddressSource.state,
+          zipCode: pickupAddressSource.zipCode || '',
+          countryCode: pickupAddressSource.countryCode,
+          houseNumber: pickupAddressSource.houseNumber,
           formattedAddress: pickupFormatted,
         },
         pickupLatitude: pickupCoordinates.latitude,
@@ -467,14 +370,17 @@ export function CreateDeliveryForm() {
       setActiveQuote(quote)
       setFormSnapshot({
         ...values,
+        pickupName: pickupNameSource,
+        pickupPhoneNumber: pickupPhoneSource,
+        pickupBusinessName: pickupBusinessSource,
+        pickupAddress: {
+          ...pickupAddressSource,
+          formattedAddress: pickupFormatted,
+        },
         pickupLatitude: pickupCoordinates.latitude,
         pickupLongitude: pickupCoordinates.longitude,
         dropoffLatitude: dropoffCoordinates.latitude,
         dropoffLongitude: dropoffCoordinates.longitude,
-        pickupAddress: {
-          ...values.pickupAddress,
-          formattedAddress: pickupFormatted,
-        },
         dropoffAddress: {
           ...values.dropoffAddress,
           formattedAddress: dropoffFormatted,
@@ -492,7 +398,6 @@ export function CreateDeliveryForm() {
       const packageDescription = resolvePackageDescription(formSnapshot)
 
       const payload: ManualRequestDeliveryInput = {
-        partnerId: formSnapshot.partnerId ?? '',
         pickupName: formSnapshot.pickupName?.trim() || 'Pickup Contact',
         pickupPhoneNumber: formSnapshot.pickupPhoneNumber?.trim() || '+10000000000',
         pickupBusinessName: formSnapshot.pickupBusinessName?.trim() || 'Pickup Location',
@@ -692,52 +597,54 @@ export function CreateDeliveryForm() {
           {/* ── Pickup ──────────────────────────────────────────────────── */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Pickup</CardTitle>
+              <CardTitle className="text-base">Pickup — your restaurant</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid sm:grid-cols-2 gap-3">
-                <FormField
-                  control={form.control}
-                  name="pickupName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Pickup contact name</FormLabel>
-                      <FormControl>
-                        <Input placeholder="e.g. JOHN DOE" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="pickupPhoneNumber"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Phone number</FormLabel>
-                      <FormControl>
-                        <Input type="tel" placeholder="+1 555 000 0000" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="pickupBusinessName"
-                  render={({ field }) => (
-                    <FormItem className="sm:col-span-2">
-                      <FormLabel>Business or building name</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Company or location name" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+              <div data-testid="pickup-readonly" className="rounded-md border p-4 text-sm bg-muted/30 space-y-3">
+                {isProfileLoading ? (
+                  <p className="text-muted-foreground">Loading your restaurant&apos;s details…</p>
+                ) : profileError ? (
+                  <ErrorBanner
+                    title="Could not load profile"
+                    message={profileError instanceof Error ? profileError.message : 'Failed to load profile.'}
+                  />
+                ) : !pickupCheck.usable ? (
+                  <div className="space-y-1">
+                    <p className="text-destructive font-medium">{pickupCheck.reason}</p>
+                    <p className="text-muted-foreground">
+                      Only a co-op admin can set your restaurant&apos;s pickup details — please contact them.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="grid sm:grid-cols-2 gap-3">
+                      <div>
+                        <span className="font-semibold text-muted-foreground block text-xs uppercase tracking-wider">
+                          Restaurant
+                        </span>
+                        <span className="font-medium text-foreground">{profile?.name}</span>
+                      </div>
+                      <div>
+                        <span className="font-semibold text-muted-foreground block text-xs uppercase tracking-wider">
+                          Phone
+                        </span>
+                        <span className="font-medium text-foreground">{profile?.phoneNumber || '—'}</span>
+                      </div>
+                    </div>
+                    <div>
+                      <span className="font-semibold text-muted-foreground block text-xs uppercase tracking-wider">
+                        Pickup address
+                      </span>
+                      <span className="font-medium text-foreground">
+                        {pickupMapped?.pickupAddress.formattedAddress || '—'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground pt-1 border-t">
+                      These come from your restaurant&apos;s profile. Only a co-op admin can change them.
+                    </p>
+                  </>
+                )}
               </div>
-
-              <AddressSection control={form.control} prefix="pickup" label="Pickup address" />
 
               <FormField
                 control={form.control}
@@ -786,20 +693,6 @@ export function CreateDeliveryForm() {
                   )}
                 />
               </div>
-
-              <div className="flex flex-wrap items-center gap-2 border-t pt-4">
-                <Button type="button" variant="outline" size="sm" onClick={handleSaveDefaultPickup}>
-                  Save pickup as default
-                </Button>
-                {hasSavedDefaultPickup ? (
-                  <Button type="button" variant="ghost" size="sm" onClick={handleClearSavedPickup}>
-                    Clear saved pickup
-                  </Button>
-                ) : null}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Saved only in this browser on your device; it is not sent to a server until you request a quote.
-              </p>
             </CardContent>
           </Card>
 
@@ -900,7 +793,7 @@ export function CreateDeliveryForm() {
 
           {/* ── Submit ──────────────────────────────────────────────────── */}
           <div className="flex justify-end">
-            <Button type="submit" disabled={isQuoting} size="lg">
+            <Button type="submit" disabled={isQuoting || !pickupCheck.usable} size="lg">
               {isQuoting && <Loader2Icon className="w-4 h-4 mr-2 animate-spin" />}
               {isQuoting ? 'Getting Estimate…' : 'Get Estimate'}
             </Button>
