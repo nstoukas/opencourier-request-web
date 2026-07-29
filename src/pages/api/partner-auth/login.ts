@@ -52,13 +52,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }>(body)
 
     const accessToken = payload?.session?.accessToken
-    const expiresIn = payload?.session?.expiresIn
+    // The backend's `expiresIn` field is in milliseconds; sessionCookieMaxAge converts it.
+    const expiresInMs = payload?.session?.expiresIn
 
     if (!accessToken) {
       return res.status(502).json({ message: 'Backend did not return a session.' })
     }
 
-    const maxAge = sessionCookieMaxAge(expiresIn)
+    const maxAge = sessionCookieMaxAge(expiresInMs)
     const cookie = buildSessionCookie(accessToken, maxAge)
 
     res.setHeader('Set-Cookie', cookie)

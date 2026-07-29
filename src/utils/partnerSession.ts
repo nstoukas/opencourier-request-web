@@ -8,10 +8,19 @@ export function getPartnerApiBasePath(): string {
   return process.env.MANUAL_REQUEST_BASE_PATH?.trim().replace(/\/$/, '') || '/api/partner/v1'
 }
 
-export function sessionCookieMaxAge(expiresIn: unknown): number {
-  if (typeof expiresIn === 'number' && Number.isFinite(expiresIn) && expiresIn > 0) {
-    return expiresIn
+// The backend returns `expiresIn` in MILLISECONDS, but a cookie's Max-Age is defined in
+// SECONDS. Verified 2026-07-29 against a live backend: POST /auth/login returned
+// expiresIn 3153600000 for a JWT whose exp - iat was 3153600 seconds (36.5 days).
+// We convert here rather than in the backend because the backend is shared by other
+// clients (Path A: the storefront adapts, the core does not change).
+export function sessionCookieMaxAge(expiresInMs: unknown): number {
+  if (typeof expiresInMs === 'number' && Number.isFinite(expiresInMs) && expiresInMs > 0) {
+    // Math.floor so the cookie never outlives the token it carries.
+    // Math.max(1, ...) so a sub-second expiry cannot floor to 0 — browsers read
+    // Max-Age=0 as "delete this cookie immediately".
+    return Math.max(1, Math.floor(expiresInMs / 1000))
   }
+  // Fallback for a missing or nonsensical value: one hour, already in seconds.
   return 3600
 }
 

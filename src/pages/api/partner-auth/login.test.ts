@@ -89,7 +89,7 @@ describe('/api/partner-auth/login API Route', () => {
         session: {
           accessToken: 'JWT_ACCESS_TOKEN_SECRET',
           tokenType: 'Bearer',
-          expiresIn: 900,
+          expiresIn: 3153600000,
         },
       },
     }
@@ -109,12 +109,13 @@ describe('/api/partner-auth/login API Route', () => {
 
     expect(resState.statusCode).toBe(200)
 
-    // Assert that Set-Cookie header contains HttpOnly and the session access token
+    // Assert that Set-Cookie header contains HttpOnly and the session access token with Max-Age in seconds
     const cookieHeader = resState.headers['set-cookie']
     expect(cookieHeader).toBeDefined()
     expect(cookieHeader).toContain('HttpOnly')
     expect(cookieHeader).toContain('oc_partner_session=JWT_ACCESS_TOKEN_SECRET')
-    expect(cookieHeader).toContain('Max-Age=900')
+    expect(cookieHeader).toContain('Max-Age=3153600')
+    expect(cookieHeader).not.toContain('Max-Age=3153600000')
 
     // CRITICAL SECURITY REGRESSION ASSERTION: Response body MUST contain ONLY email
     expect(resState.jsonBody).toEqual({ email: 'restaurant@volos.test' })

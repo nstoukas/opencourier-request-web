@@ -80,9 +80,30 @@ describe('partnerSession utils', () => {
       expect(sessionCookieMaxAge(NaN)).toBe(3600)
     })
 
-    it('passes through valid positive numeric expiresIn values', () => {
-      expect(sessionCookieMaxAge(900)).toBe(900)
-      expect(sessionCookieMaxAge(7200)).toBe(7200)
+    it('converts real backend expiresIn value in milliseconds to seconds', () => {
+      // Real backend returns 3,153,600,000 ms (~36.5 days in ms)
+      expect(sessionCookieMaxAge(3153600000)).toBe(3153600)
+    })
+
+    it('guards against raw passthrough of millisecond values (must be under 2 years in seconds)', () => {
+      const twoYearsInSeconds = 60 * 60 * 24 * 365 * 2
+      // A raw passthrough of 3,153,600,000 would fail this assertion (~100 years vs 2 years)
+      expect(sessionCookieMaxAge(3153600000)).toBeLessThan(twoYearsInSeconds)
+    })
+
+    it('converts ordinary millisecond values to seconds', () => {
+      expect(sessionCookieMaxAge(900000)).toBe(900)
+      expect(sessionCookieMaxAge(7200000)).toBe(7200)
+    })
+
+    it('rounds down fractional seconds so cookie never outlives the token', () => {
+      // 1500 ms = 1.5 s -> Math.floor rounds down to 1 s
+      expect(sessionCookieMaxAge(1500)).toBe(1)
+    })
+
+    it('returns at least 1 second for sub-second expiry to avoid Max-Age=0 cookie deletion', () => {
+      // 500 ms = 0.5 s -> Math.max(1, Math.floor(0.5)) returns 1 second
+      expect(sessionCookieMaxAge(500)).toBe(1)
     })
   })
 
