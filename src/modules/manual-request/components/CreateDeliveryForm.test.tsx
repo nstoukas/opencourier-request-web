@@ -215,4 +215,119 @@ describe('CreateDeliveryForm', () => {
 
     expect(mockCreateQuote).not.toHaveBeenCalled()
   })
+
+  // T1 — renders loading state when profile is loading and disables submit button
+  it('renders loading state when profile is loading and disables submit button', () => {
+    ;(usePartnerProfileQuery as jest.Mock).mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      error: undefined,
+    })
+
+    render(<CreateDeliveryForm />)
+
+    expect(screen.getByText(/Loading your restaurant's details…/i)).toBeInTheDocument()
+    const submitBtn = screen.getByRole('button', { name: /Get Estimate/i })
+    expect(submitBtn).toBeDisabled()
+  })
+
+  // T2 — dropoff values typed before profile load survive form.reset
+  it('preserves pre-filled dropoff values when profile finishes loading and form resets', async () => {
+    let setProfileState: ((val: any) => void) | undefined
+
+    ;(usePartnerProfileQuery as jest.Mock).mockImplementation(() => {
+      const [state, setState] = React.useState({
+        data: undefined as PartnerProfileDto | undefined,
+        isLoading: true,
+        error: undefined as any,
+      })
+      setProfileState = setState
+      return state
+    })
+
+    render(<CreateDeliveryForm />)
+
+    const recipientInput = screen.getByLabelText(/Recipient name/i)
+    fireEvent.change(recipientInput, { target: { value: 'Early Recipient' } })
+    expect(recipientInput).toHaveValue('Early Recipient')
+
+    React.act(() => {
+      if (setProfileState) {
+        setProfileState({
+          data: fixtureProfile,
+          isLoading: false,
+          error: undefined,
+        })
+      }
+    })
+
+    await waitFor(() => {
+      expect(screen.getByTestId('pickup-readonly')).toHaveTextContent('Nosh')
+    })
+
+    expect(screen.getByLabelText(/Recipient name/i)).toHaveValue('Early Recipient')
+  })
+
+  // T3 — handleConfirm calls confirmDelivery mutation and navigates to status
+  it('calls confirmDelivery mutation with mapped values and navigates when confirming quote', async () => {
+    ;(usePartnerProfileQuery as jest.Mock).mockReturnValue({
+      data: fixtureProfile,
+      isLoading: false,
+      error: undefined,
+    })
+
+    mockCreateQuote.mockResolvedValue({
+      id: 'quote-456',
+      quoteRangeFrom: 500,
+      quoteRangeTo: 500,
+      currency: 'EUR',
+      duration: 20,
+      distance: 3.0,
+      distanceUnit: 'km',
+      expiresAt: null,
+      dropoffEta: null,
+      createdAt: new Date().toISOString(),
+    })
+
+    mockConfirmDelivery.mockResolvedValue({
+      id: 'del-789',
+      status: 'ACCEPTED',
+    })
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: jest.fn().mockResolvedValue([
+        { lat: '39.3600', lon: '22.9400', display_name: 'Iasonos 45, Volos, Thessaly, 38221, GR' },
+      ]),
+    } as any)
+
+    render(<CreateDeliveryForm />)
+
+    fireEvent.change(screen.getByLabelText(/Recipient name/i), { target: { value: 'Jane Doe' } })
+    fireEvent.change(screen.getByLabelText(/Phone number/i), { target: { value: '+306912345678' } })
+
+    const streetInput = screen.getAllByLabelText(/Street address/i)[0]
+    fireEvent.change(streetInput, { target: { value: 'Iasonos 45' } })
+    fireEvent.change(screen.getByLabelText(/City/i), { target: { value: 'Volos' } })
+    fireEvent.change(screen.getByLabelText(/State \/ Province/i), { target: { value: 'Thessaly' } })
+    fireEvent.change(screen.getByLabelText(/Country/i), { target: { value: 'GR' } })
+
+    fireEvent.click(screen.getByRole('button', { name: /Get Estimate/i }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Confirm Delivery/i })).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /Confirm Delivery/i }))
+
+    await waitFor(() => {
+      expect(mockConfirmDelivery).toHaveBeenCalledTimes(1)
+    })
+
+    const payload = mockConfirmDelivery.mock.calls[0][0]
+    expect(payload.quoteId).toBe('quote-456')
+    expect(payload.pickupBusinessName).toBe('Nosh')
+    expect(payload.pickupAddress.streetAddress[0]).toBe('Ermou 120')
+    expect(mockNavigator.goToManualRequestStatus).toHaveBeenCalledWith('del-789')
+  })
 })

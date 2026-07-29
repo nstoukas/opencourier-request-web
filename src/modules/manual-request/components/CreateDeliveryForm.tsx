@@ -79,6 +79,7 @@ type PackageTypeValue = (typeof packageTypeOptions)[number]['value']
 
 const formSchema = z.object({
   // Pickup
+  // WARNING: These fields are still in the Zod schema but have no rendered inputs. checkPartnerPickupUsable must mirror their constraints.
   pickupName: z.string().min(1, 'Pickup contact name is required'),
   pickupPhoneNumber: z.string().min(7, 'Valid phone number required'),
   pickupBusinessName: z.string().min(1, 'Pickup business name is required'),
@@ -263,13 +264,13 @@ export function CreateDeliveryForm() {
   })
 
   useEffect(() => {
-    if (pickupMapped) {
+    if (pickupMapped && checkPartnerPickupUsable(profile).usable) {
       form.reset({
         ...form.getValues(),
         ...pickupMapped,
       })
     }
-  }, [pickupMapped, form])
+  }, [pickupMapped, form, profile])
 
   const pickupCheck = checkPartnerPickupUsable(profile)
 
@@ -291,6 +292,7 @@ export function CreateDeliveryForm() {
     }
 
     try {
+      // AIFLOW-NOTE: pickupMapped is non-null here via pickupCheck.usable guard; fallback to values.pickupAddress is retained defensively.
       const pickupAddressSource = pickupMapped?.pickupAddress ?? values.pickupAddress
       const pickupLatSource = pickupMapped?.pickupLatitude ?? values.pickupLatitude
       const pickupLngSource = pickupMapped?.pickupLongitude ?? values.pickupLongitude
