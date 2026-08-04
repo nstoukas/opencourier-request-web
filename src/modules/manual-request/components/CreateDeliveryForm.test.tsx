@@ -1,7 +1,7 @@
 import React from 'react'
 import '@testing-library/jest-dom'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
-import { CreateDeliveryForm } from './CreateDeliveryForm'
+import { CreateDeliveryForm, defaultDeadlineDatetimeLocal } from './CreateDeliveryForm'
 import {
   usePartnerProfileQuery,
   useCreateManualRequestQuoteMutation,
@@ -329,5 +329,23 @@ describe('CreateDeliveryForm', () => {
     expect(payload.pickupBusinessName).toBe('Nosh')
     expect(payload.pickupAddress.streetAddress[0]).toBe('Ermou 120')
     expect(mockNavigator.goToManualRequestStatus).toHaveBeenCalledWith('del-789')
+  })
+
+  // Asserting a literal like '2026-08-04T14:00' would only hold in UTC+3: assigning
+  // process.env.TZ inside a test does not move the clock, because Node has already cached
+  // the zone. So assert the property instead — a datetime-local string is read back as
+  // LOCAL time, and must land exactly one hour ahead in whatever zone the suite runs in.
+  // The old toISOString() version fails this anywhere the UTC offset is not zero.
+  it('defaultDeadlineDatetimeLocal returns local wall-clock time one hour ahead, not the UTC instant', () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-08-04T10:00:00.000Z'))
+    try {
+      const result = defaultDeadlineDatetimeLocal()
+
+      expect(result).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/)
+      // No trailing Z, so this parses as local time — the same way the input element reads it.
+      expect(new Date(result).getTime()).toBe(Date.now() + 60 * 60 * 1000)
+    } finally {
+      jest.useRealTimers()
+    }
   })
 })

@@ -132,10 +132,17 @@ const defaultAddress = {
   formattedAddress: '',
 }
 
-function defaultDeadlineDatetimeLocal(): string {
+// An <input type="datetime-local"> reads its value as LOCAL wall-clock time, but
+// toISOString() converts to UTC first — so building the default that way subtracted
+// the timezone offset and produced a deadline in the PAST (UTC+3 in Greece meant
+// "one hour from now" rendered as two hours ago). Build the local fields by hand.
+export function defaultDeadlineDatetimeLocal(): string {
   const d = new Date()
   d.setHours(d.getHours() + 1)
-  return d.toISOString().slice(0, 16)
+  // padStart keeps single digits two characters wide ("7" -> "07"), which the input requires.
+  const pad = (n: number) => String(n).padStart(2, '0')
+  // getMonth() counts from 0 (January), hence the + 1.
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
 function buildDefaultValues(): CreateDeliveryFormValues {
