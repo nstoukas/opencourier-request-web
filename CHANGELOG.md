@@ -74,6 +74,8 @@ has the full reasoning and verification notes.
 - Ignored pipeline artifacts (`.aiflow/`, `plan.md`). `2d78cd7`
 - `.run-dev.sh`, a local Node 20 helper that is only useful on the author's machine.
   `1d465ae`
+- `AGENTS.md`, context for AI coding tools that points at the co-op workspace rulebook, and a
+  `CLAUDE.md` that imports it.
 
 ---
 
