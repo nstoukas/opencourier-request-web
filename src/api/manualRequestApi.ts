@@ -303,6 +303,11 @@ export function usePartnerProfileQuery() {
 }
 
 
+// A failed sign in keeps the HTTP status beside the message, so the sign in screen can pick
+// plain words for the restaurant ("That email and password don't match") instead of showing
+// the server's own text or a code.
+export type SignInError = Error & { status?: number }
+
 export async function loginPartner(email: string, password: string): Promise<{ email: string | null }> {
   const response = await fetch(`${PARTNER_AUTH_BASE_URL}/login`, {
     method: 'POST',
@@ -311,7 +316,10 @@ export async function loginPartner(email: string, password: string): Promise<{ e
   })
   const body = await response.json().catch(() => ({}))
   if (!response.ok) {
-    throw new Error(body?.message ?? 'Sign in failed.')
+    // `as SignInError` tells TypeScript this Error may carry a status; we set it on the next line.
+    const error = new Error(body?.message ?? 'Sign in failed.') as SignInError
+    error.status = response.status
+    throw error
   }
   return { email: body?.email ?? null }
 }
