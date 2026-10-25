@@ -23,6 +23,7 @@ import type {
 } from '../../../modules/manual-request/types'
 import { getManualRequestApiMode } from '../../../utils/manualRequestAuth'
 import { formatDateTime, formatMoney } from '../../../utils/format'
+import { PageHeader } from '../../../modules/portal/components/PortalFrame'
 
 const TERMINAL_STATUSES = new Set(['DROPPED_OFF', 'CANCELED', 'FAILED'])
 
@@ -319,22 +320,25 @@ export default function ManualRequestStatusPage() {
   return (
     <>
       <Head>
-        <title>Delivery Status</title>
+        <title>Delivery Status · OpenCourier</title>
       </Head>
-      <main className="container space-y-4 py-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-xl font-semibold">Delivery status</h1>
-          <div className="flex flex-wrap gap-3 text-sm">
-            {partnerMode ? (
-              <Link href="/manual-request/deliveries" className="underline">
-                All deliveries
+      {/* The frame (PortalFrame) supplies <main> and the 768px column; this is the page inside it. */}
+      <div className="space-y-6">
+        <PageHeader
+          title="Delivery Status"
+          actions={
+            <>
+              {partnerMode ? (
+                <Link href="/manual-request/deliveries" className="underline">
+                  All deliveries
+                </Link>
+              ) : null}
+              <Link href="/manual-request" className="underline">
+                Back to request form
               </Link>
-            ) : null}
-            <Link href="/manual-request" className="underline">
-              Back to request form
-            </Link>
-          </div>
-        </div>
+            </>
+          }
+        />
 
         <Card>
           <CardHeader>
@@ -366,7 +370,7 @@ export default function ManualRequestStatusPage() {
             ) : null}
           </CardContent>
         </Card>
-      </main>
+      </div>
     </>
   )
 }

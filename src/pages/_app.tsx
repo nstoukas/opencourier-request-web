@@ -1,8 +1,8 @@
 import type { AppProps } from 'next/app'
 import Head from 'next/head'
-import Link from 'next/link'
 import { IconContext } from '@phosphor-icons/react'
-import { Button, Toaster } from '../admin-web-components'
+import { Toaster } from '../admin-web-components'
+import { PortalFrame } from '../modules/portal/components/PortalFrame'
 import '../admin-web-components/styles/globals.css'
 
 // Phosphor icons are pictures beside words, so screen readers should skip them. lucide did
@@ -28,22 +28,10 @@ export default function App({ Component, pageProps }: AppProps) {
         <link rel="icon" type="image/png" href="/icon-192.png" sizes="192x192" />
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
       </Head>
-      <header className="border-b bg-background sticky top-0 z-10">
-        <div className="container flex items-center justify-between h-14">
-          <Link href="/manual-request" className="font-semibold text-base">
-            OpenCourier
-          </Link>
-          <nav className="flex items-center gap-2">
-            <Link href="/manual-request">
-              <Button variant="ghost" size="sm">New Delivery</Button>
-            </Link>
-            <Link href="/manual-request/deliveries">
-              <Button variant="outline" size="sm">My Orders</Button>
-            </Link>
-          </nav>
-        </div>
-      </header>
-      <Component {...pageProps} />
+      {/* The sticky header, the 768px column and the sign in gate, around every page. */}
+      <PortalFrame>
+        <Component {...pageProps} />
+      </PortalFrame>
       <Toaster />
     </IconContext.Provider>
   )

@@ -27,6 +27,7 @@ import {
 import { PartnerDeliveryDto } from '../../../modules/manual-request/types'
 import { usePartnerSession } from '../../../hooks/usePartnerSession'
 import { formatDateTime, formatMoney } from '../../../utils/format'
+import { PageHeader } from '../../../modules/portal/components/PortalFrame'
 
 // Statuses where cancel is no longer possible
 const TERMINAL_STATUSES = new Set(['DROPPED_OFF', 'CANCELED', 'FAILED'])
@@ -255,13 +256,11 @@ export default function DeliveriesPage() {
   return (
     <>
       <Head>
-        <title>My Orders</title>
+        <title>My Orders · OpenCourier</title>
       </Head>
-      <main className="container py-6 space-y-4">
-        <div>
-          <h1 className="text-xl font-semibold">My Orders</h1>
-          <p className="text-xs text-muted-foreground">Only your restaurant&apos;s deliveries appear here.</p>
-        </div>
+      {/* The frame (PortalFrame) supplies <main> and the 768px column; this is the page inside it. */}
+      <div className="space-y-6">
+        <PageHeader title="My Orders" description={"Only your restaurant's deliveries appear here."} />
 
         {!isSignedIn && !isSessionLoading ? (
           <p className="text-sm text-muted-foreground">
@@ -392,7 +391,7 @@ export default function DeliveriesPage() {
             </Button>
           </div>
         ) : null}
-      </main>
+      </div>
 
       {editingDelivery ? (
         <EditDialog
