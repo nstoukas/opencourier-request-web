@@ -142,5 +142,65 @@ describe('DeliveriesPage (/manual-request/deliveries/index.tsx)', () => {
     expect(screen.getByText('ORD-1000')).toBeInTheDocument()
     expect(screen.getByText('Customer A')).toBeInTheDocument()
     expect(screen.getByText('Customer B')).toBeInTheDocument()
+
+    // Clause 2 assertion: Statuses render through StatusBadge, not raw uppercase enum text
+    expect(screen.getByText('Accepted')).toBeInTheDocument()
+    const acceptedBadge = screen.getByText('Accepted').closest('[data-status]')
+    expect(acceptedBadge).toHaveAttribute('data-status', 'ACCEPTED')
+    expect(acceptedBadge).toHaveClass('bg-secondary')
+    expect(screen.queryByText('ACCEPTED')).not.toBeInTheDocument()
+  })
+
+  it('renders statuses through StatusBadge for terminal statuses (DROPPED_OFF and CANCELED)', () => {
+    ;(usePartnerSession as jest.Mock).mockReturnValue({
+      isSignedIn: true,
+      isLoading: false,
+    })
+    ;(useListManualRequestDeliveriesQuery as jest.Mock).mockReturnValue({
+      data: {
+        data: [
+          {
+            id: 'del-completed',
+            status: 'DROPPED_OFF',
+            orderReference: 'ORD-DONE',
+            totalCost: 1200,
+            currencyCode: 'EUR',
+            createdAt: '2026-07-29T12:00:00Z',
+            pickup: { pickupName: 'Nosh', city: 'Volos' },
+            dropoff: { dropoffName: 'Customer C', city: 'Volos' },
+          },
+          {
+            id: 'del-canceled',
+            status: 'CANCELED',
+            orderReference: 'ORD-CANCEL',
+            totalCost: 800,
+            currencyCode: 'EUR',
+            createdAt: '2026-07-29T13:00:00Z',
+            pickup: { pickupName: 'Nosh', city: 'Volos' },
+            dropoff: { dropoffName: 'Customer D', city: 'Volos' },
+          },
+        ],
+        pagination: { currentPage: 1, totalPages: 1 },
+      },
+      isLoading: false,
+      error: undefined,
+      refetch: jest.fn(),
+    })
+
+    const { container } = render(<DeliveriesPage />)
+
+    // Verify DROPPED_OFF renders as "Dropped Off" on default variant (bg-primary)
+    expect(screen.getByText('Dropped Off')).toBeInTheDocument()
+    const droppedOffBadge = container.querySelector('[data-status="DROPPED_OFF"]')
+    expect(droppedOffBadge).toBeInTheDocument()
+    expect(droppedOffBadge).toHaveClass('bg-primary')
+    expect(screen.queryByText('DROPPED_OFF')).not.toBeInTheDocument()
+
+    // Verify CANCELED renders as "Canceled" on destructive variant (bg-destructive)
+    expect(screen.getByText('Canceled')).toBeInTheDocument()
+    const canceledBadge = container.querySelector('[data-status="CANCELED"]')
+    expect(canceledBadge).toBeInTheDocument()
+    expect(canceledBadge).toHaveClass('bg-destructive')
+    expect(screen.queryByText('CANCELED')).not.toBeInTheDocument()
   })
 })
