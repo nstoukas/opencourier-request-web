@@ -16,6 +16,9 @@ function Spinner({ className, label = 'Loading', ...props }: SpinnerProps) {
     <CircleNotch
       role="status"
       aria-label={label}
+      // Icons are hidden from screen readers by default (IconContext in _app.tsx). The spinner
+      // is the one icon that says something ("Loading"), so it opts back in.
+      aria-hidden={false}
       className={cn('size-4 animate-spin', className)}
       {...props}
     />

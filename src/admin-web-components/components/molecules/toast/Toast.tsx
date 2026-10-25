@@ -73,6 +73,8 @@ const ToastClose = React.forwardRef<
     {...props}
   >
     <X className="h-4 w-4" />
+    {/* The icon is hidden from screen readers, so the button needs words of its own. */}
+    <span className="sr-only">Close</span>
   </ToastPrimitives.Close>
 ))
 ToastClose.displayName = ToastPrimitives.Close.displayName

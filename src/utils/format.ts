@@ -1,6 +1,9 @@
 // How money and times read in the restaurant portal: Greek formats, the euro after the
 // number with a decimal comma (3,38 €), dates day first, and the 24 hour clock (23:25).
 // One place for these, so every page shows the same thing.
+// Times are shown on Greek time (Europe/Athens) whatever the computer's own time zone is:
+// the co-op serves Volos, so a laptop left on another zone must not shift an ETA.
+const TIME_ZONE = 'Europe/Athens'
 
 // Intl.NumberFormat and Intl.DateTimeFormat are built into every browser and Node; the
 // 'el-GR' locale gives the Greek separators and order. Built once, reused on every call.
@@ -11,12 +14,14 @@ const DATE_TIME = new Intl.DateTimeFormat('el-GR', {
   hour: '2-digit',
   minute: '2-digit',
   hourCycle: 'h23',
+  timeZone: TIME_ZONE,
 })
 
 const TIME = new Intl.DateTimeFormat('el-GR', {
   hour: '2-digit',
   minute: '2-digit',
   hourCycle: 'h23',
+  timeZone: TIME_ZONE,
 })
 
 /** Money stored as cents, for example 338 with 'EUR' reads "3,38 €". Missing reads "—". */

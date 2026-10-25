@@ -2,7 +2,7 @@ import React from 'react'
 import fs from 'fs'
 import path from 'path'
 import '@testing-library/jest-dom'
-import { render, screen } from '@testing-library/react'
+import { render } from '@testing-library/react'
 import { StatusBadge } from './StatusBadge'
 
 describe('StatusBadge (/src/admin-web-components/components/atoms/StatusBadge.tsx)', () => {
