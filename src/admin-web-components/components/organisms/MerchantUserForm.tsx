@@ -6,7 +6,7 @@ import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { WithSheetCallbacks } from '../../types/sheet'
 import { Button } from '../atoms/Button'
-import { Icons } from '../atoms/Icons'
+import { Spinner } from '../atoms/Spinner'
 import { Input } from '../atoms/Input'
 import { SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '../atoms/Sheet'
 import { Card, CardContent, CardHeader, CardTitle } from '../molecules/Card'
@@ -198,7 +198,7 @@ export function MerchantUserForm({ groupMerchants, isLoading, ...props }: Mercha
 
           <SheetFooter>
             <Button disabled={isLoading}>
-              {isLoading && <Icons.spinner className="mr-2 h-4 w-4 animate-spin" />}
+              {isLoading && <Spinner className="mr-2" />}
               Submit
             </Button>
           </SheetFooter>

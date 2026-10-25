@@ -1,4 +1,4 @@
-import { Plus } from 'lucide-react'
+import { Plus } from '@phosphor-icons/react'
 import { ReactNode } from 'react'
 import { Button } from '../atoms/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '../molecules/Card'

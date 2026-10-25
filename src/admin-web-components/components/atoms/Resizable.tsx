@@ -1,5 +1,5 @@
 import { cn } from '../../../ui-shared-utils'
-import { GripVertical } from 'lucide-react'
+import { DotsSixVertical } from '@phosphor-icons/react'
 import * as ResizablePrimitive from 'react-resizable-panels'
 
 const ResizablePanelGroup = ({ className, ...props }: React.ComponentProps<typeof ResizablePrimitive.PanelGroup>) => (
@@ -27,7 +27,7 @@ const ResizableHandle = ({
   >
     {withHandle && (
       <div className="z-10 flex h-4 w-3 items-center justify-center rounded-sm border bg-border">
-        <GripVertical className="h-2.5 w-2.5" />
+        <DotsSixVertical className="h-2.5 w-2.5" />
       </div>
     )}
   </ResizablePrimitive.PanelResizeHandle>

@@ -28,10 +28,10 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  Spinner,
   Textarea,
   useToast,
 } from '../../../admin-web-components'
-import { Loader2Icon } from 'lucide-react'
 import {
   useCreateManualRequestQuoteMutation,
   useConfirmManualRequestDeliveryMutation,
@@ -803,7 +803,7 @@ export function CreateDeliveryForm() {
           {/* ── Submit ──────────────────────────────────────────────────── */}
           <div className="flex justify-end">
             <Button type="submit" disabled={isQuoting || !pickupCheck.usable} size="lg">
-              {isQuoting && <Loader2Icon className="w-4 h-4 mr-2 animate-spin" />}
+              {isQuoting && <Spinner className="mr-2" />}
               {isQuoting ? 'Getting Estimate…' : 'Get Estimate'}
             </Button>
           </div>

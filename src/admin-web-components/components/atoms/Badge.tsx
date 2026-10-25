@@ -11,6 +11,10 @@ const badgeVariants = cva(
         secondary: 'border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80',
         destructive: 'border-transparent bg-destructive text-destructive-foreground hover:bg-destructive/80',
         outline: 'text-foreground',
+        // OpenCourier additions: a soft ground with ink text, the tone carried by the border.
+        success: 'bg-success-soft text-foreground border-success/30',
+        warning: 'bg-warning-soft text-foreground border-warning-foreground/20',
+        info: 'bg-info-soft text-info border-info/25',
       },
     },
     defaultVariants: {

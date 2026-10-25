@@ -2,13 +2,14 @@ import Head from 'next/head'
 import Link from 'next/link'
 import { useRouter } from 'next/router'
 import {
-  Badge,
   Button,
   Card,
   CardContent,
   CardHeader,
   CardTitle,
+  DetailList,
   Separator,
+  StatusBadge,
 } from '../../../admin-web-components'
 import {
   useCancelManualRequestDeliveryMutation,
@@ -21,27 +22,12 @@ import type {
   PartnerDeliveryPickupDto,
 } from '../../../modules/manual-request/types'
 import { getManualRequestApiMode } from '../../../utils/manualRequestAuth'
+import { formatDateTime, formatMoney } from '../../../utils/format'
 
 const TERMINAL_STATUSES = new Set(['DROPPED_OFF', 'CANCELED', 'FAILED'])
 
-function statusVariant(status: string): 'default' | 'secondary' | 'destructive' | 'outline' {
-  if (status === 'DROPPED_OFF') return 'default'
-  if (status === 'CANCELED' || status === 'FAILED') return 'destructive'
-  return 'secondary'
-}
-
 function formatStatus(status: string) {
   return status.replace(/_/g, ' ')
-}
-
-function formatCurrency(amount: number | null | undefined, currency: string) {
-  if (amount == null) return '—'
-  return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(amount / 100)
-}
-
-function formatDate(iso: string | null | undefined) {
-  if (!iso) return '—'
-  return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 }
 
 function formatLocationAddress(loc: PartnerDeliveryPickupDto | PartnerDeliveryDropoffDto | null | undefined): string {
@@ -63,25 +49,6 @@ function courierLabel(d: PartnerDeliveryDto): string {
   return name || c.id || 'Assigned'
 }
 
-function DetailGrid({ rows }: { rows: { label: string; value: React.ReactNode }[] }) {
-  return (
-    <dl className="grid gap-y-2 text-sm sm:grid-cols-[11rem_minmax(0,1fr)] sm:gap-x-4 [&>dt]:text-muted-foreground [&>dd]:font-normal">
-      {rows.map(({ label, value }) => (
-        <FragmentRow key={label} label={label} value={value} />
-      ))}
-    </dl>
-  )
-}
-
-function FragmentRow({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <>
-      <dt>{label}</dt>
-      <dd className={value == null || value === '' ? 'text-muted-foreground' : ''}>{value ?? '—'}</dd>
-    </>
-  )
-}
-
 function PartnerDeliveryDetails({ data }: { data: PartnerDeliveryDto }) {
   const tips = data.tips ?? 0
   const orderItems = data.orderItems ?? []
@@ -89,21 +56,19 @@ function PartnerDeliveryDetails({ data }: { data: PartnerDeliveryDto }) {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <Badge variant={statusVariant(data.status)} className="text-sm">
-          {formatStatus(data.status)}
-        </Badge>
-        <p className="text-xs text-muted-foreground">Created {formatDate(data.createdAt)}</p>
+        <StatusBadge status={data.status} className="text-sm" />
+        <p className="text-xs text-muted-foreground">Created {formatDateTime(data.createdAt)}</p>
       </div>
 
       <section className="space-y-2">
         <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Schedule</h2>
-        <DetailGrid
-          rows={[
-            { label: 'Pickup ready', value: formatDate(data.pickupReadyAt) },
-            { label: 'Pickup deadline', value: formatDate(data.pickupDeadlineAt) },
-            { label: 'Dropoff ready', value: formatDate(data.dropoffReadyAt) },
-            { label: 'Dropoff ETA', value: formatDate(data.dropoffEta) },
-            { label: 'Dropoff deadline', value: formatDate(data.dropoffDeadlineAt) },
+        <DetailList
+          items={[
+            { label: 'Pickup ready', value: formatDateTime(data.pickupReadyAt) },
+            { label: 'Pickup deadline', value: formatDateTime(data.pickupDeadlineAt) },
+            { label: 'Dropoff ready', value: formatDateTime(data.dropoffReadyAt) },
+            { label: 'Dropoff ETA', value: formatDateTime(data.dropoffEta) },
+            { label: 'Dropoff deadline', value: formatDateTime(data.dropoffDeadlineAt) },
           ]}
         />
       </section>
@@ -112,13 +77,13 @@ function PartnerDeliveryDetails({ data }: { data: PartnerDeliveryDto }) {
 
       <section className="space-y-2">
         <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Courier</h2>
-        <DetailGrid
-          rows={[
+        <DetailList
+          items={[
             { label: 'Name', value: courierLabel(data) },
             ...(data.courier?.phoneNumber
               ? [{ label: 'Phone', value: data.courier.phoneNumber } as const]
               : []),
-            ...(data.courier?.id ? [{ label: 'Courier ID', value: data.courier.id } as const] : []),
+            ...(data.courier?.id ? [{ label: 'Courier ID', value: data.courier.id, mono: true } as const] : []),
             ...(data.courier?.vehicleType != null
               ? [{ label: 'Vehicle', value: String(data.courier.vehicleType) || '—' } as const]
               : []),
@@ -141,8 +106,8 @@ function PartnerDeliveryDetails({ data }: { data: PartnerDeliveryDto }) {
                 </p>
               ) : null}
               <Separator className="my-3" />
-              <DetailGrid
-                rows={[
+              <DetailList
+                items={[
                   { label: 'Contact name', value: data.pickup.pickupName },
                   { label: 'Phone', value: data.pickup.pickupPhoneNumber },
                   { label: 'Notes', value: data.pickup.pickupNotes ?? '—' },
@@ -166,8 +131,8 @@ function PartnerDeliveryDetails({ data }: { data: PartnerDeliveryDto }) {
                 </p>
               ) : null}
               <Separator className="my-3" />
-              <DetailGrid
-                rows={[
+              <DetailList
+                items={[
                   { label: 'Recipient', value: data.dropoff.dropoffName },
                   { label: 'Phone', value: data.dropoff.dropoffPhoneNumber },
                   { label: 'Notes', value: data.dropoff.dropoffNotes ?? '—' },
@@ -185,14 +150,14 @@ function PartnerDeliveryDetails({ data }: { data: PartnerDeliveryDto }) {
 
       <section className="space-y-2">
         <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Order & pricing</h2>
-        <DetailGrid
-          rows={[
+        <DetailList
+          items={[
             { label: 'Order reference', value: data.orderReference ?? '—' },
-            { label: 'Declared order value', value: formatCurrency(data.orderTotalValue ?? null, data.currencyCode) },
-            { label: 'Total cost', value: formatCurrency(data.totalCost, data.currencyCode) },
-            { label: 'Fee', value: formatCurrency(data.fee ?? null, data.currencyCode) },
-            { label: 'Tips', value: formatCurrency(tips, data.currencyCode) },
-            { label: 'Courier compensation', value: formatCurrency(data.totalCompensation ?? null, data.currencyCode) },
+            { label: 'Declared order value', value: formatMoney(data.orderTotalValue ?? null, data.currencyCode) },
+            { label: 'Total cost', value: formatMoney(data.totalCost, data.currencyCode) },
+            { label: 'Fee', value: formatMoney(data.fee ?? null, data.currencyCode) },
+            { label: 'Tips', value: formatMoney(tips, data.currencyCode) },
+            { label: 'Courier compensation', value: formatMoney(data.totalCompensation ?? null, data.currencyCode) },
             { label: 'Deliverable action', value: data.deliverableAction ? formatStatus(data.deliverableAction) : '—' },
             { label: 'Undeliverable action', value: data.undeliverableAction ? formatStatus(data.undeliverableAction) : '—' },
             { label: 'Undeliverable reason', value: data.undeliverableReason ?? '—' },
@@ -221,13 +186,13 @@ function PartnerDeliveryDetails({ data }: { data: PartnerDeliveryDto }) {
 
       <section className="space-y-2">
         <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Identifiers</h2>
-        <DetailGrid
-          rows={[
-            { label: 'Quote ID', value: data.quoteId ?? data.deliveryQuoteId ?? '—' },
-            { label: 'Delivery quote ID', value: data.deliveryQuoteId ?? '—' },
-            { label: 'Idempotency key', value: data.idempotencyKey ?? '—' },
-            { label: 'External ID', value: data.externalId ?? '—' },
-            { label: 'External store ID', value: data.externalStoreId ?? '—' },
+        <DetailList
+          items={[
+            { label: 'Quote ID', value: data.quoteId ?? data.deliveryQuoteId ?? '—', mono: true },
+            { label: 'Delivery quote ID', value: data.deliveryQuoteId ?? '—', mono: true },
+            { label: 'Idempotency key', value: data.idempotencyKey ?? '—', mono: true },
+            { label: 'External ID', value: data.externalId ?? '—', mono: true },
+            { label: 'External store ID', value: data.externalStoreId ?? '—', mono: true },
           ]}
         />
         {data.externalUserInfo != null ? (
@@ -256,21 +221,19 @@ function AdminDeliveryDetails({ data }: { data: ManualRequestDeliveryDto }) {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <Badge variant={statusVariant(data.status)} className="text-sm">
-          {formatStatus(data.status)}
-        </Badge>
+        <StatusBadge status={data.status} className="text-sm" />
         <p className="text-xs text-muted-foreground">
-          Created {formatDate(data.createdAt)} · Updated {formatDate(data.updatedAt)}
+          Created {formatDateTime(data.createdAt)} · Updated {formatDateTime(data.updatedAt)}
         </p>
       </div>
 
       <section className="space-y-2">
         <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Delivery</h2>
-        <DetailGrid
-          rows={[
+        <DetailList
+          items={[
             { label: 'Courier ID', value: data.courierId ?? 'Unassigned' },
-            { label: 'Partner ID', value: data.partnerId ?? '—' },
-            { label: 'Delivery quote ID', value: data.deliveryQuoteId },
+            { label: 'Partner ID', value: data.partnerId ?? '—', mono: true },
+            { label: 'Delivery quote ID', value: data.deliveryQuoteId, mono: true },
             { label: 'Order reference', value: data.orderReference ?? '—' },
           ]}
         />
@@ -280,15 +243,15 @@ function AdminDeliveryDetails({ data }: { data: ManualRequestDeliveryDto }) {
 
       <section className="space-y-2">
         <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Pickup</h2>
-        <DetailGrid
-          rows={[
-            { label: 'Location ID', value: data.pickupLocationId },
+        <DetailList
+          items={[
+            { label: 'Location ID', value: data.pickupLocationId, mono: true },
             { label: 'Name', value: data.pickupName },
             { label: 'Business', value: data.pickupBusinessName },
             { label: 'Phone', value: data.pickupPhoneNumber },
             { label: 'Notes', value: data.pickupNotes ?? '—' },
-            { label: 'Ready', value: formatDate(data.pickupReadyAt) },
-            { label: 'Deadline', value: formatDate(data.pickupDeadlineAt) },
+            { label: 'Ready', value: formatDateTime(data.pickupReadyAt) },
+            { label: 'Deadline', value: formatDateTime(data.pickupDeadlineAt) },
           ]}
         />
       </section>
@@ -297,16 +260,16 @@ function AdminDeliveryDetails({ data }: { data: ManualRequestDeliveryDto }) {
 
       <section className="space-y-2">
         <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Dropoff</h2>
-        <DetailGrid
-          rows={[
-            { label: 'Location ID', value: data.dropoffLocationId },
+        <DetailList
+          items={[
+            { label: 'Location ID', value: data.dropoffLocationId, mono: true },
             { label: 'Name', value: data.dropoffName },
             { label: 'Business', value: data.dropoffBusinessName ?? '—' },
             { label: 'Phone', value: data.dropoffPhoneNumber },
             { label: 'Notes', value: data.dropoffNotes ?? '—' },
-            { label: 'Ready', value: formatDate(data.dropoffReadyAt) },
-            { label: 'ETA', value: formatDate(data.dropoffEta) },
-            { label: 'Deadline', value: formatDate(data.dropoffDeadlineAt) },
+            { label: 'Ready', value: formatDateTime(data.dropoffReadyAt) },
+            { label: 'ETA', value: formatDateTime(data.dropoffEta) },
+            { label: 'Deadline', value: formatDateTime(data.dropoffDeadlineAt) },
           ]}
         />
       </section>
@@ -315,12 +278,12 @@ function AdminDeliveryDetails({ data }: { data: ManualRequestDeliveryDto }) {
 
       <section className="space-y-2">
         <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Pricing & actions</h2>
-        <DetailGrid
-          rows={[
+        <DetailList
+          items={[
             { label: 'Currency', value: data.currencyCode },
-            { label: 'Total cost', value: formatCurrency(data.totalCost, data.currencyCode) },
-            { label: 'Pay', value: formatCurrency(data.pay, data.currencyCode) },
-            { label: 'Fee', value: formatCurrency(data.fee, data.currencyCode) },
+            { label: 'Total cost', value: formatMoney(data.totalCost, data.currencyCode) },
+            { label: 'Pay', value: formatMoney(data.pay, data.currencyCode) },
+            { label: 'Fee', value: formatMoney(data.fee, data.currencyCode) },
             { label: 'Deliverable action', value: formatStatus(data.deliverableAction) },
             { label: 'Undeliverable action', value: data.undeliverableAction ? formatStatus(data.undeliverableAction) : '—' },
           ]}

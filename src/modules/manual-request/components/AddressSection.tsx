@@ -12,8 +12,9 @@ import {
   FormLabel,
   FormMessage,
   Input,
+  Spinner,
 } from '../../../admin-web-components'
-import { Loader2Icon, MapPinIcon, SearchIcon, XIcon } from 'lucide-react'
+import { MagnifyingGlass, MapPin, X } from '@phosphor-icons/react'
 
 // ── Nominatim types ───────────────────────────────────────────────────────────
 
@@ -132,7 +133,7 @@ export function AddressSection<T extends FieldValues>({
       <div ref={containerRef} className="relative">
         <div className="flex gap-2">
           <div className="relative flex-1">
-            <MapPinIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+            <MapPin className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
             <Input
               type="text"
               placeholder="Search address to auto-fill"
@@ -150,7 +151,7 @@ export function AddressSection<T extends FieldValues>({
                 onClick={() => { setQuery(''); setResults([]); setShowResults(false) }}
                 className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
               >
-                <XIcon className="h-3.5 w-3.5" />
+                <X className="h-3.5 w-3.5" />
               </button>
             )}
           </div>
@@ -161,8 +162,8 @@ export function AddressSection<T extends FieldValues>({
             className="inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm font-medium bg-background hover:bg-accent disabled:opacity-50 transition-colors"
           >
             {isSearching
-              ? <Loader2Icon className="h-4 w-4 animate-spin" />
-              : <SearchIcon className="h-4 w-4" />}
+              ? <Spinner label="Searching" />
+              : <MagnifyingGlass className="h-4 w-4" />}
             Search
           </button>
         </div>

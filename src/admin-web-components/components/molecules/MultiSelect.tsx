@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { cn } from '../../../ui-shared-utils'
-import { Check, X, ChevronsUpDown } from 'lucide-react'
+import { CaretUpDown, Check, X } from '@phosphor-icons/react'
 import { Button } from '../atoms/Button'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from './Command'
 import { Popover, PopoverContent, PopoverTrigger } from '../atoms/Popover'
@@ -53,7 +53,7 @@ export function MultiSelect({ options, selected, onChange, className, ...props }
               </Badge>
             ))}
           </div>
-          <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
+          <CaretUpDown className="h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-full p-0 m-0">

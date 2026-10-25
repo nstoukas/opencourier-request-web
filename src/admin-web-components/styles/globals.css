@@ -2,67 +2,60 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * OpenCourier theme (design system v2, light only).
+ * Generated from opencourier-design-system/tokens/tokens.json as HSL triplets, the format
+ * Tailwind 3 reads through hsl(var(--name)). Change a color in tokens.json first, then here.
+ * The .dark block the system also defines is left out on purpose: no app ships Dark yet.
+ */
 @layer base {
   :root {
+    --radius: 0.625rem;
     --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-
+    --foreground: 60 0.9% 22.2%;
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-
+    --card-foreground: 60 0.9% 22.2%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
-
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
-
-    --radius: 0.5rem;
-  }
-
-  .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
+    --popover-foreground: 60 0.9% 22.2%;
+    --primary: 60 0.9% 22.2%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 92.2%;
+    --secondary-foreground: 60 0.9% 22.2%;
+    --muted: 0 0% 96.5%;
+    --muted-foreground: 40 1.6% 37.8%;
+    --accent: 0 0% 96.5%;
+    --accent-foreground: 60 0.9% 22.2%;
+    --destructive: 3 55.6% 51.4%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 42.9 13.7% 90%;
+    --input: 216.9 16% 84.1%;
+    --ring: 60 0.9% 22.2%;
+    --chart-1: 212.8 67.7% 50.2%;
+    --chart-2: 17 82.1% 56.3%;
+    --chart-3: 158.5 73.3% 39.6%;
+    --chart-4: 40.8 100% 46.5%;
+    --chart-5: 337.4 70.3% 69.6%;
+    --sidebar: 0 0% 96.5%;
+    --sidebar-foreground: 60 0.9% 22.2%;
+    --sidebar-primary: 60 0.9% 22.2%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 0 0% 92.2%;
+    --sidebar-accent-foreground: 60 0.9% 22.2%;
+    --sidebar-border: 42.9 13.7% 90%;
+    --sidebar-ring: 60 0.9% 22.2%;
+    --success: 136 30.3% 38.8%;
+    --success-foreground: 0 0% 100%;
+    --success-soft: 128.6 30.4% 95.5%;
+    --warning: 47.8 91.5% 76.9%;
+    --warning-foreground: 60 0.9% 22.2%;
+    --warning-soft: 49.1 89.2% 92.7%;
+    --info: 209.3 46.6% 34.5%;
+    --info-foreground: 0 0% 100%;
+    --info-soft: 210 46.2% 94.9%;
+    --destructive-soft: 3.7 72.7% 95.7%;
+    --route: 213.8 84.2% 62.7%;
+    --online-tint: 120.6 44.6% 58.2%;
+    --offline-tint: 228 2.3% 57.8%;
   }
 }
 

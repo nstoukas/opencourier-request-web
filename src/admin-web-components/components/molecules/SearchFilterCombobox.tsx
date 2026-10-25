@@ -1,9 +1,9 @@
 import { Button } from '../atoms/Button'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '../molecules/Command'
-import { Icons } from '../atoms/Icons'
+import { Spinner } from '../atoms/Spinner'
 import { cn } from '../../../ui-shared-utils'
 import { debounce } from 'lodash'
-import { Check, ChevronsUpDown } from 'lucide-react'
+import { CaretUpDown, Check } from '@phosphor-icons/react'
 import { useEffect, useState } from 'react'
 import { Popover, PopoverContent, PopoverTrigger } from '../atoms/Popover'
 
@@ -65,7 +65,7 @@ export function SearchFilterCombobox<T extends ObjectWithId>({
       <PopoverTrigger asChild>
         <Button variant="outline" role="combobox" aria-expanded={searchOpen} className="w-[300px] justify-between">
           {selectedItem ? itemStringifier(selectedItem) : title}
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          <CaretUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[300px] p-0">
@@ -75,7 +75,7 @@ export function SearchFilterCombobox<T extends ObjectWithId>({
             placeholder={searchInputPlaceholder}
             onValueChange={setSearchString}
           ></CommandInput>
-          {isLoading && <Icons.spinner className="absolute right-0 mt-4 mr-4 h-4 w-4 animate-spin" />}
+          {isLoading && <Spinner className="absolute right-0 mt-4 mr-4" />}
           <CommandList>
             <CommandEmpty>{emptySearchResultsPlaceholder}</CommandEmpty>
             <CommandGroup>

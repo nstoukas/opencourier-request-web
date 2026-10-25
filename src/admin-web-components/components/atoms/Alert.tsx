@@ -9,7 +9,11 @@ const alertVariants = cva(
     variants: {
       variant: {
         default: 'bg-background text-foreground',
-        destructive: 'border-destructive/50 text-destructive dark:border-destructive [&>svg]:text-destructive',
+        destructive: 'border-destructive/50 text-destructive [&>svg]:text-destructive',
+        // OpenCourier additions: soft ground, toned border and icon, description stays ink.
+        success: 'bg-success-soft border-success/35 [&>svg]:text-success',
+        warning: 'bg-warning-soft border-warning-foreground/20',
+        info: 'bg-info-soft border-info/30 [&>svg]:text-info',
       },
     },
     defaultVariants: {

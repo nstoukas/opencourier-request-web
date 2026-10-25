@@ -12,7 +12,8 @@ import {
 } from '../../../admin-web-components'
 import { ManualRequestQuoteDto } from '../types'
 import dayjs from 'dayjs'
-import { CheckIcon, XIcon, ClockIcon, RouterIcon } from 'lucide-react'
+import { Check, Clock, Path, X } from '@phosphor-icons/react'
+import { formatDistance, formatMoney, formatTime } from '../../../utils/format'
 
 interface EstimateSummaryCardProps {
   quote: ManualRequestQuoteDto
@@ -21,25 +22,17 @@ interface EstimateSummaryCardProps {
   onDiscard: () => void
 }
 
-function formatCents(cents: number, currency: string) {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: currency || 'USD',
-    minimumFractionDigits: 2,
-  }).format(cents / 100)
-}
-
 export function EstimateSummaryCard({
   quote,
   isConfirming,
   onConfirm,
   onDiscard,
 }: EstimateSummaryCardProps) {
-  const priceFrom = formatCents(quote.quoteRangeFrom, quote.currency)
-  const priceTo = formatCents(quote.quoteRangeTo, quote.currency)
+  const priceFrom = formatMoney(quote.quoteRangeFrom, quote.currency)
+  const priceTo = formatMoney(quote.quoteRangeTo, quote.currency)
   const isSinglePrice = quote.quoteRangeFrom === quote.quoteRangeTo
   const etaLabel = quote.dropoffEta
-    ? dayjs(quote.dropoffEta).format('h:mm A')
+    ? formatTime(quote.dropoffEta)
     : `~${quote.duration} min`
 
   const expiresAt = quote.expiresAt ? dayjs(quote.expiresAt) : null
@@ -77,7 +70,7 @@ export function EstimateSummaryCard({
           {/* ETA */}
           <div className="space-y-0.5">
             <p className="text-xs text-muted-foreground uppercase tracking-wide flex items-center gap-1">
-              <ClockIcon className="w-3 h-3" />
+              <Clock className="w-3 h-3" aria-hidden="true" />
               ETA
             </p>
             <p className="text-2xl font-bold">{etaLabel}</p>
@@ -87,21 +80,18 @@ export function EstimateSummaryCard({
           {/* Distance */}
           <div className="space-y-0.5">
             <p className="text-xs text-muted-foreground uppercase tracking-wide flex items-center gap-1">
-              <RouterIcon className="w-3 h-3" />
+              <Path className="w-3 h-3" aria-hidden="true" />
               Distance
             </p>
-            <p className="text-2xl font-bold">
-              {quote.distance != null ? quote.distance.toFixed(2) : '—'}
-              <span className="text-base font-normal text-muted-foreground ml-1 lowercase">
-                {quote.distanceUnit}
-              </span>
+            <p className="text-2xl font-bold tabular-nums">
+              {formatDistance(quote.distance, quote.distanceUnit)}
             </p>
           </div>
         </div>
 
         {expiresAt && !isExpired && (
           <p className="text-xs text-muted-foreground">
-            Quote valid until {expiresAt.format('h:mm A')}
+            Quote valid until {formatTime(quote.expiresAt)}
           </p>
         )}
 
@@ -111,11 +101,11 @@ export function EstimateSummaryCard({
             disabled={isConfirming || isExpired}
             className="flex-1"
           >
-            <CheckIcon className="w-4 h-4 mr-1.5" />
+            <Check className="w-4 h-4 mr-1.5" aria-hidden="true" />
             {isConfirming ? 'Confirming…' : 'Confirm Delivery'}
           </Button>
           <Button variant="outline" onClick={onDiscard} disabled={isConfirming}>
-            <XIcon className="w-4 h-4 mr-1.5" />
+            <X className="w-4 h-4 mr-1.5" aria-hidden="true" />
             Discard
           </Button>
         </div>

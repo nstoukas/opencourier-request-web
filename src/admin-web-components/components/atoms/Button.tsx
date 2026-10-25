@@ -16,12 +16,19 @@ const buttonVariants = cva(
         ghost: 'hover:bg-accent hover:text-accent-foreground',
         link: 'text-primary underline-offset-4 hover:underline',
         blank: '',
+        // OpenCourier additions: success moves a delivery forward; warning always takes ink text.
+        success: 'bg-success text-success-foreground hover:bg-success/90',
+        warning: 'bg-warning text-warning-foreground border border-warning-foreground/15 hover:bg-warning/85',
       },
       size: {
         default: 'h-10 px-4 py-2',
         sm: 'h-9 rounded-md px-3',
         lg: 'h-11 rounded-md px-8',
         icon: 'h-10 w-10',
+        // OpenCourier touch sizes: 48px for phones, 100px only for Accept and Decline on an offer.
+        xl: "h-12 px-6 text-base font-semibold [&_svg:not([class*='size-'])]:size-5",
+        offer: 'h-offer flex-1 rounded-xl px-6 text-base font-semibold',
+        'icon-xl': 'size-12',
       },
     },
     defaultVariants: {

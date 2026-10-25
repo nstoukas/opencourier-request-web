@@ -2,7 +2,6 @@ import { useState } from 'react'
 import Head from 'next/head'
 import Link from 'next/link'
 import {
-  Badge,
   Button,
   Card,
   CardContent,
@@ -16,6 +15,7 @@ import {
   Input,
   Label,
   Separator,
+  StatusBadge,
   Textarea,
 } from '../../../admin-web-components'
 import {
@@ -26,29 +26,10 @@ import {
 } from '../../../api/manualRequestApi'
 import { PartnerDeliveryDto } from '../../../modules/manual-request/types'
 import { usePartnerSession } from '../../../hooks/usePartnerSession'
+import { formatDateTime, formatMoney } from '../../../utils/format'
 
 // Statuses where cancel is no longer possible
 const TERMINAL_STATUSES = new Set(['DROPPED_OFF', 'CANCELED', 'FAILED'])
-
-function statusVariant(status: string): 'default' | 'secondary' | 'destructive' | 'outline' {
-  if (status === 'DROPPED_OFF') return 'default'
-  if (status === 'CANCELED' || status === 'FAILED') return 'destructive'
-  return 'secondary'
-}
-
-function formatStatus(status: string) {
-  return status.replace(/_/g, ' ')
-}
-
-function formatCurrency(amount: number | null, currency: string) {
-  if (amount == null) return '—'
-  return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(amount / 100)
-}
-
-function formatDate(iso: string | null) {
-  if (!iso) return '—'
-  return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
-}
 
 interface EditDialogProps {
   delivery: PartnerDeliveryDto
@@ -316,9 +297,7 @@ export default function DeliveriesPage() {
                           <p className="text-sm font-medium">{delivery.orderReference}</p>
                         ) : null}
                       </div>
-                      <Badge variant={statusVariant(delivery.status)}>
-                        {formatStatus(delivery.status)}
-                      </Badge>
+                      <StatusBadge status={delivery.status} />
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-3">
@@ -344,11 +323,11 @@ export default function DeliveriesPage() {
                     </div>
 
                     <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                      <span>Cost: {formatCurrency(delivery.totalCost, delivery.currencyCode)}</span>
+                      <span>Cost: {formatMoney(delivery.totalCost, delivery.currencyCode)}</span>
                       {delivery.dropoffEta ? (
-                        <span>ETA: {formatDate(delivery.dropoffEta)}</span>
+                        <span>ETA: {formatDateTime(delivery.dropoffEta)}</span>
                       ) : null}
-                      <span>Created: {formatDate(delivery.createdAt)}</span>
+                      <span>Created: {formatDateTime(delivery.createdAt)}</span>
                     </div>
 
                     <Separator />

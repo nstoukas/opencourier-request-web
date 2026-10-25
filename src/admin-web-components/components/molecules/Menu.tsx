@@ -1,5 +1,5 @@
 import { cn } from '../../../ui-shared-utils'
-import { ChevronDownIcon } from 'lucide-react'
+import { CaretDown } from '@phosphor-icons/react'
 import * as React from 'react'
 import { Button } from '../atoms/Button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './DropdownMenu'
@@ -13,7 +13,7 @@ const MenuTrigger = React.forwardRef<
   <DropdownMenuTrigger ref={ref} {...props} asChild>
     <Button variant="outline" className={cn('w-[200px] justify-between', className)}>
       {children}
-      <ChevronDownIcon className="w-4 h-4" />
+      <CaretDown className="w-4 h-4" />
     </Button>
   </DropdownMenuTrigger>
 ))

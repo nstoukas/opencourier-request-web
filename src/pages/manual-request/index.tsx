@@ -51,7 +51,7 @@ export default function ManualRequestPage() {
   return (
     <>
       <Head>
-        <title>Open Courier Manual Request</title>
+        <title>OpenCourier Manual Request</title>
       </Head>
       <main className="container py-6 space-y-6">
         <div>

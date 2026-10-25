@@ -12,6 +12,9 @@ const config: Config = {
       },
     },
     extend: {
+      // OpenCourier design system: every color is a CSS variable from globals.css, so the
+      // theme lives in one place. The names after `card` are the system's additions
+      // (opencourier-design-system/web/tailwind3/tailwind.config.ts).
       colors: {
         border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',
@@ -29,6 +32,7 @@ const config: Config = {
         destructive: {
           DEFAULT: 'hsl(var(--destructive))',
           foreground: 'hsl(var(--destructive-foreground))',
+          soft: 'hsl(var(--destructive-soft))',
         },
         muted: {
           DEFAULT: 'hsl(var(--muted))',
@@ -46,11 +50,53 @@ const config: Config = {
           DEFAULT: 'hsl(var(--card))',
           foreground: 'hsl(var(--card-foreground))',
         },
+        success: {
+          DEFAULT: 'hsl(var(--success))',
+          foreground: 'hsl(var(--success-foreground))',
+          soft: 'hsl(var(--success-soft))',
+        },
+        warning: {
+          DEFAULT: 'hsl(var(--warning))',
+          foreground: 'hsl(var(--warning-foreground))',
+          soft: 'hsl(var(--warning-soft))',
+        },
+        info: {
+          DEFAULT: 'hsl(var(--info))',
+          foreground: 'hsl(var(--info-foreground))',
+          soft: 'hsl(var(--info-soft))',
+        },
+        chart: {
+          1: 'hsl(var(--chart-1))',
+          2: 'hsl(var(--chart-2))',
+          3: 'hsl(var(--chart-3))',
+          4: 'hsl(var(--chart-4))',
+          5: 'hsl(var(--chart-5))',
+        },
+        sidebar: {
+          DEFAULT: 'hsl(var(--sidebar))',
+          foreground: 'hsl(var(--sidebar-foreground))',
+          primary: 'hsl(var(--sidebar-primary))',
+          'primary-foreground': 'hsl(var(--sidebar-primary-foreground))',
+          accent: 'hsl(var(--sidebar-accent))',
+          'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
+          border: 'hsl(var(--sidebar-border))',
+          ring: 'hsl(var(--sidebar-ring))',
+        },
+        route: 'hsl(var(--route))',
+        'online-tint': 'hsl(var(--online-tint))',
+        'offline-tint': 'hsl(var(--offline-tint))',
+        overlay: 'rgb(0 0 0 / 0.5)',
       },
+      // shadcn's radius math on the 10px base: sm 6, md 8, lg 10, xl 14, 2xl 18.
       borderRadius: {
+        sm: 'calc(var(--radius) * 0.6)',
+        md: 'calc(var(--radius) * 0.8)',
         lg: 'var(--radius)',
-        md: 'calc(var(--radius) - 2px)',
-        sm: 'calc(var(--radius) - 4px)',
+        xl: 'calc(var(--radius) * 1.4)',
+        '2xl': 'calc(var(--radius) * 1.8)',
+      },
+      height: {
+        offer: '100px',
       },
       keyframes: {
         'accordion-down': {

@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
+    "@phosphor-icons/react": "^2.1.10",
     "@radix-ui/react-accordion": "^1.2.11",
     "@radix-ui/react-alert-dialog": "^1.1.14",
     "@radix-ui/react-avatar": "^1.1.10",
@@ -38,7 +39,6 @@
     "date-fns": "^3.6.0",
     "dayjs": "^1.11.13",
     "lodash": "^4.17.21",
-    "lucide-react": "^0.542.0",
     "next": "^14.2.32",
     "postcss": "^8.5.6",
     "react": "^18.3.1",
