@@ -34,9 +34,11 @@ function hexToRgb(hex: string): [number, number, number] {
 describe('globals.css design system theme matching tokens.json (Clause 1)', () => {
   const cssPath = path.resolve(__dirname, 'globals.css')
   const tokensPath = path.resolve(__dirname, '../../../../opencourier-design-system/tokens/tokens.json')
+  const tailwindConfigPath = path.resolve(__dirname, '../../../tailwind.config.ts')
 
   const css = fs.readFileSync(cssPath, 'utf8')
   const tokensData = JSON.parse(fs.readFileSync(tokensPath, 'utf8'))
+  const tailwindConfig = fs.readFileSync(tailwindConfigPath, 'utf8')
 
   // Build token lookup map
   const rawTokenMap = new Map<string, any>()
@@ -65,6 +67,46 @@ describe('globals.css design system theme matching tokens.json (Clause 1)', () =
   it('contains no .dark block in globals.css (light only, night run decision D6)', () => {
     // Assert no .dark selector exists
     expect(css).not.toMatch(/\.dark\s*\{/)
+  })
+
+  it('defines a matching --<name> variable in :root for every hex color token in tokens.json (and defines overlay in tailwind.config.ts)', () => {
+    const rootMatch = css.match(/:root\s*\{([^}]+)\}/)
+    expect(rootMatch).toBeTruthy()
+    const rootContent = rootMatch![1]
+
+    // Collect all CSS variable names defined in :root (stripping leading '--')
+    const rootVarNames = new Set<string>()
+    for (const line of rootContent.split('\n')) {
+      const trimmed = line.trim()
+      if (trimmed.startsWith('--') && trimmed.includes(':')) {
+        const varName = trimmed.split(':')[0].trim().replace(/^--/, '')
+        rootVarNames.add(varName)
+      }
+    }
+
+    // Every token in tokens.json color.tokens whose light value resolves to a hex color
+    // must have a matching --<name> variable in :root.
+    const missingTokens: string[] = []
+    for (const token of tokensData.color.tokens) {
+      const resolved = resolveLightHex(token.value)
+      if (resolved.startsWith('#')) {
+        if (!rootVarNames.has(token.name)) {
+          missingTokens.push(token.name)
+        }
+      }
+    }
+
+    // If any hex color token is missing from :root, fail with the list of missing token names
+    expect(missingTokens).toEqual([])
+
+    // The one token whose value is rgba ('overlay', rgba(0, 0, 0, 0.5)) is the only one
+    // allowed to be absent from :root, because tailwind.config.ts defines it directly.
+    const nonHexTokens = tokensData.color.tokens.filter(
+      (token: any) => !resolveLightHex(token.value).startsWith('#')
+    )
+    expect(nonHexTokens.map((t: any) => t.name)).toEqual(['overlay'])
+    expect(rootVarNames.has('overlay')).toBe(false)
+    expect(tailwindConfig).toContain("overlay: 'rgb(0 0 0 / 0.5)'")
   })
 
   it('matches every color variable in :root against tokens.json light value within 1/255 rounding', () => {
