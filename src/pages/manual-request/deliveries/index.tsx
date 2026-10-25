@@ -289,8 +289,9 @@ export default function DeliveriesPage() {
                 <Card key={delivery.id}>
                   <CardHeader className="pb-2">
                     <div className="flex items-start justify-between gap-2">
-                      <div className="space-y-1">
-                        <CardTitle className="text-sm font-mono text-muted-foreground">
+                      {/* min-w-0 lets this column shrink, so a long id wraps instead of pushing the badge out of the card on a phone. */}
+                      <div className="min-w-0 space-y-1">
+                        <CardTitle className="break-all text-sm font-mono text-muted-foreground">
                           {delivery.id}
                         </CardTitle>
                         {delivery.orderReference ? (
