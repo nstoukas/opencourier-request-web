@@ -23,18 +23,24 @@ describe('format utilities (Greek formats per decision D6)', () => {
   })
 
   describe('formatDateTime', () => {
-    it('formats ISO string with day first and 24-hour clock', () => {
-      // Construct a fixed local date: 30 September 2026, 23:25
-      const d = new Date(2026, 8, 30, 23, 25)
-      const iso = d.toISOString()
-      const formatted = formatDateTime(iso)
-      // Day first (30/09/2026) and 24-hour clock (23:25)
-      expect(formatted).toContain('30/09/2026')
-      expect(formatted).toContain('23:25')
-      expect(formatted).toMatch(/^\d{2}\/\d{2}\/\d{4},\s+\d{2}:\d{2}$/)
+    // Tests use fixed UTC instants to ensure Greek time (Europe/Athens) is formatted
+    // correctly regardless of machine time zone.
+    it('formats summer instant on Greek time (UTC+3, day first and 24-hour clock)', () => {
+      // 20:25 UTC in summer -> 23:25 in Athens
+      expect(formatDateTime('2026-09-30T20:25:00Z')).toBe('30/09/2026, 23:25')
     })
 
-    it('returns an em dash when ISO date is null or undefined', () => {
+    it('formats winter instant on Greek time (UTC+2)', () => {
+      // 10:05 UTC in winter -> 12:05 in Athens
+      expect(formatDateTime('2026-01-15T10:05:00Z')).toBe('15/01/2026, 12:05')
+    })
+
+    it('rolls over day at midnight and formats midnight hour as 00 (h23 clock)', () => {
+      // 21:05 UTC on 30 Sep -> 00:05 on 1 Oct in Athens
+      expect(formatDateTime('2026-09-30T21:05:00Z')).toBe('01/10/2026, 00:05')
+    })
+
+    it('returns an em dash when ISO date is null, undefined, or empty', () => {
       expect(formatDateTime(null)).toBe('—')
       expect(formatDateTime(undefined)).toBe('—')
       expect(formatDateTime('')).toBe('—')
@@ -42,13 +48,24 @@ describe('format utilities (Greek formats per decision D6)', () => {
   })
 
   describe('formatTime', () => {
-    it('formats ISO string as time of day in 24-hour clock (23:25 style)', () => {
-      const d = new Date(2026, 8, 30, 23, 25)
-      const iso = d.toISOString()
-      expect(formatTime(iso)).toBe('23:25')
+    // Tests use fixed UTC instants to ensure Greek time (Europe/Athens) is formatted
+    // correctly regardless of machine time zone.
+    it('formats summer instant on Greek time (UTC+3, 23:25 style)', () => {
+      // 20:25 UTC in summer -> 23:25 in Athens
+      expect(formatTime('2026-09-30T20:25:00Z')).toBe('23:25')
     })
 
-    it('returns an em dash when time is null or undefined', () => {
+    it('formats winter instant on Greek time (UTC+2)', () => {
+      // 10:05 UTC in winter -> 12:05 in Athens
+      expect(formatTime('2026-01-15T10:05:00Z')).toBe('12:05')
+    })
+
+    it('formats midnight as 00 (h23 clock, not 24)', () => {
+      // 21:05 UTC -> 00:05 in Athens
+      expect(formatTime('2026-09-30T21:05:00Z')).toBe('00:05')
+    })
+
+    it('returns an em dash when time is null, undefined, or empty', () => {
       expect(formatTime(null)).toBe('—')
       expect(formatTime(undefined)).toBe('—')
       expect(formatTime('')).toBe('—')
