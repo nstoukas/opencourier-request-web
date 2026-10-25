@@ -5,7 +5,7 @@ for a Greek workers' cooperative. In this fork, request-web is the **restaurant 
 where a signed-in restaurant places delivery requests.
 
 Everything below sits on top of upstream `main` on the branch `fix/partial-address-form`
-(8 commits, 26 July – 4 August 2026). Each entry names its commit, and the commit message
+(19 commits, 26 July – 25 October 2026). Each entry names its commit, and the commit message
 has the full reasoning and verification notes.
 
 ---
@@ -49,6 +49,27 @@ has the full reasoning and verification notes.
 ### Testing
 - Added Jest and React Testing Library via `next/jest` (run with
   `node node_modules/.bin/jest`). The suite has grown to 86 tests. `6f8cf6e`
+
+### The OpenCourier design system (row 64) — `ba8fbf8`, `7ee4c4c`, `94670e3`
+- The colours and corner radius come from the co-op's design system
+  (`opencourier-design-system/tokens/tokens.json`): the `:root` theme in `globals.css`
+  and the Tailwind config. Light theme only, still Tailwind 3.
+- Button, Badge and Alert have the OpenCourier variants (`success`, `warning`, `info`).
+- New `StatusBadge`, `Spinner` and `DetailList` components. Every delivery status shows
+  through `StatusBadge` with a readable name ("Dropped Off", not `DROPPED_OFF`); it replaces
+  `statusVariant()`, lucide's loader and the status page's `DetailGrid`.
+- Icons come from Phosphor (`@phosphor-icons/react` 2.1.10) instead of `lucide-react`.
+  Icons are hidden from screen readers by default; the spinner and the toast close button
+  carry their own names, and the address search's clear button is named too.
+- Money, dates and distances use Greek formats and the Athens time zone
+  (`src/utils/format.ts`, a 24 hour clock).
+- The browser tab and phone home screen show the app icon (`favicon.ico`, `icon-192.png`,
+  `apple-touch-icon.png`).
+- On a phone, a long delivery id wraps instead of pushing the status badge out of its card.
+- Tests: 59 more, written by agy (145 in all). They check the theme against `tokens.json`,
+  every status label, that no lucide import comes back, and the Greek formats; the theme and
+  status tests skip cleanly when the design system or backend folder is not beside this
+  repo. `d07e1f2`, `7ffe3ea`, `7a036c8`
 
 ## Fixed
 
