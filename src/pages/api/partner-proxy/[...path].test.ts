@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { PARTNER_SESSION_COOKIE } from '../../../utils/partnerSession'
-import handler from './[...path]'
+import handler, { forwardedBody } from './[...path]'
 
 function createMockReqRes(options: {
   method?: string
@@ -124,7 +124,6 @@ describe('/api/partner-proxy/[...path] API Route', () => {
       expect.objectContaining({
         method: 'GET',
         headers: {
-          'Content-Type': 'application/json',
           Authorization: 'Bearer COOKIE_ACCESS_TOKEN',
         },
         body: undefined,
@@ -209,5 +208,94 @@ describe('/api/partner-proxy/[...path] API Route', () => {
 
     expect(resState.statusCode).toBe(502)
     expect(resState.jsonBody).toEqual({ message: 'Backend unreachable.' })
+  })
+
+  it('proxies DELETE request sending no body and no Content-Type header', async () => {
+    const fetchSpy = jest.fn().mockResolvedValue({
+      status: 204,
+      headers: new Map(),
+      text: jest.fn().mockResolvedValue(''),
+    } as any)
+    global.fetch = fetchSpy
+
+    const { req, res, resState } = createMockReqRes({
+      method: 'DELETE',
+      query: { path: ['customers', 'cust-123'] },
+      url: '/api/partner-proxy/customers/cust-123',
+      cookies: { [PARTNER_SESSION_COOKIE]: 'COOKIE_ACCESS_TOKEN' },
+    })
+
+    await handler(req, res)
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'http://127.0.0.1:3000/api/partner/v1/customers/cust-123',
+      expect.objectContaining({
+        method: 'DELETE',
+        headers: {
+          Authorization: 'Bearer COOKIE_ACCESS_TOKEN',
+        },
+        body: undefined,
+      }),
+    )
+    expect(resState.statusCode).toBe(204)
+  })
+
+  it('proxies bodyless POST request sending no body and no Content-Type header', async () => {
+    const fetchSpy = jest.fn().mockResolvedValue({
+      status: 204,
+      headers: new Map(),
+      text: jest.fn().mockResolvedValue(''),
+    } as any)
+    global.fetch = fetchSpy
+
+    const { req, res, resState } = createMockReqRes({
+      method: 'POST',
+      query: { path: ['customers', 'cust-123', 'used'] },
+      url: '/api/partner-proxy/customers/cust-123/used',
+      cookies: { [PARTNER_SESSION_COOKIE]: 'COOKIE_ACCESS_TOKEN' },
+      body: {}, // Next.js parses bodyless requests as {}
+    })
+
+    await handler(req, res)
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'http://127.0.0.1:3000/api/partner/v1/customers/cust-123/used',
+      expect.objectContaining({
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer COOKIE_ACCESS_TOKEN',
+        },
+        body: undefined,
+      }),
+    )
+    expect(resState.statusCode).toBe(204)
+  })
+})
+
+describe('forwardedBody helper', () => {
+  it('returns undefined for GET, DELETE, and HEAD', () => {
+    expect(forwardedBody('GET', { key: 'val' })).toBeUndefined()
+    expect(forwardedBody('DELETE', { key: 'val' })).toBeUndefined()
+    expect(forwardedBody('HEAD', { key: 'val' })).toBeUndefined()
+    expect(forwardedBody(undefined, { key: 'val' })).toBeUndefined()
+  })
+
+  it('returns undefined for POST with empty object, empty string, null, or undefined', () => {
+    expect(forwardedBody('POST', {})).toBeUndefined()
+    expect(forwardedBody('POST', '')).toBeUndefined()
+    expect(forwardedBody('POST', null)).toBeUndefined()
+    expect(forwardedBody('POST', undefined)).toBeUndefined()
+  })
+
+  it('returns JSON string for POST, PATCH, and PUT with a real body', () => {
+    const payload = { name: 'Maria Papadopoulou', phone: '+306912345678' }
+    expect(forwardedBody('POST', payload)).toBe(JSON.stringify(payload))
+    expect(forwardedBody('PATCH', payload)).toBe(JSON.stringify(payload))
+    expect(forwardedBody('PUT', payload)).toBe(JSON.stringify(payload))
+
+    // String body is forwarded as string
+    expect(forwardedBody('POST', '{"raw":"json"}')).toBe('{"raw":"json"}')
+    // Array body is preserved as JSON
+    expect(forwardedBody('POST', [1, 2, 3])).toBe('[1,2,3]')
   })
 })

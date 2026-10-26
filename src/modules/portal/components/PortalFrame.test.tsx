@@ -146,17 +146,21 @@ describe('PortalFrame gate and frame layout', () => {
     // Email displayed in header
     expect(screen.getByText('restaurant@volos.test')).toBeInTheDocument()
 
-    // Nav links: New Delivery and My Orders
+    // Nav links: New Delivery, My Orders, and Customers
     const nav = screen.getByRole('navigation', { name: 'Main' })
     const newDeliveryLink = screen.getByRole('link', { name: 'New Delivery' })
     const myOrdersLink = screen.getByRole('link', { name: 'My Orders' })
+    const customersLink = screen.getByRole('link', { name: 'Customers' })
     expect(nav).toContainElement(newDeliveryLink)
     expect(nav).toContainElement(myOrdersLink)
+    expect(nav).toContainElement(customersLink)
+    expect(customersLink).toHaveAttribute('href', '/manual-request/customers')
 
     // Current page: /manual-request has aria-current="page" and shading
     expect(newDeliveryLink).toHaveAttribute('aria-current', 'page')
     expect(newDeliveryLink).toHaveClass('bg-secondary')
     expect(myOrdersLink).not.toHaveAttribute('aria-current')
+    expect(customersLink).not.toHaveAttribute('aria-current')
 
     // Centered column max 768px (<main id="main" class="mx-auto w-full max-w-3xl...">)
     const main = screen.getByRole('main')
@@ -190,6 +194,31 @@ describe('PortalFrame gate and frame layout', () => {
     expect(myOrdersLink).toHaveAttribute('aria-current', 'page')
     expect(myOrdersLink).toHaveClass('bg-secondary')
     expect(newDeliveryLink).not.toHaveAttribute('aria-current')
+  })
+
+  it('sets aria-current="page" and shading on Customers when pathname is /manual-request/customers', () => {
+    mockRouter.pathname = '/manual-request/customers'
+    ;(usePartnerSession as jest.Mock).mockReturnValue({
+      isSignedIn: true,
+      email: 'restaurant@volos.test',
+      isLoading: false,
+      refresh: refreshMock,
+    })
+
+    render(
+      <PortalFrame>
+        <div>Customers content</div>
+      </PortalFrame>
+    )
+
+    const newDeliveryLink = screen.getByRole('link', { name: 'New Delivery' })
+    const myOrdersLink = screen.getByRole('link', { name: 'My Orders' })
+    const customersLink = screen.getByRole('link', { name: 'Customers' })
+
+    expect(customersLink).toHaveAttribute('aria-current', 'page')
+    expect(customersLink).toHaveClass('bg-secondary')
+    expect(newDeliveryLink).not.toHaveAttribute('aria-current')
+    expect(myOrdersLink).not.toHaveAttribute('aria-current')
   })
 
   it('Sign Out calls logoutPartner and refresh, and stays on the current address', async () => {

@@ -9,6 +9,9 @@ import {
 } from '../../../api/manualRequestApi'
 import { useRequestPageNavigator } from '../../../hooks/useRequestPageNavigator'
 import { PartnerProfileDto } from '../types'
+import { saveCustomerAfterOrder } from '../../saved-customers/utils/saveAfterOrder'
+import { useSavedCustomerSearch } from '../../saved-customers/hooks/useSavedCustomerSearch'
+import { fetchRetentionMonths } from '../../../api/savedCustomersApi'
 
 // Mock manualRequestApi queries and mutations
 jest.mock('../../../api/manualRequestApi', () => ({
@@ -20,6 +23,23 @@ jest.mock('../../../api/manualRequestApi', () => ({
 // Mock request page navigator hook
 jest.mock('../../../hooks/useRequestPageNavigator', () => ({
   useRequestPageNavigator: jest.fn(),
+}))
+
+jest.mock('../../saved-customers/utils/saveAfterOrder', () => ({
+  CUSTOMER_SAVE_FAILURES: ['clash', 'invalid', 'failed'],
+  saveCustomerAfterOrder: jest.fn().mockResolvedValue('none'),
+}))
+
+jest.mock('../../saved-customers/hooks/useSavedCustomerSearch', () => ({
+  useSavedCustomerSearch: jest.fn().mockReturnValue({ status: 'idle' }),
+}))
+
+jest.mock('../../saved-customers/hooks/useRetentionMonths', () => ({
+  useRetentionMonths: jest.fn().mockReturnValue(12),
+  retentionHelperText: (months: number | null) =>
+    months === null
+      ? 'Only your restaurant sees it. It is deleted after a period unused that the co-op sets.'
+      : `Only your restaurant sees it. It is deleted after ${months} months unused.`,
 }))
 
 // Real fixture from opencourier-backend/scripts/seedPartnerPickupLocation.ts
@@ -50,6 +70,23 @@ describe('CreateDeliveryForm', () => {
     ;(useCreateManualRequestQuoteMutation as jest.Mock).mockReturnValue([mockCreateQuote, { isLoading: false }])
     ;(useConfirmManualRequestDeliveryMutation as jest.Mock).mockReturnValue([mockConfirmDelivery, { isLoading: false }])
     ;(useRequestPageNavigator as jest.Mock).mockReturnValue(mockNavigator)
+    ;(saveCustomerAfterOrder as jest.Mock).mockResolvedValue('none')
+    ;(useSavedCustomerSearch as jest.Mock).mockReturnValue({ status: 'idle' })
+    global.fetch = jest.fn().mockImplementation((url: string) => {
+      if (typeof url === 'string' && url.includes('partner-metadata')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ savedCustomerRetentionMonths: 12 }),
+        })
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () =>
+          Promise.resolve([
+            { lat: '39.3600', lon: '22.9400', display_name: 'Test Street 10, Volos, Thessaly, 38221, GR' },
+          ]),
+      })
+    })
   })
 
   afterAll(() => {
@@ -347,5 +384,257 @@ describe('CreateDeliveryForm', () => {
     } finally {
       jest.useRealTimers()
     }
+  })
+
+  const sampleCustomer = {
+    id: 'cust-picked-1',
+    name: 'Vassilis Spanoulis',
+    phone: '+306911223344',
+    notes: 'Ring twice',
+    addressLine1: 'Iasonos 80',
+    addressLine2: 'Floor 4',
+    city: 'Volos',
+    zipCode: '38221',
+    latitude: 39.361,
+    longitude: 22.942,
+    formattedAddress: 'Iasonos 80, Volos',
+    lastUsedAt: '2026-10-26T10:00:00Z',
+    createdAt: '2026-10-20T10:00:00Z',
+    updatedAt: '2026-10-26T10:00:00Z',
+  }
+
+  it('picking a saved customer fills dropoff name, phone, address with coordinates and notes, ticks the save checkbox, and Change unlinks and unticks', async () => {
+    ;(usePartnerProfileQuery as jest.Mock).mockReturnValue({
+      data: fixtureProfile,
+      isLoading: false,
+      error: undefined,
+    })
+
+    ;(useSavedCustomerSearch as jest.Mock).mockReturnValue({
+      status: 'ready',
+      items: [sampleCustomer],
+      total: 1,
+    })
+
+    render(<CreateDeliveryForm />)
+
+    // Save checkbox is off by default for a typed customer
+    const tickCheckbox = screen.getByRole('checkbox', {
+      name: /Save this customer for next time \(they agreed\)/i,
+    })
+    expect(tickCheckbox).not.toBeChecked()
+
+    // Pick customer from picker
+    const customerItem = screen.getByText('Vassilis Spanoulis').closest('[role="option"]')!
+    fireEvent.click(customerItem)
+
+    // Form fields are auto-filled with customer details
+    expect(screen.getByLabelText(/Recipient name/i)).toHaveValue('Vassilis Spanoulis')
+    expect(screen.getByLabelText(/Phone number/i)).toHaveValue('+306911223344')
+    expect(screen.getAllByLabelText(/Street address/i)[0]).toHaveValue('Iasonos 80')
+    expect(screen.getByLabelText(/Floor or flat/i)).toHaveValue('Floor 4')
+    expect(screen.getByLabelText(/City/i)).toHaveValue('Volos')
+    expect(screen.getByLabelText(/Dropoff Notes/i)).toHaveValue('Ring twice')
+
+    // Tick turns on when a customer is picked
+    expect(tickCheckbox).toBeChecked()
+
+    // Picker now shows linked customer line with Change button
+    expect(screen.getByText(/Saved customer:/i)).toBeInTheDocument()
+    const changeBtn = screen.getByRole('button', { name: 'Change' })
+    expect(changeBtn).toBeInTheDocument()
+
+    // Clicking Change unlinks customer and unticks the checkbox, while leaving field values in place
+    fireEvent.click(changeBtn)
+
+    expect(tickCheckbox).not.toBeChecked()
+    expect(screen.queryByText(/Saved customer:/i)).not.toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: 'Saved customer' })).toBeInTheDocument()
+    expect(screen.getByLabelText(/Recipient name/i)).toHaveValue('Vassilis Spanoulis')
+  })
+
+  it('picking a customer or clicking Change while an estimate is shown clears the estimate', async () => {
+    ;(usePartnerProfileQuery as jest.Mock).mockReturnValue({
+      data: fixtureProfile,
+      isLoading: false,
+      error: undefined,
+    })
+
+    mockCreateQuote.mockResolvedValue({
+      id: 'quote-active-1',
+      quoteRangeFrom: 400,
+      quoteRangeTo: 400,
+      currency: 'EUR',
+      duration: 15,
+      distance: 2.0,
+      distanceUnit: 'km',
+      expiresAt: null,
+      dropoffEta: null,
+      createdAt: new Date().toISOString(),
+    })
+
+    ;(useSavedCustomerSearch as jest.Mock).mockReturnValue({
+      status: 'ready',
+      items: [sampleCustomer],
+      total: 1,
+    })
+
+    render(<CreateDeliveryForm />)
+
+    // Fill minimum required fields and get estimate
+    fireEvent.change(screen.getByLabelText(/Recipient name/i), { target: { value: 'Original' } })
+    fireEvent.change(screen.getByLabelText(/Phone number/i), { target: { value: '+306911111111' } })
+    fireEvent.change(screen.getAllByLabelText(/Street address/i)[0], { target: { value: 'Ermou 10' } })
+    fireEvent.change(screen.getByLabelText(/City/i), { target: { value: 'Volos' } })
+    fireEvent.change(screen.getByLabelText(/Country/i), { target: { value: 'GR' } })
+
+    fireEvent.click(screen.getByRole('button', { name: /Get Estimate/i }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Confirm Delivery/i })).toBeInTheDocument()
+    })
+
+    // Picking a customer clears the active quote/estimate
+    const customerItem = screen.getByText('Vassilis Spanoulis').closest('[role="option"]')!
+    fireEvent.click(customerItem)
+
+    expect(screen.queryByRole('button', { name: /Confirm Delivery/i })).not.toBeInTheDocument()
+
+    // Get estimate again with the picked customer
+    fireEvent.click(screen.getByRole('button', { name: /Get Estimate/i }))
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Confirm Delivery/i })).toBeInTheDocument()
+    })
+
+    // Clicking Change also clears the estimate
+    fireEvent.click(screen.getByRole('button', { name: 'Change' }))
+    expect(screen.queryByRole('button', { name: /Confirm Delivery/i })).not.toBeInTheDocument()
+  })
+
+  it('runs saveCustomerAfterOrder with formSnapshot values and passes ?customerSave only on failure', async () => {
+    ;(usePartnerProfileQuery as jest.Mock).mockReturnValue({
+      data: fixtureProfile,
+      isLoading: false,
+      error: undefined,
+    })
+
+    mockCreateQuote.mockResolvedValue({
+      id: 'quote-snap-1',
+      quoteRangeFrom: 350,
+      quoteRangeTo: 350,
+      currency: 'EUR',
+      duration: 10,
+      distance: 1.5,
+      distanceUnit: 'km',
+      expiresAt: null,
+      dropoffEta: null,
+      createdAt: new Date().toISOString(),
+    })
+
+    let resolveConfirm: (value: any) => void = () => {}
+    mockConfirmDelivery.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveConfirm = resolve
+        }),
+    )
+
+    render(<CreateDeliveryForm />)
+
+    fireEvent.change(screen.getByLabelText(/Recipient name/i), { target: { value: 'Snapshot Name' } })
+    fireEvent.change(screen.getByLabelText(/Phone number/i), { target: { value: '+306912345678' } })
+    fireEvent.change(screen.getAllByLabelText(/Street address/i)[0], { target: { value: 'Iasonos 10' } })
+    fireEvent.change(screen.getByLabelText(/City/i), { target: { value: 'Volos' } })
+    fireEvent.change(screen.getByLabelText(/Dropoff Notes/i), { target: { value: 'Snapshot Notes' } })
+    fireEvent.change(screen.getByLabelText(/Country/i), { target: { value: 'GR' } })
+
+    // Tick the save customer checkbox
+    const tickCheckbox = screen.getByRole('checkbox', {
+      name: /Save this customer for next time \(they agreed\)/i,
+    })
+    fireEvent.click(tickCheckbox)
+
+    fireEvent.click(screen.getByRole('button', { name: /Get Estimate/i }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Confirm Delivery/i })).toBeInTheDocument()
+    })
+
+    // Edit notes AFTER estimate is taken
+    fireEvent.change(screen.getByLabelText(/Dropoff Notes/i), { target: { value: 'Edited After Estimate' } })
+
+    // Simulate clash failure
+    ;(saveCustomerAfterOrder as jest.Mock).mockResolvedValue('clash')
+
+    const confirmBtn = screen.getByRole('button', { name: /Confirm Delivery/i })
+    fireEvent.click(confirmBtn)
+
+    // Confirm button becomes disabled while confirming and saving
+    expect(confirmBtn).toBeDisabled()
+
+    // Resolve delivery confirmation
+    resolveConfirm({ id: 'del-clash-1', status: 'ACCEPTED' })
+
+    await waitFor(() => {
+      expect(saveCustomerAfterOrder).toHaveBeenCalledTimes(1)
+    })
+
+    // Assert saveCustomerAfterOrder was called with the formSnapshot values, not the edited ones
+    const saveCallArgs = (saveCustomerAfterOrder as jest.Mock).mock.calls[0][0]
+    expect(saveCallArgs.fields.notes).toBe('Snapshot Notes')
+    expect(saveCallArgs.saveTicked).toBe(true)
+    expect(saveCallArgs.linkedCustomerId).toBeNull()
+
+    // Navigator gets ?customerSave=clash
+    await waitFor(() => {
+      expect(mockNavigator.goToManualRequestStatus).toHaveBeenCalledWith('del-clash-1', {
+        query: { customerSave: 'clash' },
+      })
+    })
+  })
+
+  it('navigates with no second argument when customer save succeeds ("saved" outcome)', async () => {
+    ;(usePartnerProfileQuery as jest.Mock).mockReturnValue({
+      data: fixtureProfile,
+      isLoading: false,
+      error: undefined,
+    })
+
+    mockCreateQuote.mockResolvedValue({
+      id: 'quote-success-1',
+      quoteRangeFrom: 350,
+      quoteRangeTo: 350,
+      currency: 'EUR',
+      duration: 10,
+      distance: 1.5,
+      distanceUnit: 'km',
+      expiresAt: null,
+      dropoffEta: null,
+      createdAt: new Date().toISOString(),
+    })
+
+    mockConfirmDelivery.mockResolvedValue({ id: 'del-success-1', status: 'ACCEPTED' })
+    ;(saveCustomerAfterOrder as jest.Mock).mockResolvedValue('saved')
+
+    render(<CreateDeliveryForm />)
+
+    fireEvent.change(screen.getByLabelText(/Recipient name/i), { target: { value: 'Jane' } })
+    fireEvent.change(screen.getByLabelText(/Phone number/i), { target: { value: '+306912345678' } })
+    fireEvent.change(screen.getAllByLabelText(/Street address/i)[0], { target: { value: 'Iasonos 10' } })
+    fireEvent.change(screen.getByLabelText(/City/i), { target: { value: 'Volos' } })
+    fireEvent.change(screen.getByLabelText(/Country/i), { target: { value: 'GR' } })
+
+    fireEvent.click(screen.getByRole('button', { name: /Get Estimate/i }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Confirm Delivery/i })).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /Confirm Delivery/i }))
+
+    await waitFor(() => {
+      expect(mockNavigator.goToManualRequestStatus).toHaveBeenCalledWith('del-success-1')
+    })
+    expect(mockNavigator.goToManualRequestStatus.mock.calls[0]).toHaveLength(1)
   })
 })
