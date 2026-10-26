@@ -24,6 +24,9 @@ export default function App({ Component, pageProps }: AppProps) {
     <IconContext.Provider value={ICON_DEFAULTS}>
       {/* The OpenCourier app icon, on every page (files in public/, made from the design system's app icon). */}
       <Head>
+        {/* Phone width layout. viewport-fit=cover lets the order form's fixed bar pad itself clear of
+            a phone's home indicator (env(safe-area-inset-bottom), spec 0006). */}
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
         <link rel="icon" href="/favicon.ico" sizes="48x48" />
         <link rel="icon" type="image/png" href="/icon-192.png" sizes="192x192" />
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
