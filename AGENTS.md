@@ -15,6 +15,8 @@ react-hook-form, zod. Dev server on port 3090, using the backend's `partner` API
 | `src/pages/api/partner-proxy/[...path].ts` | Attaches the bearer token server-side and forwards to the backend |
 | `src/utils/partnerSession.ts` | Reads `MANUAL_REQUEST_PROXY_TARGET`, the backend address |
 | `src/pages/manual-request/` | The request form itself |
+| `src/modules/saved-customers/` | Saved customers: the Customers page (`/manual-request/customers`), the order form's picker and save tick (spec 0005) |
+| `src/modules/manual-request/utils/geocode.ts` | The address lookup, from the browser to public Nominatim, giving up after 8 s; `addressPinKey` says when a map point no longer fits its address |
 | `src/modules/portal/components/PortalFrame.tsx` | The frame every page sits in, and the sign in gate (there is no `/login` page) |
 
 ## Commands
@@ -25,5 +27,7 @@ Yarn 1.22, **not Corepack**: run `node node_modules/.bin/next dev -p 3090` and
 ## Gotchas
 
 - The browser never holds a credential. Never add an API key path, not even as a fallback.
+- The partner proxy forwards a body only for POST, PATCH and PUT, and only a real one: Next.js turns no
+  body into `{}`, which the backend would read as a body it never asked for.
 
 _Drafted by /audit from the repo, worth a quick human pass. Edit freely: once a line stops matching this draft, later runs treat it as curated and will flag rather than overwrite it._
