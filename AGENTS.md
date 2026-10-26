@@ -15,6 +15,7 @@ react-hook-form, zod. Dev server on port 3090, using the backend's `partner` API
 | `src/pages/api/partner-proxy/[...path].ts` | Attaches the bearer token server-side and forwards to the backend |
 | `src/utils/partnerSession.ts` | Reads `MANUAL_REQUEST_PROXY_TARGET`, the backend address |
 | `src/pages/manual-request/` | The request form itself |
+| `src/modules/portal/components/PortalFrame.tsx` | The frame every page sits in, and the sign in gate (there is no `/login` page) |
 
 ## Commands
 
