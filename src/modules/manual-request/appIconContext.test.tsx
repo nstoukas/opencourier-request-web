@@ -17,6 +17,23 @@ jest.mock('next/head', () => ({
   default: ({ children }: { children: Array<React.ReactElement> }) => <div data-testid="head-mock">{children}</div>,
 }))
 
+// Mock next/router for PortalFrame's header navigation
+jest.mock('next/router', () => ({
+  useRouter: () => ({
+    pathname: '/manual-request',
+  }),
+}))
+
+// Mock partner session as signed in so PortalFrame renders Component without gate blocking
+jest.mock('../../hooks/usePartnerSession', () => ({
+  usePartnerSession: () => ({
+    isSignedIn: true,
+    email: 'test@example.com',
+    isLoading: false,
+    refresh: jest.fn(),
+  }),
+}))
+
 describe('Phosphor icon accessibility defaults and IconContext in _app.tsx (Ruling 1)', () => {
   function SmallPage() {
     return (

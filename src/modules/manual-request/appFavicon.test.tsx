@@ -11,6 +11,23 @@ jest.mock('next/head', () => ({
   default: ({ children }: { children: Array<React.ReactElement> }) => <div data-testid="head-mock">{children}</div>,
 }))
 
+// Mock next/router for PortalFrame
+jest.mock('next/router', () => ({
+  useRouter: () => ({
+    pathname: '/manual-request',
+  }),
+}))
+
+// Mock session hook as signed in so PortalFrame renders synchronously without act warning
+jest.mock('../../hooks/usePartnerSession', () => ({
+  usePartnerSession: () => ({
+    isSignedIn: true,
+    email: 'restaurant@volos.test',
+    isLoading: false,
+    refresh: jest.fn(),
+  }),
+}))
+
 describe('favicon is the app icon (Clause 4)', () => {
   const rootDir = path.resolve(__dirname, '../../..')
   const publicDir = path.resolve(rootDir, 'public')

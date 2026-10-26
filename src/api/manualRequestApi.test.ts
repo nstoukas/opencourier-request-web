@@ -33,13 +33,36 @@ describe('manualRequestApi helper functions', () => {
       expect(res).toEqual({ email: 'test@example.com' })
     })
 
-    it('throws error with server message when sign-in fails', async () => {
+    it('throws error with server message and sets error.status when sign-in fails', async () => {
       global.fetch = jest.fn().mockResolvedValue({
         ok: false,
+        status: 401,
         json: jest.fn().mockResolvedValue({ message: 'Invalid credentials' }),
       } as any)
 
-      await expect(loginPartner('test@example.com', 'wrong')).rejects.toThrow('Invalid credentials')
+      try {
+        await loginPartner('test@example.com', 'wrong')
+        fail('Should have thrown an error')
+      } catch (err: any) {
+        expect(err.message).toBe('Invalid credentials')
+        expect(err.status).toBe(401)
+      }
+    })
+
+    it('falls back to default message and preserves HTTP status on failed response', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: false,
+        status: 502,
+        json: jest.fn().mockRejectedValue(new Error('Bad Gateway')),
+      } as any)
+
+      try {
+        await loginPartner('test@example.com', 'wrong')
+        fail('Should have thrown an error')
+      } catch (err: any) {
+        expect(err.message).toBe('Sign in failed.')
+        expect(err.status).toBe(502)
+      }
     })
   })
 
