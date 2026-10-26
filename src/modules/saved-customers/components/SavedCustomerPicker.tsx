@@ -104,6 +104,11 @@ export function SavedCustomerPicker({ linked, onPick, onUnlink }: SavedCustomerP
           </p>
           {/* shouldFilter={false}: the backend already searched, so cmdk must not filter the rows again. */}
           <Command
+            // Focus leaving the picker (a click or Tab elsewhere in the form) closes the list. Clicking a
+            // row keeps focus inside (cmdk's root takes it), so a pick still goes through.
+            onBlur={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDismissed(true)
+            }}
             label="Saved customer"
             shouldFilter={false}
             value={highlighted}

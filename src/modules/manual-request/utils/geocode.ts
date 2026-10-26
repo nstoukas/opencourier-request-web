@@ -11,6 +11,8 @@ export interface GeocodableAddress {
   countryCode?: string
 }
 
+export const GEOCODE_TIMEOUT_MS = 8000
+
 export type GeocodeCoordinatesResult = { latitude: number; longitude: number; displayName?: string }
 
 // The part of an address that decides where its map point is. When it changes after the point was set
@@ -42,11 +44,14 @@ export async function geocodeCoordinatesFromAddress(
     .join(', ')
 
   const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&addressdetails=1&limit=1`
+  // A public service that may stall: after 8 s the lookup gives up (the fetch throws), so Save or Get
+  // Estimate never spins for ever.
   const response = await fetch(url, {
     headers: {
       'Accept-Language': 'en',
       'User-Agent': 'opencourier-request-web/1.0 (manual delivery form)',
     },
+    signal: AbortSignal.timeout(GEOCODE_TIMEOUT_MS),
   })
   if (!response.ok) return null
 
