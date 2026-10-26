@@ -29,7 +29,14 @@ export function CustomerCard({ customer, onEdit, onDelete }: CustomerCardProps) 
           </p>
         </div>
         <div className="flex shrink-0 gap-2">
-          <Button type="button" variant="outline" size="sm" onClick={() => onEdit(customer)}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => onEdit(customer)}
+            // Every card has an Edit button, so the name says whose; it starts with the visible word.
+            aria-label={`Edit ${customer.name}`}
+          >
             <PencilSimple className="mr-1.5 size-4" aria-hidden="true" />
             Edit
           </Button>
