@@ -9,7 +9,8 @@ import {
 
 // The body to send on, or undefined for none. Next.js's body parser turns a request with no body into
 // `{}` (or `''`), so without this a DELETE or a bodyless POST (`/customers/:id/used`) would arrive at
-// the backend with a body it never asked for. Only POST, PATCH and PUT carry one, and only a real one.
+// the backend with a body it never asked for. Only POST, PATCH and PUT carry one, and only a real one:
+// a PATCH sent as `{}` also goes bodyless (no caller sends one today; the backend reads it as no change).
 // Exported so it can be tested without a request.
 export function forwardedBody(method: string | undefined, body: unknown): string | undefined {
   if (method !== 'POST' && method !== 'PATCH' && method !== 'PUT') return undefined

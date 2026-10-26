@@ -13,6 +13,15 @@ export interface GeocodableAddress {
 
 export type GeocodeCoordinatesResult = { latitude: number; longitude: number; displayName?: string }
 
+// The part of an address that decides where its map point is. When it changes after the point was set
+// (a pick from the address search, a picked saved customer, a customer as loaded), the point belongs to
+// another address and must be looked up again (spec 0005; the order form and the customer dialog).
+export function addressPinKey(address: GeocodableAddress | undefined): string {
+  return [address?.streetAddress?.[0], address?.city, address?.zipCode]
+    .map((part) => (part ?? '').trim().toLowerCase())
+    .join('|')
+}
+
 // 0,0 is what an empty form holds, never a real Volos address.
 export function hasValidCoordinates(latitude: number, longitude: number) {
   return Number.isFinite(latitude) && Number.isFinite(longitude) && !(latitude === 0 && longitude === 0)

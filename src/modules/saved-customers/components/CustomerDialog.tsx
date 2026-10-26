@@ -24,7 +24,7 @@ import {
   Textarea,
 } from '../../../admin-web-components'
 import { AddressSection } from '../../manual-request/components/AddressSection'
-import { geocodeCoordinatesFromAddress, hasValidCoordinates } from '../../manual-request/utils/geocode'
+import { addressPinKey, geocodeCoordinatesFromAddress, hasValidCoordinates } from '../../manual-request/utils/geocode'
 import { addSavedCustomer, listSavedCustomers, updateSavedCustomer } from '../../../api/savedCustomersApi'
 import type { SavedCustomer, SavedCustomerError, SavedCustomerFields } from '../types'
 import { DEFAULT_COUNTRY_CODE, phoneSearchDigits } from '../utils/fields'
@@ -68,12 +68,8 @@ function initialValues(customer: SavedCustomer | null): DialogValues {
   }
 }
 
-// The part of an address that decides where the map point is. When it changes after the point was
-// set (a pick from the search, or the customer as loaded), the point must be looked up again.
-function pinKey(values: Pick<DialogValues, 'dropoffAddress'>): string {
-  const a = values.dropoffAddress
-  return [a?.streetAddress?.[0], a?.city, a?.zipCode].map((part) => (part ?? '').trim().toLowerCase()).join('|')
-}
+// Where the map point came from: see addressPinKey.
+const pinKey = (values: Pick<DialogValues, 'dropoffAddress'>) => addressPinKey(values.dropoffAddress)
 
 function optional(value: string | undefined): string | null {
   const trimmed = value?.trim() ?? ''
@@ -128,7 +124,8 @@ export function CustomerDialog({ customer, onClose, onSaved, onGone }: CustomerD
         }
         lat = found.latitude
         lng = found.longitude
-        formattedAddress = found.displayName ?? formattedAddress
+        // A new lookup's own text, or none: never the old address's text beside a new street.
+        formattedAddress = found.displayName ?? null
       }
 
       const fields: SavedCustomerFields = {

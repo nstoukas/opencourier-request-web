@@ -55,6 +55,7 @@ import {
 } from '../../saved-customers/utils/fields'
 import { CUSTOMER_SAVE_FAILURES, saveCustomerAfterOrder } from '../../saved-customers/utils/saveAfterOrder'
 import {
+  addressPinKey,
   geocodeCoordinatesFromAddress,
   GeocodeCoordinatesResult,
   hasValidCoordinates,
@@ -247,6 +248,16 @@ export function CreateDeliveryForm() {
     defaultValues: buildDefaultValues(),
   })
 
+  // Which drop off address the current map point belongs to (street, city, zip). The point is set by a
+  // search pick or a picked saved customer; typing in those fields afterwards does not move it, so the
+  // estimate looks the address up again when they changed (spec 0005: a picked customer stays editable).
+  const dropoffLatitude = form.watch('dropoffLatitude')
+  const dropoffLongitude = form.watch('dropoffLongitude')
+  const [dropoffPinKey, setDropoffPinKey] = useState('')
+  useEffect(() => {
+    setDropoffPinKey(addressPinKey(form.getValues('dropoffAddress')))
+  }, [dropoffLatitude, dropoffLongitude, form])
+
   useEffect(() => {
     if (pickupMapped && checkPartnerPickupUsable(profile).usable) {
       form.reset({
@@ -288,7 +299,10 @@ export function CreateDeliveryForm() {
       const pickupCoordinates = hasValidCoordinates(pickupLatSource, pickupLngSource)
         ? { latitude: pickupLatSource, longitude: pickupLngSource }
         : await geocodeCoordinatesFromAddress(pickupAddressSource)
-      const dropoffCoordinates = hasValidCoordinates(values.dropoffLatitude, values.dropoffLongitude)
+      const dropoffPointStillFits =
+        hasValidCoordinates(values.dropoffLatitude, values.dropoffLongitude) &&
+        addressPinKey(values.dropoffAddress) === dropoffPinKey
+      const dropoffCoordinates = dropoffPointStillFits
         ? { latitude: values.dropoffLatitude, longitude: values.dropoffLongitude }
         : await geocodeCoordinatesFromAddress(values.dropoffAddress)
 
@@ -298,7 +312,11 @@ export function CreateDeliveryForm() {
       }
 
       const pickupFormatted = resolveSubmittedFormattedAddress(pickupAddressSource, pickupCoordinates)
-      const dropoffFormatted = resolveSubmittedFormattedAddress(values.dropoffAddress, dropoffCoordinates)
+      // A point looked up again belongs to a new address: its old full text must not come along.
+      const dropoffFormatted = resolveSubmittedFormattedAddress(
+        dropoffPointStillFits ? values.dropoffAddress : { ...values.dropoffAddress, formattedAddress: '' },
+        dropoffCoordinates,
+      )
 
       form.setValue('pickupLatitude', pickupCoordinates.latitude, { shouldDirty: true, shouldValidate: true })
       form.setValue('pickupLongitude', pickupCoordinates.longitude, { shouldDirty: true, shouldValidate: true })
@@ -775,7 +793,15 @@ export function CreateDeliveryForm() {
                 />
               </div>
 
-              <AddressSection control={form.control} prefix="dropoff" label="Dropoff address" />
+              {/* Remounted when a saved customer is picked or unlinked, so its search box shows that
+                  customer's address instead of what was typed there before. */}
+              <AddressSection
+                key={linkedCustomer?.id ?? 'typed'}
+                control={form.control}
+                prefix="dropoff"
+                label="Dropoff address"
+                initialQuery={linkedCustomer ? form.getValues('dropoffAddress.formattedAddress') ?? '' : ''}
+              />
 
               <FormField
                 control={form.control}

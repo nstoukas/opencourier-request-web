@@ -26,10 +26,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     const upstream = await fetch(`${getBackendBaseUrl()}/metadata`, { signal: AbortSignal.timeout(5000) })
-    const body = await upstream.json()
+    // Checked before reading the body: a backend error page is not JSON.
+    const body = upstream.ok ? await upstream.json().catch(() => null) : null
     // The backend wraps answers as { error, result }; the setting sits in result.config.
     const months = body?.result?.config?.savedCustomerRetentionMonths
-    if (!upstream.ok || typeof months !== 'number') {
+    if (typeof months !== 'number') {
       return res.status(502).json({ message: 'The co-op setting could not be read.' })
     }
     cached = { months, at: Date.now() }

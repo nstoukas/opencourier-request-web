@@ -42,6 +42,10 @@ export function CustomersPage() {
   // Bumped to load the first page again (after an Add, or Try again).
   const [reloadCount, setReloadCount] = useState(0)
   const listRef = useRef<HTMLDivElement>(null)
+  const countRef = useRef<HTMLParagraphElement>(null)
+  // Bumped by every first page load. A Show more answer that arrives after a newer search (or a
+  // reload) belongs to another list and is dropped.
+  const listVersion = useRef(0)
 
   useEffect(() => {
     const trimmed = query.trim()
@@ -52,6 +56,7 @@ export function CustomersPage() {
   // The first page for the current search. Only the latest load counts: a change aborts the one before.
   useEffect(() => {
     const controller = new AbortController()
+    listVersion.current += 1
     setList({ status: 'loading' })
     listSavedCustomers({ q: search || undefined, page: 1, perPage: CUSTOMERS_PAGE_SIZE }, controller.signal)
       .then((result) => {
@@ -65,15 +70,20 @@ export function CustomersPage() {
 
   const showMore = useCallback(async () => {
     if (list.status !== 'ready') return
+    const version = listVersion.current
     setIsLoadingMore(true)
     try {
       const next = await listSavedCustomers({ q: search || undefined, page: list.page + 1, perPage: CUSTOMERS_PAGE_SIZE })
+      if (version !== listVersion.current) return
       setList((current) => {
         if (current.status !== 'ready') return current
         // A customer used between two pages moves up the list; never show it twice.
         const shown = new Set(current.items.map((item) => item.id))
         const added = next.items.filter((item) => !shown.has(item.id))
-        return { status: 'ready', items: [...current.items, ...added], total: next.total, page: current.page + 1 }
+        const items = [...current.items, ...added]
+        // The last page: the Show more button goes away while it has focus, so focus moves to the count.
+        if (items.length >= next.total) setTimeout(() => countRef.current?.focus(), 0)
+        return { status: 'ready', items, total: next.total, page: current.page + 1 }
       })
     } catch {
       toast({ title: 'Could not load more customers', description: 'Try again in a moment.', variant: 'destructive' })
@@ -195,7 +205,7 @@ export function CustomersPage() {
             </Button>
           ) : null}
           {/* aria-live: a screen reader hears the new count after Show more, without moving focus. */}
-          <p className="text-sm text-muted-foreground" aria-live="polite">
+          <p ref={countRef} tabIndex={-1} className="text-sm text-muted-foreground outline-none" aria-live="polite">
             {list.items.length} of {list.total}
           </p>
         </div>
