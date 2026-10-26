@@ -13,7 +13,7 @@ jest.mock('../hooks/useSavedCustomerSearch', () => ({
 
 describe('SavedCustomerPicker', () => {
   const onPickMock = jest.fn()
-  const onUnlinkMock = jest.fn()
+  const defaultChangeRef = { current: null }
 
   const sampleCustomers: SavedCustomer[] = [
     {
@@ -56,7 +56,7 @@ describe('SavedCustomerPicker', () => {
   })
 
   it('renders input with accessible name "Saved customer"', () => {
-    render(<SavedCustomerPicker linked={null} onPick={onPickMock} onUnlink={onUnlinkMock} />)
+    render(<SavedCustomerPicker linked={null} onPick={onPickMock} changeRef={defaultChangeRef} />)
 
     // Command sets label="Saved customer", so accessible name of combobox/input is "Saved customer"
     const input = screen.getByRole('combobox', { name: 'Saved customer' })
@@ -64,28 +64,33 @@ describe('SavedCustomerPicker', () => {
     expect(input).toHaveAttribute('placeholder', 'Type a name or phone')
   })
 
-  it('renders linked state with "Saved customer: <name>" and Change button which calls onUnlink', () => {
+  it('renders linked state drawing only its role="status" announcement and focusing changeRef (AC-11)', () => {
+    const changeButton = document.createElement('button')
+    document.body.appendChild(changeButton)
+    const changeRef = { current: changeButton }
+
     render(
       <SavedCustomerPicker
         linked={{ id: 'cust-1', name: 'Maria Papadopoulou' }}
         onPick={onPickMock}
-        onUnlink={onUnlinkMock}
+        changeRef={changeRef}
       />,
     )
 
-    expect(screen.getAllByText(/Saved customer:/i).length).toBeGreaterThanOrEqual(1)
-    expect(screen.getByText('Maria Papadopoulou')).toBeInTheDocument()
+    // While a customer is linked the picker draws nothing but its role="status" announcement (AC-11)
     expect(screen.queryByPlaceholderText('Type a name or phone')).not.toBeInTheDocument()
-
-    const changeButton = screen.getByRole('button', { name: 'Change' })
-    fireEvent.click(changeButton)
-    expect(onUnlinkMock).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Saved customer: Maria Papadopoulou. The drop off fields are filled in.',
+    )
+    expect(document.activeElement).toBe(changeButton)
+    document.body.removeChild(changeButton)
   })
 
   it('displays loading spinner when search status is loading', () => {
     ;(useSavedCustomerSearch as jest.Mock).mockReturnValue({ status: 'loading' })
 
-    render(<SavedCustomerPicker linked={null} onPick={onPickMock} onUnlink={onUnlinkMock} />)
+    render(<SavedCustomerPicker linked={null} onPick={onPickMock} changeRef={defaultChangeRef} />)
 
     expect(screen.getByRole('status', { name: 'Searching saved customers' })).toBeInTheDocument()
     expect(screen.getByText('Searching saved customers…')).toBeInTheDocument()
@@ -98,7 +103,7 @@ describe('SavedCustomerPicker', () => {
       total: 0,
     })
 
-    render(<SavedCustomerPicker linked={null} onPick={onPickMock} onUnlink={onUnlinkMock} />)
+    render(<SavedCustomerPicker linked={null} onPick={onPickMock} changeRef={defaultChangeRef} />)
 
     expect(
       screen.getByText('No saved customer matches. Fill in the fields below.'),
@@ -108,7 +113,7 @@ describe('SavedCustomerPicker', () => {
   it('displays "Search is not available. Fill in the fields below." when search errors', () => {
     ;(useSavedCustomerSearch as jest.Mock).mockReturnValue({ status: 'error' })
 
-    render(<SavedCustomerPicker linked={null} onPick={onPickMock} onUnlink={onUnlinkMock} />)
+    render(<SavedCustomerPicker linked={null} onPick={onPickMock} changeRef={defaultChangeRef} />)
 
     expect(
       screen.getByText('Search is not available. Fill in the fields below.'),
@@ -122,7 +127,7 @@ describe('SavedCustomerPicker', () => {
       total: 2,
     })
 
-    render(<SavedCustomerPicker linked={null} onPick={onPickMock} onUnlink={onUnlinkMock} />)
+    render(<SavedCustomerPicker linked={null} onPick={onPickMock} changeRef={defaultChangeRef} />)
 
     // First customer row has formattedAddress
     expect(screen.getByText('Maria Papadopoulou')).toBeInTheDocument()
@@ -152,7 +157,7 @@ describe('SavedCustomerPicker', () => {
 
     render(
       <form onSubmit={onFormSubmit}>
-        <SavedCustomerPicker linked={null} onPick={onPickMock} onUnlink={onUnlinkMock} />
+        <SavedCustomerPicker linked={null} onPick={onPickMock} changeRef={defaultChangeRef} />
       </form>,
     )
 
@@ -173,7 +178,7 @@ describe('SavedCustomerPicker', () => {
       total: 2,
     })
 
-    render(<SavedCustomerPicker linked={null} onPick={onPickMock} onUnlink={onUnlinkMock} />)
+    render(<SavedCustomerPicker linked={null} onPick={onPickMock} changeRef={defaultChangeRef} />)
 
     expect(screen.getByText('Maria Papadopoulou')).toBeInTheDocument()
 
@@ -184,8 +189,12 @@ describe('SavedCustomerPicker', () => {
   })
 
   it('announces pick with status line and focuses Change button; announces clear and returns focus to search input', () => {
+    const changeButton = document.createElement('button')
+    document.body.appendChild(changeButton)
+    const changeRef = { current: changeButton }
+
     const { rerender } = render(
-      <SavedCustomerPicker linked={null} onPick={onPickMock} onUnlink={onUnlinkMock} />,
+      <SavedCustomerPicker linked={null} onPick={onPickMock} changeRef={changeRef} />,
     )
 
     // Initially unlinked, combobox exists
@@ -197,7 +206,7 @@ describe('SavedCustomerPicker', () => {
       <SavedCustomerPicker
         linked={{ id: 'cust-1', name: 'Maria Papadopoulou' }}
         onPick={onPickMock}
-        onUnlink={onUnlinkMock}
+        changeRef={changeRef}
       />,
     )
 
@@ -209,11 +218,10 @@ describe('SavedCustomerPicker', () => {
     expect(srAnnouncement).toBeInTheDocument()
 
     // Focus is on Change button
-    const changeBtn = screen.getByRole('button', { name: 'Change' })
-    expect(changeBtn).toHaveFocus()
+    expect(document.activeElement).toBe(changeButton)
 
     // Clear link: rerender with null
-    rerender(<SavedCustomerPicker linked={null} onPick={onPickMock} onUnlink={onUnlinkMock} />)
+    rerender(<SavedCustomerPicker linked={null} onPick={onPickMock} changeRef={changeRef} />)
 
     // Status line announces clear
     expect(
@@ -223,13 +231,15 @@ describe('SavedCustomerPicker', () => {
     // Focus is back on the search input
     const inputAfter = screen.getByRole('combobox', { name: 'Saved customer' })
     expect(inputAfter).toHaveFocus()
+
+    document.body.removeChild(changeButton)
   })
 
   it('searching, no match, and error messages are in a role=status element outside the listbox', () => {
     // 1. Loading state
     ;(useSavedCustomerSearch as jest.Mock).mockReturnValue({ status: 'loading' })
     const { rerender } = render(
-      <SavedCustomerPicker linked={null} onPick={onPickMock} onUnlink={onUnlinkMock} />,
+      <SavedCustomerPicker linked={null} onPick={onPickMock} changeRef={defaultChangeRef} />,
     )
     const loadingStatus = screen.getByText('Searching saved customers…').closest('[role="status"]')
     expect(loadingStatus).toBeInTheDocument()
@@ -242,7 +252,7 @@ describe('SavedCustomerPicker', () => {
       items: [],
       total: 0,
     })
-    rerender(<SavedCustomerPicker linked={null} onPick={onPickMock} onUnlink={onUnlinkMock} />)
+    rerender(<SavedCustomerPicker linked={null} onPick={onPickMock} changeRef={defaultChangeRef} />)
     const noMatchStatus = screen
       .getByText('No saved customer matches. Fill in the fields below.')
       .closest('[role="status"]')
@@ -252,7 +262,7 @@ describe('SavedCustomerPicker', () => {
 
     // 3. Error state
     ;(useSavedCustomerSearch as jest.Mock).mockReturnValue({ status: 'error' })
-    rerender(<SavedCustomerPicker linked={null} onPick={onPickMock} onUnlink={onUnlinkMock} />)
+    rerender(<SavedCustomerPicker linked={null} onPick={onPickMock} changeRef={defaultChangeRef} />)
     const errorStatus = screen
       .getByText('Search is not available. Fill in the fields below.')
       .closest('[role="status"]')
@@ -270,7 +280,7 @@ describe('SavedCustomerPicker', () => {
 
     render(
       <div>
-        <SavedCustomerPicker linked={null} onPick={onPickMock} onUnlink={onUnlinkMock} />
+        <SavedCustomerPicker linked={null} onPick={onPickMock} changeRef={defaultChangeRef} />
         <button type="button" data-testid="outside-button">
           Outside
         </button>

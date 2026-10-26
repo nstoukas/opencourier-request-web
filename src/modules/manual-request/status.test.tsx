@@ -25,7 +25,11 @@ jest.mock('next/head', () => ({
 // Mock next/link
 jest.mock('next/link', () => ({
   __esModule: true,
-  default: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>,
+  default: ({ children, href, className }: { children: React.ReactNode; href: string; className?: string }) => (
+    <a href={href} className={className}>
+      {children}
+    </a>
+  ),
 }))
 
 // Mock API and auth mode
@@ -107,6 +111,27 @@ describe('DeliveryStatusPage (/manual-request/[deliveryId]/status.tsx)', () => {
     // Cancel delivery button is enabled for non-terminal status
     const cancelBtn = screen.getByRole('button', { name: /Cancel delivery/i })
     expect(cancelBtn).toBeEnabled()
+  })
+
+  it('AC-14: renders "New order" button that links to /manual-request to open an empty form', () => {
+    ;(useGetManualRequestDeliveryQuery as jest.Mock).mockReturnValue({
+      data: {
+        id: 'del-xyz-789',
+        status: 'ACCEPTED',
+        createdAt: '2026-09-30T10:00:00Z',
+      },
+      isLoading: false,
+      error: undefined,
+      refetch: mockRefetch,
+    })
+
+    render(<DeliveryStatusPage />)
+
+    const newOrderLink = screen.getByRole('link', { name: 'New order' })
+    expect(newOrderLink).toBeInTheDocument()
+    expect(newOrderLink).toHaveAttribute('href', '/manual-request')
+    // button styling asChild size="xl"
+    expect(newOrderLink).toHaveClass('h-12')
   })
 
   it('renders StatusBadge and disables cancel button for terminal status (DROPPED_OFF)', () => {

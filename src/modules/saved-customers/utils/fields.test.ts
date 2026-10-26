@@ -9,14 +9,15 @@ import type { SavedCustomer } from '../types'
 
 describe('fields.ts mapping utilities', () => {
   describe('customerFieldsFromOrder', () => {
-    it('maps houseNumber to addressLine2, trims strings, and turns empty optional texts into null', () => {
+    it('maps floorAndBell to addressLine2, note to notes, trims strings, and turns empty optional texts into null', () => {
       const orderValues = {
         dropoffName: '  Katerina Sakellaropoulou  ',
         dropoffPhoneNumber: '  +30 691 234 5678  ',
-        dropoffNotes: '   Ring doorbell twice   ',
+        note: '   Ring doorbell twice   ',
+        floorAndBell: '  Floor 2, Flat B  ',
         dropoffAddress: {
           streetAddress: ['  Politechniou 12  '],
-          houseNumber: '  Floor 2, Flat B  ',
+          houseNumber: '',
           city: '  Volos  ',
           zipCode: '  38221  ',
           formattedAddress: '  Politechniou 12, Volos, 38221  ',
@@ -45,7 +46,8 @@ describe('fields.ts mapping utilities', () => {
       const orderValues: any = {
         dropoffName: 'Nikos',
         dropoffPhoneNumber: '2421012345',
-        dropoffNotes: '   ',
+        note: '   ',
+        floorAndBell: '   ',
         dropoffBusinessName: 'Nikos Bakery', // MUST NOT be saved
         dropoffAddress: {
           streetAddress: ['Iasonos 1'],
@@ -109,10 +111,11 @@ describe('fields.ts mapping utilities', () => {
       expect(orderValues).toEqual({
         dropoffName: 'Dimitris Diamantidis',
         dropoffPhoneNumber: '+306987654321',
-        dropoffNotes: 'Leave at front porch',
+        floorAndBell: 'Floor 3',
+        note: 'Leave at front porch',
         dropoffAddress: {
           streetAddress: ['Dimitriadis 150'],
-          houseNumber: 'Floor 3',
+          houseNumber: '',
           city: 'Volos',
           state: '',
           zipCode: '38221',
@@ -145,7 +148,8 @@ describe('fields.ts mapping utilities', () => {
 
       const orderValues = orderValuesFromCustomer(customer)
 
-      expect(orderValues.dropoffNotes).toBe('')
+      expect(orderValues.note).toBe('')
+      expect(orderValues.floorAndBell).toBe('')
       expect(orderValues.dropoffAddress.houseNumber).toBe('')
       expect(orderValues.dropoffAddress.zipCode).toBe('')
       expect(orderValues.dropoffAddress.formattedAddress).toBe('')
