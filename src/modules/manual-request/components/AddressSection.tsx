@@ -283,7 +283,7 @@ export function AddressSection<T extends FieldValues>({
             name={field('streetAddress.0')}
             render={({ field: f }) => (
               <FormItem className="sm:col-span-6">
-                <FormLabel>Street and number</FormLabel>
+                <FormLabel>Street address or PO Box</FormLabel>
                 <FormControl>
                   <Input placeholder="e.g. Iasonos 12" {...f} />
                 </FormControl>
