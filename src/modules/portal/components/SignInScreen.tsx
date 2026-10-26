@@ -138,7 +138,8 @@ export function SignInScreen({ onSignedIn }: SignInScreenProps) {
               <Button type="submit" size="xl" className="w-full" disabled={isSigningIn}>
                 {isSigningIn ? (
                   <>
-                    <Spinner className="mr-2" label="Signing in" />
+                    {/* The button's own words say "Signing in…", so the spinner stays silent here. */}
+                    <Spinner className="mr-2" aria-hidden />
                     Signing in…
                   </>
                 ) : (

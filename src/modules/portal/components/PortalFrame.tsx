@@ -125,7 +125,8 @@ export function PortalFrame({ children }: { children: ReactNode }) {
         Skip to content
       </a>
       <PortalHeader email={email} onSignOut={handleSignOut} />
-      <main id="main" className="mx-auto w-full max-w-3xl px-4 py-6 sm:py-8">
+      {/* tabIndex -1 lets the skip link move keyboard focus here, not only the scroll. */}
+      <main id="main" tabIndex={-1} className="mx-auto w-full max-w-3xl px-4 py-6 outline-none sm:py-8">
         {children}
       </main>
     </div>
