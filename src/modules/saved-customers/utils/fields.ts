@@ -10,7 +10,9 @@ export const DEFAULT_COUNTRY_CODE = 'GR'
 export interface OrderDropoffValues {
   dropoffName?: string
   dropoffPhoneNumber?: string
-  dropoffNotes?: string
+  // "Floor and doorbell" and "Note for the rider" (spec 0006)
+  floorAndBell?: string
+  note?: string
   dropoffAddress?: {
     streetAddress?: string[]
     houseNumber?: string
@@ -29,15 +31,16 @@ function optional(value: string | null | undefined): string | null {
 }
 
 // The customer to save from an order's drop off details (spec 0005, the order flow's mapping).
-// "Floor or flat" is the address's houseNumber field; the business or building name is not saved.
+// "Floor and doorbell" is the customer's addressLine2 and the rider note its notes (spec 0006, AC-9);
+// the two line text sent to the rider is never saved.
 export function customerFieldsFromOrder(values: OrderDropoffValues): SavedCustomerFields {
   const address = values.dropoffAddress ?? {}
   return {
     name: (values.dropoffName ?? '').trim(),
     phone: (values.dropoffPhoneNumber ?? '').trim(),
-    notes: optional(values.dropoffNotes),
+    notes: optional(values.note),
     addressLine1: (address.streetAddress?.[0] ?? '').trim(),
-    addressLine2: optional(address.houseNumber),
+    addressLine2: optional(values.floorAndBell),
     city: (address.city ?? '').trim(),
     zipCode: optional(address.zipCode),
     latitude: values.dropoffLatitude ?? 0,
@@ -48,15 +51,17 @@ export function customerFieldsFromOrder(values: OrderDropoffValues): SavedCustom
 
 // The order form's drop off fields a picked customer fills in (AC-3). The coordinates come along, so
 // the estimate needs no address search; the country is Greek and the state empty, as the backend
-// stores neither.
+// stores neither. The delivery's houseNumber stays empty (spec 0006: the backend shares one address
+// row per street and point, so a doorbell name there would show on other orders).
 export function orderValuesFromCustomer(customer: SavedCustomer) {
   return {
     dropoffName: customer.name,
     dropoffPhoneNumber: customer.phone,
-    dropoffNotes: customer.notes ?? '',
+    floorAndBell: customer.addressLine2 ?? '',
+    note: customer.notes ?? '',
     dropoffAddress: {
       streetAddress: [customer.addressLine1],
-      houseNumber: customer.addressLine2 ?? '',
+      houseNumber: '',
       city: customer.city,
       state: '',
       zipCode: customer.zipCode ?? '',

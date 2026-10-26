@@ -196,7 +196,7 @@ function mapDeliveryInputForPartner(input: ManualRequestDeliveryInput) {
     pickupNotes: input.pickupNotes ?? '',
     dropoffBusinessName: input.dropoffBusinessName || input.dropoffName,
     dropoffNotes: input.dropoffNotes ?? '',
-    dropoffSellerNotes: input.specialInstructions ?? '',
+    dropoffSellerNotes: input.dropoffSellerNotes ?? '',
     deliverableAction: 'MEET_AT_DOOR',
     orderReference: input.orderReference || input.quoteId,
     orderTotalValue: input.orderTotalValue ?? 0,

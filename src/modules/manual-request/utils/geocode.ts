@@ -1,6 +1,8 @@
 // Turning a typed address into a map point. Shared by the order form and the saved customer dialog
 // (spec 0005), so both look an address up the same way. Moved here from CreateDeliveryForm.tsx.
 
+import { GeoPoint, nearbyViewbox } from './orderForm'
+
 // The address fields a lookup reads. Any address form value with these fields fits.
 export interface GeocodableAddress {
   streetAddress?: string[]
@@ -29,8 +31,11 @@ export function hasValidCoordinates(latitude: number, longitude: number) {
   return Number.isFinite(latitude) && Number.isFinite(longitude) && !(latitude === 0 && longitude === 0)
 }
 
+// `near` (optional): the restaurant's pickup point, so a street name found in several towns gives the
+// one near the restaurant first (spec 0006, AC-10).
 export async function geocodeCoordinatesFromAddress(
   address: GeocodableAddress,
+  near?: GeoPoint,
 ): Promise<GeocodeCoordinatesResult | null> {
   const query = [
     address.streetAddress?.[0],
@@ -43,7 +48,8 @@ export async function geocodeCoordinatesFromAddress(
     .filter(Boolean)
     .join(', ')
 
-  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&addressdetails=1&limit=1`
+  const viewbox = near && hasValidCoordinates(near.latitude, near.longitude) ? `&viewbox=${nearbyViewbox(near)}` : ''
+  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&addressdetails=1&limit=1${viewbox}`
   // A public service that may stall: after 8 s the lookup gives up (the fetch throws), so Save or Get
   // Estimate never spins for ever.
   const response = await fetch(url, {

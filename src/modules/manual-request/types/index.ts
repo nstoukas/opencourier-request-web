@@ -59,6 +59,8 @@ export interface ManualRequestQuoteInput {
   dropoffPhoneNumber: string
   dropoffBusinessName?: string | null
   dropoffNotes?: string | null
+  /** The note the rider app shows (spec 0006 sends the same text as `dropoffNotes`). */
+  dropoffSellerNotes?: string | null
   dropoffAddress: ManualRequestAddressInput
   dropoffLatitude: number
   dropoffLongitude: number
@@ -66,7 +68,6 @@ export interface ManualRequestQuoteInput {
   dropoffDeadlineAt?: string | null
   packageDescription?: string | null
   packageSize?: ManualRequestPackageSize | null
-  specialInstructions?: string | null
   orderReference?: string | null
   orderTotalValue?: number | null
   metadata?: Record<string, unknown> | null
