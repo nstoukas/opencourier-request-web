@@ -22,6 +22,7 @@ import type {
   PartnerDeliveryPickupDto,
 } from '../../../modules/manual-request/types'
 import { getManualRequestApiMode } from '../../../utils/manualRequestAuth'
+import { CustomerSaveNotice } from '../../../modules/saved-customers/components/CustomerSaveNotice'
 import { formatDateTime, formatMoney } from '../../../utils/format'
 import { PageHeader } from '../../../modules/portal/components/PortalFrame'
 
@@ -339,6 +340,9 @@ export default function ManualRequestStatusPage() {
             </>
           }
         />
+
+        {/* After an order whose customer could not be saved (spec 0005). */}
+        <CustomerSaveNotice code={router.query.customerSave} />
 
         <Card>
           <CardHeader>

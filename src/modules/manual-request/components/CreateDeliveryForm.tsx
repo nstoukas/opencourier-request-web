@@ -45,6 +45,20 @@ import {
   ManualRequestQuoteInput,
 } from '../types'
 import { EstimateSummaryCard } from './EstimateSummaryCard'
+import { SavedCustomerPicker, LinkedCustomer } from '../../saved-customers/components/SavedCustomerPicker'
+import { SaveCustomerTick } from '../../saved-customers/components/SaveCustomerTick'
+import type { SavedCustomer } from '../../saved-customers/types'
+import {
+  customerFieldsFromOrder,
+  DEFAULT_COUNTRY_CODE,
+  orderValuesFromCustomer,
+} from '../../saved-customers/utils/fields'
+import { CUSTOMER_SAVE_FAILURES, saveCustomerAfterOrder } from '../../saved-customers/utils/saveAfterOrder'
+import {
+  geocodeCoordinatesFromAddress,
+  GeocodeCoordinatesResult,
+  hasValidCoordinates,
+} from '../utils/geocode'
 import { AddressSection } from './AddressSection'
 import { ErrorBanner } from './ErrorBanner'
 import { useRequestPageNavigator } from '../../../hooks/useRequestPageNavigator'
@@ -58,7 +72,8 @@ import {
 const addressSchema = z.object({
   streetAddress: z.array(z.string().min(1, 'Required')).min(1),
   city: z.string().min(1, 'City is required'),
-  state: z.string().min(1, 'State / province / region is required'),
+  // Optional: Volos addresses have none, and the backend accepts it empty (spec 0005).
+  state: z.string(),
   zipCode: z.string().optional(),
   countryCode: z.string().length(2, 'Use 2-letter country code').transform((value) => value.toUpperCase()),
   houseNumber: z.string().optional(),
@@ -127,7 +142,7 @@ const defaultAddress = {
   city: '',
   state: '',
   zipCode: '',
-  countryCode: 'US',
+  countryCode: DEFAULT_COUNTRY_CODE,
   houseNumber: '',
   formattedAddress: '',
 }
@@ -192,12 +207,6 @@ function fromDatetimeLocal(value: string | undefined): string | null {
   return new Date(value).toISOString()
 }
 
-function hasValidCoordinates(latitude: number, longitude: number) {
-  return Number.isFinite(latitude) && Number.isFinite(longitude) && !(latitude === 0 && longitude === 0)
-}
-
-type GeocodeCoordinatesResult = { latitude: number; longitude: number; displayName?: string }
-
 /** Prefer Nominatim display line (same style as OSM search results). */
 function resolveSubmittedFormattedAddress(
   addr: CreateDeliveryFormValues['pickupAddress'],
@@ -210,44 +219,6 @@ function resolveSubmittedFormattedAddress(
   )
 }
 
-async function geocodeCoordinatesFromAddress(
-  address: CreateDeliveryFormValues['pickupAddress'],
-): Promise<GeocodeCoordinatesResult | null> {
-  const query = [
-    address.streetAddress?.[0],
-    address.houseNumber,
-    address.city,
-    address.state,
-    address.zipCode,
-    address.countryCode,
-  ]
-    .filter(Boolean)
-    .join(', ')
-
-  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&addressdetails=1&limit=1`
-  const response = await fetch(url, {
-    headers: {
-      'Accept-Language': 'en',
-      'User-Agent': 'opencourier-request-web/1.0 (manual delivery form)',
-    },
-  })
-  if (!response.ok) return null
-
-  const result = (await response.json()) as Array<{ lat: string; lon: string; display_name?: string }>
-  const first = result[0]
-  if (!first) return null
-
-  const latitude = parseFloat(first.lat)
-  const longitude = parseFloat(first.lon)
-  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null
-
-  return {
-    latitude,
-    longitude,
-    displayName: first.display_name?.trim() || undefined,
-  }
-}
-
 export function CreateDeliveryForm() {
   const { toast } = useToast()
   const navigator = useRequestPageNavigator()
@@ -255,6 +226,12 @@ export function CreateDeliveryForm() {
   const [activeQuote, setActiveQuote] = useState<ManualRequestQuoteDto | null>(null)
   const [formSnapshot, setFormSnapshot] = useState<CreateDeliveryFormValues | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  // Saved customers (spec 0005): the customer picked for this order, if any, and the save tick.
+  const [linkedCustomer, setLinkedCustomer] = useState<LinkedCustomer | null>(null)
+  const [saveCustomer, setSaveCustomer] = useState(false)
+  // True from Confirm until the page changes, so the customer save after the order cannot be
+  // raced by a second Confirm (which would create a second delivery).
+  const [isFinishing, setIsFinishing] = useState(false)
 
   const { data: profile, isLoading: isProfileLoading, error: profileError } = usePartnerProfileQuery()
   const [createQuote, { isLoading: isQuoting }] = useCreateManualRequestQuoteMutation()
@@ -453,15 +430,31 @@ export function CreateDeliveryForm() {
         quoteId: activeQuote.id,
       }
 
+      setIsFinishing(true)
       const delivery = await confirmDelivery(payload)
+
+      // The order is sent. Now the saved customer (spec 0005, the order flow's step 2), from the
+      // details the delivery was created with; it never throws, and never undoes the order.
+      const outcome = await saveCustomerAfterOrder({
+        fields: customerFieldsFromOrder(formSnapshot),
+        linkedCustomerId: linkedCustomer?.id ?? null,
+        saveTicked: saveCustomer,
+      })
 
       toast({
         title: 'Delivery created',
         description: `Delivery ${delivery.id} is now being processed.`,
       })
 
-      navigator.goToManualRequestStatus(delivery.id)
+      // `as readonly string[]`: lets `includes` take any outcome, not only the three failure codes.
+      const saveFailed = (CUSTOMER_SAVE_FAILURES as readonly string[]).includes(outcome)
+      if (saveFailed) {
+        navigator.goToManualRequestStatus(delivery.id, { query: { customerSave: outcome } })
+      } else {
+        navigator.goToManualRequestStatus(delivery.id)
+      }
     } catch (err: any) {
+      setIsFinishing(false)
       setErrorMessage(getDebugErrorMessage(err, 'Failed to confirm delivery. The quote may have expired.'))
     }
   }
@@ -469,6 +462,29 @@ export function CreateDeliveryForm() {
   const handleDiscard = () => {
     setActiveQuote(null)
     setFormSnapshot(null)
+  }
+
+  // A picked customer fills the drop off fields (AC-3), with the coordinates, so the estimate needs no
+  // address search. An estimate already shown was made from other details, so it goes.
+  const handlePickCustomer = (customer: SavedCustomer) => {
+    const values = orderValuesFromCustomer(customer)
+    const options = { shouldDirty: true, shouldValidate: true }
+    form.setValue('dropoffName', values.dropoffName, options)
+    form.setValue('dropoffPhoneNumber', values.dropoffPhoneNumber, options)
+    form.setValue('dropoffNotes', values.dropoffNotes, options)
+    form.setValue('dropoffAddress', values.dropoffAddress, options)
+    form.setValue('dropoffLatitude', values.dropoffLatitude, options)
+    form.setValue('dropoffLongitude', values.dropoffLongitude, options)
+    setLinkedCustomer({ id: customer.id, name: customer.name })
+    setSaveCustomer(true)
+    if (activeQuote) handleDiscard()
+  }
+
+  // `Change`: the fields stay as they are, the order becomes a typed customer, the tick goes off.
+  const handleUnlinkCustomer = () => {
+    setLinkedCustomer(null)
+    setSaveCustomer(false)
+    if (activeQuote) handleDiscard()
   }
 
   const selectedPackageType = form.watch('packageType') as PackageTypeValue
@@ -487,7 +503,7 @@ export function CreateDeliveryForm() {
       {activeQuote && (
         <EstimateSummaryCard
           quote={activeQuote}
-          isConfirming={isConfirming}
+          isConfirming={isConfirming || isFinishing}
           onConfirm={handleConfirm}
           onDiscard={handleDiscard}
         />
@@ -711,6 +727,12 @@ export function CreateDeliveryForm() {
               <CardTitle className="text-base">Dropoff</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              <SavedCustomerPicker
+                linked={linkedCustomer}
+                onPick={handlePickCustomer}
+                onUnlink={handleUnlinkCustomer}
+              />
+
               <div className="grid sm:grid-cols-2 gap-3">
                 <FormField
                   control={form.control}
@@ -797,6 +819,8 @@ export function CreateDeliveryForm() {
                   )}
                 />
               </div>
+
+              <SaveCustomerTick checked={saveCustomer} onCheckedChange={setSaveCustomer} />
             </CardContent>
           </Card>
 

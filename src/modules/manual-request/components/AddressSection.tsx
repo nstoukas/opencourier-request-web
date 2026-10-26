@@ -15,6 +15,7 @@ import {
   Spinner,
 } from '../../../admin-web-components'
 import { MagnifyingGlass, MapPin, X } from '@phosphor-icons/react'
+import { cn } from '../../../ui-shared-utils'
 
 // ── Nominatim types ───────────────────────────────────────────────────────────
 
@@ -46,19 +47,27 @@ interface AddressSectionProps<T extends FieldValues> {
   control: Control<T>
   prefix: AddressFieldPrefix
   label: string
+  // `?` = optional. Compact (the saved customer dialog, spec 0005): no State and Country inputs, no
+  // helper lines, and the search results in the page flow instead of floating, so a scrolling
+  // dialog cannot clip them.
+  compact?: boolean
+  // What the search box starts with, e.g. a saved customer's address when editing it.
+  initialQuery?: string
 }
 
 export function AddressSection<T extends FieldValues>({
   control,
   prefix,
   label,
+  compact = false,
+  initialQuery = '',
 }: AddressSectionProps<T>) {
   const { setValue } = useFormContext<T>()
   const field = (name: string) => `${prefix}Address.${name}` as Path<T>
   const coord = (name: string) => `${prefix}${name.charAt(0).toUpperCase()}${name.slice(1)}` as Path<T>
 
   // ── Geocoding search state ──────────────────────────────────────────────
-  const [query, setQuery] = useState('')
+  const [query, setQuery] = useState(initialQuery)
   const [results, setResults] = useState<NominatimResult[]>([])
   const [isSearching, setIsSearching] = useState(false)
   const [searchError, setSearchError] = useState<string | null>(null)
@@ -172,7 +181,12 @@ export function AddressSection<T extends FieldValues>({
 
         {/* Results dropdown */}
         {showResults && results.length > 0 && (
-          <ul className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-md max-h-56 overflow-auto text-sm">
+          <ul
+            className={cn(
+              'mt-1 w-full rounded-md border bg-popover max-h-56 overflow-auto text-sm',
+              compact ? 'relative' : 'absolute z-50 shadow-md',
+            )}
+          >
             {results.map((r) => (
               <li key={r.place_id}>
                 <button
@@ -189,9 +203,11 @@ export function AddressSection<T extends FieldValues>({
         {searchError && (
           <p className="text-xs text-destructive mt-1">{searchError}</p>
         )}
-        <p className="text-xs text-muted-foreground mt-1">
-          Autofill uses OpenStreetMap geocoding. Google Maps autocomplete can be plugged in with a Places API key.
-        </p>
+        {!compact && (
+          <p className="text-xs text-muted-foreground mt-1">
+            Autofill uses OpenStreetMap geocoding. Google Maps autocomplete can be plugged in with a Places API key.
+          </p>
+        )}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-6 gap-3">
@@ -215,10 +231,10 @@ export function AddressSection<T extends FieldValues>({
           render={({ field: f }) => (
             <FormItem className="sm:col-span-6">
               <FormLabel>
-                Unit / Apt <span className="text-muted-foreground font-normal">(optional)</span>
+                Floor or flat <span className="text-muted-foreground font-normal">(optional)</span>
               </FormLabel>
               <FormControl>
-                <Input placeholder="Apt 4, Suite 200" {...f} />
+                <Input placeholder="e.g. 3rd floor, flat 4" {...f} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -229,7 +245,7 @@ export function AddressSection<T extends FieldValues>({
           control={control}
           name={field('city')}
           render={({ field: f }) => (
-            <FormItem className="sm:col-span-2">
+            <FormItem className={compact ? 'sm:col-span-4' : 'sm:col-span-2'}>
               <FormLabel>City</FormLabel>
               <FormControl>
                 <Input placeholder="e.g. NEW YORK" {...f} />
@@ -239,12 +255,13 @@ export function AddressSection<T extends FieldValues>({
           )}
         />
 
+        {!compact && (
         <FormField
           control={control}
           name={field('state')}
           render={({ field: f }) => (
             <FormItem className="sm:col-span-2">
-              <FormLabel>State / Province</FormLabel>
+              <FormLabel>State / Province <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
               <FormControl>
                 <Input placeholder="e.g. NY" {...f} />
               </FormControl>
@@ -252,6 +269,7 @@ export function AddressSection<T extends FieldValues>({
             </FormItem>
           )}
         />
+        )}
 
         <FormField
           control={control}
@@ -267,6 +285,7 @@ export function AddressSection<T extends FieldValues>({
           )}
         />
 
+        {!compact && (
         <FormField
           control={control}
           name={field('countryCode')}
@@ -285,11 +304,14 @@ export function AddressSection<T extends FieldValues>({
             </FormItem>
           )}
         />
+        )}
       </div>
 
-      <p className="text-xs text-muted-foreground">
-        Coordinates are captured automatically from the selected address and saved with the request.
-      </p>
+      {!compact && (
+        <p className="text-xs text-muted-foreground">
+          Coordinates are captured automatically from the selected address and saved with the request.
+        </p>
+      )}
     </div>
   )
 }

@@ -4,6 +4,7 @@
 // components
 export * from './components/atoms/Accordion'
 export * from './components/atoms/Alert'
+export * from './components/atoms/AlertDialog'
 export * from './components/atoms/Avatar'
 export * from './components/atoms/Badge'
 export * from './components/atoms/Button'

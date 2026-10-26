@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/router'
 import { SignOut } from '@phosphor-icons/react'
@@ -8,10 +8,11 @@ import { logoutPartner } from '../../../api/manualRequestApi'
 import { usePartnerSession } from '../../../hooks/usePartnerSession'
 import { SignInScreen } from './SignInScreen'
 
-// The two places a restaurant goes. `as const` keeps the strings exact instead of widening them to `string`.
+// The three places a restaurant goes. `as const` keeps the strings exact instead of widening them to `string`.
 const NAV_LINKS = [
   { href: '/manual-request', label: 'New Delivery' },
   { href: '/manual-request/deliveries', label: 'My Orders' },
+  { href: '/manual-request/customers', label: 'Customers' },
 ] as const
 
 interface PortalHeaderProps {
@@ -19,9 +20,18 @@ interface PortalHeaderProps {
   onSignOut: () => void
 }
 
-/** The sticky 56px header: the co-op's mark, the two pages, and Sign Out. */
+/** The sticky 56px header: the co-op's mark, the three pages, and Sign Out. */
 function PortalHeader({ email, onSignOut }: PortalHeaderProps) {
   const router = useRouter()
+  const navRef = useRef<HTMLElement>(null)
+
+  // On a phone the links scroll sideways; bring the current page's link into view, so it is never
+  // the one cut off at the edge. `inline: 'nearest'` moves the row only as far as needed.
+  useEffect(() => {
+    navRef.current
+      ?.querySelector('[aria-current="page"]')
+      ?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
+  }, [router.pathname])
 
   return (
     <header className="sticky top-0 z-20 h-14 border-b bg-background">
@@ -33,7 +43,9 @@ function PortalHeader({ email, onSignOut }: PortalHeaderProps) {
           <span className="sr-only sm:not-sr-only">OpenCourier</span>
         </Link>
 
-        <nav aria-label="Main" className="flex min-w-0 items-center gap-1">
+        {/* Three links do not fit beside the mark on a phone: the row scrolls sideways inside the
+            header (never the page), and each link stays on one line. */}
+        <nav ref={navRef} aria-label="Main" className="flex min-w-0 items-center gap-1 overflow-x-auto [scrollbar-width:none] md:shrink-0">
           {NAV_LINKS.map((link) => {
             const isCurrent = router.pathname === link.href
             return (
@@ -43,7 +55,7 @@ function PortalHeader({ email, onSignOut }: PortalHeaderProps) {
                 key={link.href}
                 asChild
                 variant="ghost"
-                className={cn('px-3', isCurrent && 'bg-secondary text-secondary-foreground')}
+                className={cn('shrink-0 whitespace-nowrap px-3', isCurrent && 'bg-secondary text-secondary-foreground')}
               >
                 <Link href={link.href} aria-current={isCurrent ? 'page' : undefined}>
                   {link.label}
