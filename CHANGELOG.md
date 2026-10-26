@@ -5,7 +5,7 @@ for a Greek workers' cooperative. In this fork, request-web is the **restaurant 
 where a signed-in restaurant places delivery requests.
 
 Everything below sits on top of upstream `main` on the branch `fix/partial-address-form`
-(34 commits, 26 July – 26 October 2026). Each entry names its commit, and the commit message
+(38 commits, 26 July – 26 October 2026). Each entry names its commit, and the commit message
 has the full reasoning and verification notes.
 
 ---
@@ -55,12 +55,14 @@ with their agreement, and picks them on the next order.
 - **A picked customer stays editable.** Editing the street, city or zip after a pick makes Get
   Estimate look the address up again, so the quote never carries the old point or the old text
   (`9c0310b`). The address lookup now gives up after 8 s (`acafc1e`).
+- Each card's Edit button is named for its customer ("Edit Maria P."), as Delete already was, so a
+  screen reader tells the cards apart (found at the row's verify).
 - "Unit / Apt" is now "Floor or flat"; the form's state is optional and its country defaults to
   `GR`; the header's links stay on one line (on a phone the row scrolls sideways inside the header).
 - Fixed along the way: the partner proxy forwarded `{}` as the body of every `DELETE` and bodyless
   `POST`, because Next.js turns no body into `{}`. It now forwards a body only for `POST`, `PATCH`
   and `PUT`, and only a real one (`81fddc2`).
-- Tests: 114 new (`b8e0af0`, `f14d9b5`), 279 in all; 44 checked by hand by putting their bug back.
+- Tests: 115 new (`b8e0af0`, `f14d9b5`, and one for the Edit name), 280 in all; 45 checked by hand by putting their bug back.
   Reviewed by Fable and by agy; every finding ruled in `docs/reviews/2026-10-26-*saved-customers*`.
 
 ### Order form scoped to the signed-in restaurant (Unit 4) — `f8f4232`, `69960e3`
