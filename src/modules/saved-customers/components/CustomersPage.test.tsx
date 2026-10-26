@@ -113,6 +113,23 @@ describe('CustomersPage', () => {
     updatedAt: '2026-10-15T10:00:00.000Z',
   }
 
+  const mariaCustomer: SavedCustomer = {
+    id: 'cust-maria',
+    name: 'Maria Papadopoulou',
+    phone: '+306944444444',
+    notes: null,
+    addressLine1: 'Dimitriadis 15',
+    addressLine2: null,
+    city: 'Volos',
+    zipCode: '38221',
+    latitude: 39.36,
+    longitude: 22.94,
+    formattedAddress: 'Dimitriadis 15, Volos',
+    lastUsedAt: '2026-10-18T10:00:00.000Z',
+    createdAt: '2026-10-18T10:00:00.000Z',
+    updatedAt: '2026-10-18T10:00:00.000Z',
+  }
+
   beforeEach(() => {
     jest.resetAllMocks()
   })
@@ -332,6 +349,45 @@ describe('CustomersPage', () => {
     expect(screen.queryByTestId('mock-customer-dialog')).not.toBeInTheDocument()
   })
 
+  it("each Edit button's accessible name is 'Edit <that customer's name>', differs per card, and clicking opens that customer's edit dialog", async () => {
+    // When two or more customers are listed, each card's Edit button must uniquely identify the customer for screen readers
+    ;(listSavedCustomers as jest.Mock).mockResolvedValue({
+      items: [customer1, mariaCustomer],
+      total: 2,
+    })
+
+    render(<CustomersPage />)
+
+    await screen.findByText('Giannis Antetokounmpo')
+    await screen.findByText('Maria Papadopoulou')
+
+    // Each Edit button has an accessible name of 'Edit <customer name>'
+    const editGiannisBtn = screen.getByRole('button', { name: 'Edit Giannis Antetokounmpo' })
+    const editMariaBtn = screen.getByRole('button', { name: 'Edit Maria Papadopoulou' })
+
+    expect(editGiannisBtn).toBeInTheDocument()
+    expect(editMariaBtn).toBeInTheDocument()
+
+    // Accessible names differ per card (no ambiguity)
+    expect(editGiannisBtn).not.toBe(editMariaBtn)
+
+    // A generic query for exact accessible name 'Edit' matches nothing
+    expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument()
+
+    // Clicking an Edit button opens that specific customer's edit dialog
+    fireEvent.click(editMariaBtn)
+    expect(screen.getByTestId('mock-customer-dialog')).toBeInTheDocument()
+    expect(screen.getByText('Edit: Maria Papadopoulou')).toBeInTheDocument()
+
+    // Closing dialog and clicking the other customer's Edit button opens their dialog
+    fireEvent.click(screen.getByRole('button', { name: 'Close Dialog' }))
+    expect(screen.queryByTestId('mock-customer-dialog')).not.toBeInTheDocument()
+
+    fireEvent.click(editGiannisBtn)
+    expect(screen.getByTestId('mock-customer-dialog')).toBeInTheDocument()
+    expect(screen.getByText('Edit: Giannis Antetokounmpo')).toBeInTheDocument()
+  })
+
   it('Edit replaces the card in place without reordering list', async () => {
     ;(listSavedCustomers as jest.Mock).mockResolvedValue({
       items: [customer1, customer2],
@@ -342,9 +398,9 @@ describe('CustomersPage', () => {
 
     await screen.findByText('Giannis Antetokounmpo')
 
-    // Click Edit on second card (Kostas Sloukas)
-    const editButtons = screen.getAllByRole('button', { name: /Edit/i })
-    fireEvent.click(editButtons[1])
+    // Click Edit on second card (Kostas Sloukas) using accessible name 'Edit <name>'
+    const editBtn = screen.getByRole('button', { name: 'Edit Kostas Sloukas' })
+    fireEvent.click(editBtn)
 
     expect(screen.getByTestId('mock-customer-dialog')).toHaveTextContent('Edit: Kostas Sloukas')
 
@@ -374,8 +430,9 @@ describe('CustomersPage', () => {
 
     await screen.findByText('Giannis Antetokounmpo')
 
-    const editButtons = screen.getAllByRole('button', { name: /Edit/i })
-    fireEvent.click(editButtons[0]) // Edit Giannis
+    // Click Edit on first card (Giannis Antetokounmpo) using accessible name 'Edit <name>'
+    const editBtn = screen.getByRole('button', { name: 'Edit Giannis Antetokounmpo' })
+    fireEvent.click(editBtn)
 
     // Simulate 404 response in dialog
     fireEvent.click(screen.getByRole('button', { name: 'Simulate 404 Gone' }))
