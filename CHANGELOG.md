@@ -5,7 +5,7 @@ for a Greek workers' cooperative. In this fork, request-web is the **restaurant 
 where a signed-in restaurant places delivery requests.
 
 Everything below sits on top of upstream `main` on the branch `fix/partial-address-form`
-(26 commits, 26 July – 26 October 2026). Each entry names its commit, and the commit message
+(34 commits, 26 July – 26 October 2026). Each entry names its commit, and the commit message
 has the full reasoning and verification notes.
 
 ---
@@ -33,6 +33,35 @@ has the full reasoning and verification notes.
   converted and floored so the cookie can never outlive its token.
 
 ## Added
+
+### Saved customers for restaurants (scope row 26, spec 0005): `81fddc2` to `f14d9b5`
+Built on the branch `feat/saved-customers` and merged on 26 October, together with the backend and
+adminweb halves of the row. A restaurant no longer retypes a regular customer: it saves them once,
+with their agreement, and picks them on the next order.
+- **A Customers page** (a third header link): the restaurant's saved customers, most recently used
+  first, 20 at a time with Show more and "N of M". The search waits 300 ms and needs 2 characters,
+  and only the latest search's answer is shown. Add and Edit open a dialog with Name, Phone, the
+  address (the order form's address search, in a new compact mode) and Notes for the rider; Save
+  looks a typed address up first, so a customer always has a map point. Delete asks first.
+- **A Saved customer picker on New Delivery**, above the drop off fields. Picking a customer (click,
+  or the arrow keys and Enter) fills the recipient, phone, address with its map point, floor and
+  notes, and becomes "Saved customer: <name>" with Change. A screen reader hears the pick and the
+  change, and focus moves to what replaced the control that had it.
+- **"Save this customer for next time (they agreed)"**, a tick at the end of the drop off card, with
+  how long an unused customer is kept (the co-op's setting, read through a new server route,
+  `/api/partner-metadata`, that passes on only that number). The save runs after the order is
+  confirmed, from the details the order was sent with. If it fails, the order stands and the status
+  page says why with a short code in its address (`?customerSave=clash`), never a customer's detail.
+- **A picked customer stays editable.** Editing the street, city or zip after a pick makes Get
+  Estimate look the address up again, so the quote never carries the old point or the old text
+  (`9c0310b`). The address lookup now gives up after 8 s (`acafc1e`).
+- "Unit / Apt" is now "Floor or flat"; the form's state is optional and its country defaults to
+  `GR`; the header's links stay on one line (on a phone the row scrolls sideways inside the header).
+- Fixed along the way: the partner proxy forwarded `{}` as the body of every `DELETE` and bodyless
+  `POST`, because Next.js turns no body into `{}`. It now forwards a body only for `POST`, `PATCH`
+  and `PUT`, and only a real one (`81fddc2`).
+- Tests: 114 new (`b8e0af0`, `f14d9b5`), 279 in all; 44 checked by hand by putting their bug back.
+  Reviewed by Fable and by agy; every finding ruled in `docs/reviews/2026-10-26-*saved-customers*`.
 
 ### Order form scoped to the signed-in restaurant (Unit 4) — `f8f4232`, `69960e3`
 - The form loads `GET /api/partner/v1/partner/profile` and shows the restaurant's name,
@@ -121,4 +150,6 @@ has the full reasoning and verification notes.
 
 - Rotate the leaked partner API key and the Google Maps key, and remove the Maps key from
   the tracked `local.env`.
-- The default drop-off country is still `US` and should probably be `GR`.
+- The customer search sends its words in the query string to this app's own proxy. Nothing here
+  logs it, but a reverse proxy put in front of request-web in production would, unless told not
+  to for `/api/partner-proxy/customers` (scope row 45, production hosting).
