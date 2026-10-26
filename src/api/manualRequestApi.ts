@@ -24,7 +24,8 @@ import {
  */
 const REQUEST_TIMEOUT_MS = 12000
 
-async function manualRequestFetch<T>(
+// Exported for the other API files (savedCustomersApi.ts), so every partner call shares one error shape.
+export async function manualRequestFetch<T>(
   path: string,
   options?: RequestInit,
 ): Promise<T> {
@@ -75,6 +76,8 @@ async function manualRequestFetch<T>(
     const err: any = new Error(message)
     err.statusCode = wrapped?.statusCode ?? response.status
     err.code = wrapped?.code
+    // A saved customer's phone clash (409) names the other customer by id (spec 0005, AC-4).
+    err.conflictingCustomerId = wrapped?.conflictingCustomerId
     throw err
   }
 

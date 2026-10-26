@@ -7,6 +7,17 @@ import {
   getPartnerApiBasePath,
 } from '../../../utils/partnerSession'
 
+// The body to send on, or undefined for none. Next.js's body parser turns a request with no body into
+// `{}` (or `''`), so without this a DELETE or a bodyless POST (`/customers/:id/used`) would arrive at
+// the backend with a body it never asked for. Only POST, PATCH and PUT carry one, and only a real one.
+// Exported so it can be tested without a request.
+export function forwardedBody(method: string | undefined, body: unknown): string | undefined {
+  if (method !== 'POST' && method !== 'PATCH' && method !== 'PUT') return undefined
+  if (body === undefined || body === null || body === '') return undefined
+  if (typeof body === 'object' && !Array.isArray(body) && Object.keys(body).length === 0) return undefined
+  return typeof body === 'string' ? body : JSON.stringify(body)
+}
+
 // Next.js catch-all API route matches /api/partner-proxy/* and extracts path segments into req.query.path.
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const allowedMethods = ['GET', 'POST', 'PATCH', 'PUT', 'DELETE']
@@ -28,15 +39,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const search = req.url && req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : ''
   const targetUrl = `${getBackendBaseUrl()}${getPartnerApiBasePath()}${upstreamPath}${search}`
 
-  // AIFLOW-NOTE: Bodyless DELETE requests would forward "{}" here because Next.js body-parser yields {} for JSON requests. Add an empty-object body check before adding any DELETE endpoint.
-  const hasBody = req.method !== 'GET' && req.method !== 'HEAD'
-  const bodyPayload = hasBody ? JSON.stringify(req.body ?? {}) : undefined
+  const bodyPayload = forwardedBody(req.method, req.body)
 
   try {
     const upstreamRes = await fetch(targetUrl, {
       method: req.method,
       headers: {
-        'Content-Type': 'application/json',
+        // Only a request that carries a body says what kind it is.
+        ...(bodyPayload !== undefined && { 'Content-Type': 'application/json' }),
         Authorization: `Bearer ${token}`,
       },
       body: bodyPayload,
