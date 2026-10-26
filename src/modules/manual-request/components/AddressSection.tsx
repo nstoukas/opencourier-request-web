@@ -129,6 +129,9 @@ export function AddressSection<T extends FieldValues>({
         // A public service that may stall: give up after 8 s, like the lookup at Get price.
         signal: AbortSignal.timeout(GEOCODE_TIMEOUT_MS),
       })
+      // A refusal (Nominatim answers 429 or 5xx with a JSON object, not a list) goes to the catch below,
+      // so the restaurant sees "Search failed" instead of nothing at all.
+      if (!res.ok) throw new Error(`Search failed (HTTP ${res.status})`)
       const data: NominatimResult[] = await res.json()
       if (data.length === 0) setSearchError('No results found. Try a more specific address.')
       setResults(data)

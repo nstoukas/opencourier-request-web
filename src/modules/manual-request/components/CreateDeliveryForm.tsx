@@ -55,11 +55,11 @@ import {
 import {
   composeRiderNote,
   COUNTER_FROM_SHARE,
+  euroAmountToCents,
   FLOOR_AND_BELL_MAX,
   isQuoteExpired,
   isQuoteFailure,
   orderTotalProblem,
-  parseEuroAmount,
   READY_IN_MINUTES,
   readyAtFromMinutes,
   RIDER_NOTE_MAX,
@@ -170,6 +170,7 @@ interface PricedOrder {
   values: CreateDeliveryFormValues
   // The ISO time worked out at the Get price tap.
   pickupReadyAt: string
+  // The typed total in whole cents.
   orderTotalValue: number
   quote: ManualRequestQuoteDto
 }
@@ -336,6 +337,8 @@ export function CreateDeliveryForm() {
   // True from Send until the page changes, so the customer save after the order cannot be
   // raced by a second Send (which would create a second delivery).
   const [isFinishing, setIsFinishing] = useState(false)
+  // True for the whole of Get price, the address lookup included (the quote's own isLoading starts after it).
+  const [isPricing, setIsPricing] = useState(false)
 
   const { data: profile, isLoading: isProfileLoading, error: profileError } = usePartnerProfileQuery()
   const [createQuote, { isLoading: isQuoting }] = useCreateManualRequestQuoteMutation()
@@ -410,7 +413,18 @@ export function CreateDeliveryForm() {
 
   const pickupCheck = checkPartnerPickupUsable(profile)
 
+  // Get price as a whole, address lookup included, counts as "a call runs" (AC-12): the button reads
+  // "Getting price…" and is disabled until it ends, however it ends.
   const handleGetPrice = async (values: CreateDeliveryFormValues) => {
+    setIsPricing(true)
+    try {
+      await priceOrder(values)
+    } finally {
+      setIsPricing(false)
+    }
+  }
+
+  const priceOrder = async (values: CreateDeliveryFormValues) => {
     setBarError(null)
     showPrice(null)
 
@@ -421,24 +435,38 @@ export function CreateDeliveryForm() {
 
     // Fixed here and reused at Send, so the delivery carries what the quote and its ETA used (AC-6).
     const pickupReadyAt = readyAtFromMinutes(values.readyInMinutes)
-    const orderTotalValue = parseEuroAmount(values.orderTotal) ?? 0
+    const orderTotalValue = euroAmountToCents(values.orderTotal) ?? 0
 
     try {
-      // AIFLOW-NOTE: pickupMapped is non-null here via pickupCheck.usable guard; fallback to values.pickupAddress is retained defensively.
+      // The profile's pickup when it is usable (checked above); the form's own copy is only a fallback.
       const pickupAddressSource = pickupMapped?.pickupAddress ?? values.pickupAddress
       const pickupLatSource = pickupMapped?.pickupLatitude ?? values.pickupLatitude
       const pickupLngSource = pickupMapped?.pickupLongitude ?? values.pickupLongitude
 
-      const pickupCoordinates = hasValidCoordinates(pickupLatSource, pickupLngSource)
-        ? { latitude: pickupLatSource, longitude: pickupLngSource }
-        : await geocodeCoordinatesFromAddress(pickupAddressSource)
       const dropoffPointStillFits =
         hasValidCoordinates(values.dropoffLatitude, values.dropoffLongitude) &&
         addressPinKey(values.dropoffAddress) === dropoffPinKey
-      // A typed address is looked up near the restaurant first (AC-10).
-      const dropoffCoordinates = dropoffPointStillFits
-        ? { latitude: values.dropoffLatitude, longitude: values.dropoffLongitude }
-        : await geocodeCoordinatesFromAddress(values.dropoffAddress, pickupCoordinates ?? undefined)
+
+      // The address lookups get their own catch: a timeout or a dropped connection there would otherwise
+      // put the browser's own words ("signal timed out") in the bar.
+      let pickupCoordinates: { latitude: number; longitude: number } | null
+      let dropoffCoordinates: { latitude: number; longitude: number } | null
+      try {
+        pickupCoordinates = hasValidCoordinates(pickupLatSource, pickupLngSource)
+          ? { latitude: pickupLatSource, longitude: pickupLngSource }
+          : await geocodeCoordinatesFromAddress(pickupAddressSource)
+        // A typed address is looked up near the restaurant first (AC-10).
+        dropoffCoordinates = dropoffPointStillFits
+          ? { latitude: values.dropoffLatitude, longitude: values.dropoffLongitude }
+          : await geocodeCoordinatesFromAddress(values.dropoffAddress, pickupCoordinates ?? undefined)
+      } catch (lookupError) {
+        setBarError(
+          (lookupError as Error | undefined)?.name === 'TimeoutError'
+            ? 'The address lookup did not answer. Try again, or search the address and pick a result.'
+            : 'The address lookup failed. Check your connection and try again.',
+        )
+        return
+      }
 
       if (!pickupCoordinates || !dropoffCoordinates) {
         setBarError('This address was not found on the map. Search for it and pick a result.')
@@ -568,7 +596,7 @@ export function CreateDeliveryForm() {
   const phase: BarPhase =
     isConfirming || isFinishing
       ? 'sending'
-      : isQuoting
+      : isPricing || isQuoting
         ? 'pricing'
         : priced
           ? isExpired
@@ -690,7 +718,8 @@ export function CreateDeliveryForm() {
                 control={form.control}
                 prefix="dropoff"
                 label="Address"
-                initialQuery={linkedCustomer ? form.getValues('dropoffAddress.formattedAddress') ?? '' : ''}
+                // The address the form holds, so it stays visible after Change too (empty on a new form).
+                initialQuery={form.getValues('dropoffAddress.formattedAddress') ?? ''}
                 near={pickupPoint}
                 defaultTown={profile?.pickupAddress?.city ?? ''}
               />

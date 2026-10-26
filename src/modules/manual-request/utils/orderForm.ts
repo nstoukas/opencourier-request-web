@@ -24,6 +24,13 @@ export function parseEuroAmount(text: string): number | null {
   return Number(text.trim().replace(',', '.'))
 }
 
+// The typed total in whole cents, as the backend keeps money ("12,50" is 1250; decision 27.5), or null
+// when the text is refused. Rounded because 0.29 * 100 is 28.999… in floating point, not 29.
+export function euroAmountToCents(text: string): number | null {
+  const euros = parseEuroAmount(text)
+  return euros === null ? null : Math.round(euros * 100)
+}
+
 // ─── Ready in (AC-6) ──────────────────────────────────────────────────────────
 
 // `as const` keeps the exact numbers as the type (0 | 10 | 15 | 20 | 30), not just `number`.
