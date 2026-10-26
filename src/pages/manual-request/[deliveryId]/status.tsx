@@ -334,9 +334,11 @@ export default function ManualRequestStatusPage() {
                   All deliveries
                 </Link>
               ) : null}
-              <Link href="/manual-request" className="underline">
-                Back to request form
-              </Link>
+              {/* asChild: the Button's look on the Link itself, so it stays a real link (spec 0006, AC-14).
+                  The order form mounts afresh there, so it opens empty. */}
+              <Button asChild size="xl">
+                <Link href="/manual-request">New order</Link>
+              </Button>
             </>
           }
         />
