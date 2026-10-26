@@ -35,12 +35,14 @@ jest.mock('../../../hooks/usePartnerSession', () => ({
   usePartnerSession: jest.fn(),
 }))
 
-// Mock manualRequestApi logoutPartner
+// Mock manualRequestApi functions
 jest.mock('../../../api/manualRequestApi', () => {
   const actual = jest.requireActual('../../../api/manualRequestApi')
   return {
     ...actual,
+    loginPartner: jest.fn(),
     logoutPartner: jest.fn(),
+    fetchPartnerSession: jest.fn(),
   }
 })
 
@@ -75,45 +77,39 @@ describe('PortalFrame gate and frame layout', () => {
     expect(screen.queryByRole('navigation', { name: 'Main' })).not.toBeInTheDocument()
   })
 
-  it('signed out at /manual-request/deliveries shows sign in, and after success shows that page', async () => {
+  it('signed out at /manual-request/deliveries shows sign in, and after form sign in shows that page without navigating', async () => {
     mockRouter.pathname = '/manual-request/deliveries'
 
-    // Initially signed out
-    let sessionState = {
-      isSignedIn: false,
-      email: null,
-      isLoading: false,
-      refresh: refreshMock,
-    }
-    ;(usePartnerSession as jest.Mock).mockImplementation(() => sessionState)
+    // Delegate usePartnerSession to the real hook for this test so onSignedIn (refresh)
+    // executes the real session fetch state transition and re-renders PortalFrame.
+    const { usePartnerSession: actualUsePartnerSession } = jest.requireActual('../../../hooks/usePartnerSession')
+    ;(usePartnerSession as jest.Mock).mockImplementation(actualUsePartnerSession)
 
-    const { rerender } = render(
+    // Initial session check is signed out; the second check after loginPartner flips to signed in.
+    ;(api.fetchPartnerSession as jest.Mock)
+      .mockResolvedValueOnce({ signedIn: false, email: null })
+      .mockResolvedValueOnce({ signedIn: true, email: 'restaurant@volos.test' })
+
+    ;(api.loginPartner as jest.Mock).mockResolvedValue({ email: 'restaurant@volos.test' })
+
+    render(
       <PortalFrame>
         <div data-testid="my-orders-page">My Orders Page Content</div>
       </PortalFrame>
     )
 
-    // Shows SignInScreen at /manual-request/deliveries
-    expect(screen.getByRole('heading', { name: 'Restaurant Portal' })).toBeInTheDocument()
+    // Shows SignInScreen at /manual-request/deliveries while page content is gate-blocked
+    expect(await screen.findByRole('heading', { name: 'Restaurant Portal' })).toBeInTheDocument()
     expect(screen.getByLabelText(/^Email/i)).toBeInTheDocument()
     expect(screen.queryByTestId('my-orders-page')).not.toBeInTheDocument()
 
-    // Simulate successful sign in: onSignedIn calls refresh
-    sessionState = {
-      isSignedIn: true,
-      email: 'volos-kitchen@coop.gr',
-      isLoading: false,
-      refresh: refreshMock,
-    }
+    // Sign in through the real SignInScreen form
+    fireEvent.change(screen.getByLabelText(/^Email/i), { target: { value: 'restaurant@volos.test' } })
+    fireEvent.change(screen.getByLabelText(/^Password/i), { target: { value: 'secretpass' } })
+    fireEvent.click(screen.getByRole('button', { name: /^Sign In$/i }))
 
-    rerender(
-      <PortalFrame>
-        <div data-testid="my-orders-page">My Orders Page Content</div>
-      </PortalFrame>
-    )
-
-    // After success, shows that page without having navigated away
-    expect(screen.getByTestId('my-orders-page')).toBeInTheDocument()
+    // After success, shows that page without having pushed or replaced the address
+    expect(await screen.findByTestId('my-orders-page')).toBeInTheDocument()
     expect(mockRouter.push).not.toHaveBeenCalled()
     expect(mockRouter.replace).not.toHaveBeenCalled()
   })

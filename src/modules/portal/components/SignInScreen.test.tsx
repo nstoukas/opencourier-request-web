@@ -143,6 +143,38 @@ describe('SignInScreen component', () => {
     expect(onSignedInMock).not.toHaveBeenCalled()
   })
 
+  it('shows empty fields message and does not call API when only email is filled', async () => {
+    render(<SignInScreen onSignedIn={onSignedInMock} />)
+
+    fireEvent.change(screen.getByLabelText(/^Email/i), { target: { value: 'restaurant@volos.test' } })
+    fireEvent.click(screen.getByRole('button', { name: /^Sign In$/i }))
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toBeInTheDocument()
+    expect(alert).toHaveClass('text-destructive')
+    expect(screen.getByText('Could not sign in')).toBeInTheDocument()
+    expect(screen.getByText('Enter your email and password, then press Sign In.')).toBeInTheDocument()
+
+    expect(api.loginPartner).not.toHaveBeenCalled()
+    expect(onSignedInMock).not.toHaveBeenCalled()
+  })
+
+  it('shows empty fields message and does not call API when only password is filled', async () => {
+    render(<SignInScreen onSignedIn={onSignedInMock} />)
+
+    fireEvent.change(screen.getByLabelText(/^Password/i), { target: { value: 'secretpass' } })
+    fireEvent.click(screen.getByRole('button', { name: /^Sign In$/i }))
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toBeInTheDocument()
+    expect(alert).toHaveClass('text-destructive')
+    expect(screen.getByText('Could not sign in')).toBeInTheDocument()
+    expect(screen.getByText('Enter your email and password, then press Sign In.')).toBeInTheDocument()
+
+    expect(api.loginPartner).not.toHaveBeenCalled()
+    expect(onSignedInMock).not.toHaveBeenCalled()
+  })
+
   it('Enter key submits the form (real form submission)', async () => {
     ;(api.loginPartner as jest.Mock).mockResolvedValue({ email: 'restaurant@volos.test' })
 
