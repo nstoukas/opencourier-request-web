@@ -231,6 +231,63 @@ describe('CustomersPage', () => {
     expect(screen.getByText('3 of 3')).toBeInTheDocument()
     // Show more button disappears when all items are shown
     expect(screen.queryByRole('button', { name: 'Show more' })).not.toBeInTheDocument()
+    // When the last page arrives focus moves to the count line
+    await waitFor(() => {
+      expect(screen.getByText('3 of 3')).toHaveFocus()
+    })
+  })
+
+  it('a Show more answer that arrives after a newer search started is dropped (the new search rows only, its own total)', async () => {
+    // Initial load: 1 customer of 3
+    ;(listSavedCustomers as jest.Mock).mockResolvedValueOnce({
+      items: [customer1],
+      total: 3,
+    })
+
+    render(<CustomersPage />)
+    await screen.findByText('Giannis Antetokounmpo')
+    expect(screen.getByText('1 of 3')).toBeInTheDocument()
+
+    // Setup: showMore promise is pending
+    let resolveShowMore!: (value: any) => void
+    const showMorePromise = new Promise((resolve) => {
+      resolveShowMore = resolve
+    })
+    ;(listSavedCustomers as jest.Mock).mockImplementationOnce(() => showMorePromise)
+
+    // Click Show more (requests page 2 of initial search)
+    fireEvent.click(screen.getByRole('button', { name: 'Show more' }))
+
+    // Now start a new search for "Sloukas" before showMore resolves
+    ;(listSavedCustomers as jest.Mock).mockImplementationOnce(() =>
+      Promise.resolve({
+        items: [customer2],
+        total: 1,
+      }),
+    )
+
+    const searchInput = screen.getByRole('searchbox', { name: /Search saved customers/i })
+    fireEvent.change(searchInput, { target: { value: 'Sloukas' } })
+
+    // Wait for the new search results to arrive
+    await screen.findByText('Kostas Sloukas')
+    expect(screen.queryByText('Giannis Antetokounmpo')).not.toBeInTheDocument()
+    expect(screen.getByText('1 of 1')).toBeInTheDocument()
+
+    // Now the old search's showMore resolves
+    await act(async () => {
+      resolveShowMore({
+        items: [customer3],
+        total: 3,
+      })
+      await showMorePromise
+    })
+
+    // The late showMore response must be dropped: only new search's rows and count remain
+    expect(screen.queryByText('Nikos Galis')).not.toBeInTheDocument()
+    expect(screen.getByText('Kostas Sloukas')).toBeInTheDocument()
+    expect(screen.getByText('1 of 1')).toBeInTheDocument()
+    expect(screen.queryByText('3 of 3')).not.toBeInTheDocument()
   })
 
   it('Add customer reloads the first page and shows toast', async () => {

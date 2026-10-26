@@ -191,6 +191,49 @@ describe('CustomerDialog', () => {
     })
   })
 
+  it('a lookup on Save that returns no display name saves formattedAddress null, never the previous pick text', async () => {
+    ;(updateSavedCustomer as jest.Mock).mockResolvedValue({
+      ...existingCustomer,
+      addressLine1: 'Dimitriadis 99',
+      latitude: 39.38,
+      longitude: 22.96,
+      formattedAddress: null,
+    })
+
+    ;(geocodeCoordinatesFromAddress as jest.Mock).mockResolvedValue({
+      latitude: 39.38,
+      longitude: 22.96,
+      displayName: undefined,
+    })
+
+    render(
+      <CustomerDialog
+        customer={existingCustomer}
+        onClose={onCloseMock}
+        onSaved={onSavedMock}
+        onGone={onGoneMock}
+      />,
+    )
+
+    fireEvent.change(screen.getByLabelText(/Street address or PO Box/i), { target: { value: 'Dimitriadis 99' } })
+    fireEvent.click(screen.getByRole('button', { name: /^Save$/i }))
+
+    await waitFor(() => {
+      expect(geocodeCoordinatesFromAddress).toHaveBeenCalledTimes(1)
+      expect(updateSavedCustomer).toHaveBeenCalledTimes(1)
+    })
+
+    expect(updateSavedCustomer).toHaveBeenCalledWith(
+      existingCustomer.id,
+      expect.objectContaining({
+        addressLine1: 'Dimitriadis 99',
+        latitude: 39.38,
+        longitude: 22.96,
+        formattedAddress: null,
+      }),
+    )
+  })
+
   it('shows "Another saved customer has this phone: <name>, <phone>." on 409 clash when conflicting customer is found', async () => {
     const error409 = Object.assign(new Error('Another saved customer has this phone'), {
       statusCode: 409,

@@ -12,6 +12,18 @@ import { PartnerProfileDto } from '../types'
 import { saveCustomerAfterOrder } from '../../saved-customers/utils/saveAfterOrder'
 import { useSavedCustomerSearch } from '../../saved-customers/hooks/useSavedCustomerSearch'
 import { fetchRetentionMonths } from '../../../api/savedCustomersApi'
+import { geocodeCoordinatesFromAddress } from '../utils/geocode'
+
+const actualGeocode = jest.requireActual('../utils/geocode')
+
+jest.mock('../utils/geocode', () => {
+  const actual = jest.requireActual('../utils/geocode')
+  return {
+    __esModule: true,
+    ...actual,
+    geocodeCoordinatesFromAddress: jest.fn((...args) => actual.geocodeCoordinatesFromAddress(...args)),
+  }
+})
 
 // Mock manualRequestApi queries and mutations
 jest.mock('../../../api/manualRequestApi', () => ({
@@ -72,6 +84,9 @@ describe('CreateDeliveryForm', () => {
     ;(useRequestPageNavigator as jest.Mock).mockReturnValue(mockNavigator)
     ;(saveCustomerAfterOrder as jest.Mock).mockResolvedValue('none')
     ;(useSavedCustomerSearch as jest.Mock).mockReturnValue({ status: 'idle' })
+    ;(geocodeCoordinatesFromAddress as jest.Mock).mockImplementation((...args) =>
+      actualGeocode.geocodeCoordinatesFromAddress(...args),
+    )
     global.fetch = jest.fn().mockImplementation((url: string) => {
       if (typeof url === 'string' && url.includes('partner-metadata')) {
         return Promise.resolve({
@@ -440,7 +455,7 @@ describe('CreateDeliveryForm', () => {
     expect(tickCheckbox).toBeChecked()
 
     // Picker now shows linked customer line with Change button
-    expect(screen.getByText(/Saved customer:/i)).toBeInTheDocument()
+    expect(screen.getAllByText(/Saved customer:/i).length).toBeGreaterThanOrEqual(1)
     const changeBtn = screen.getByRole('button', { name: 'Change' })
     expect(changeBtn).toBeInTheDocument()
 
@@ -509,6 +524,84 @@ describe('CreateDeliveryForm', () => {
     // Clicking Change also clears the estimate
     fireEvent.click(screen.getByRole('button', { name: 'Change' }))
     expect(screen.queryByRole('button', { name: /Confirm Delivery/i })).not.toBeInTheDocument()
+  })
+
+  it('AC-3: picking a saved customer and editing street triggers lookup and quote carries new point and new formattedAddress, while unchanged street uses picked point without lookup', async () => {
+    ;(usePartnerProfileQuery as jest.Mock).mockReturnValue({
+      data: fixtureProfile,
+      isLoading: false,
+      error: undefined,
+    })
+
+    mockCreateQuote.mockResolvedValue({
+      id: 'quote-active-1',
+      quoteRangeFrom: 400,
+      quoteRangeTo: 400,
+      currency: 'EUR',
+      duration: 15,
+      distance: 2.0,
+      distanceUnit: 'km',
+      expiresAt: null,
+      dropoffEta: null,
+      createdAt: new Date().toISOString(),
+    })
+
+    ;(useSavedCustomerSearch as jest.Mock).mockReturnValue({
+      status: 'ready',
+      items: [sampleCustomer],
+      total: 1,
+    })
+
+    render(<CreateDeliveryForm />)
+
+    // Pick customer
+    const customerItem = screen.getByText('Vassilis Spanoulis').closest('[role="option"]')!
+    fireEvent.click(customerItem)
+
+    // Unchanged street: Get Estimate uses picked customer point and no lookup runs
+    ;(geocodeCoordinatesFromAddress as jest.Mock).mockClear()
+    fireEvent.click(screen.getByRole('button', { name: /Get Estimate/i }))
+
+    await waitFor(() => {
+      expect(mockCreateQuote).toHaveBeenCalledTimes(1)
+    })
+
+    expect(geocodeCoordinatesFromAddress).not.toHaveBeenCalled()
+    const firstQuotePayload = mockCreateQuote.mock.calls[0][0]
+    expect(firstQuotePayload.dropoffLatitude).toBe(sampleCustomer.latitude)
+    expect(firstQuotePayload.dropoffLongitude).toBe(sampleCustomer.longitude)
+    expect(firstQuotePayload.dropoffAddress.formattedAddress).toBe(sampleCustomer.formattedAddress)
+
+    // Clear active estimate so we can edit and re-estimate
+    mockCreateQuote.mockClear()
+    // Lookup returns coordinates with NO displayName: quote's formattedAddress must be built from edited fields
+    ;(geocodeCoordinatesFromAddress as jest.Mock).mockResolvedValueOnce({
+      latitude: 39.375,
+      longitude: 22.955,
+    })
+
+    // Edit street address by typing
+    const streetInput = screen.getAllByLabelText(/Street address/i)[0]
+    fireEvent.change(streetInput, { target: { value: 'Dimitriadis 50' } })
+
+    fireEvent.click(screen.getByRole('button', { name: /Get Estimate/i }))
+
+    await waitFor(() => {
+      expect(mockCreateQuote).toHaveBeenCalledTimes(1)
+    })
+
+    expect(geocodeCoordinatesFromAddress).toHaveBeenCalledWith(
+      expect.objectContaining({
+        streetAddress: ['Dimitriadis 50'],
+        city: 'Volos',
+      }),
+    )
+    const secondQuotePayload = mockCreateQuote.mock.calls[0][0]
+    expect(secondQuotePayload.dropoffLatitude).toBe(39.375)
+    expect(secondQuotePayload.dropoffLongitude).toBe(22.955)
+    expect(secondQuotePayload.dropoffLatitude).not.toBe(sampleCustomer.latitude)
+    expect(secondQuotePayload.dropoffAddress.formattedAddress).not.toBe(sampleCustomer.formattedAddress)
+    expect(secondQuotePayload.dropoffAddress.formattedAddress).toBe('Floor 4 Dimitriadis 50, Volos, 38221 GR')
   })
 
   it('runs saveCustomerAfterOrder with formSnapshot values and passes ?customerSave only on failure', async () => {

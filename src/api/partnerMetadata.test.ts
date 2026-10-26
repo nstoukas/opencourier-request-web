@@ -163,4 +163,21 @@ describe('/api/partner-metadata route handler', () => {
     expect(resState.statusCode).toBe(502)
     expect(resState.jsonBody).toEqual({ message: 'Backend unreachable.' })
   })
+
+  it('answers 502 for a non ok backend answer without reading it as JSON', async () => {
+    const jsonSpy = jest.fn().mockRejectedValue(new SyntaxError('Unexpected token < in JSON at position 0'))
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 502,
+      json: jsonSpy,
+    } as any)
+
+    const { req, res, resState } = createMockReqRes({ method: 'GET' })
+    await handler(req, res)
+
+    // Upstream body must not be read when response is not ok
+    expect(jsonSpy).not.toHaveBeenCalled()
+    expect(resState.statusCode).toBe(502)
+    expect(resState.jsonBody).toEqual({ message: 'The co-op setting could not be read.' })
+  })
 })

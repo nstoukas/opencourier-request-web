@@ -9,10 +9,11 @@ import {
 import { getManualRequestApiMode } from '../../utils/manualRequestAuth'
 
 // Mock next/router
+const mockRouter = {
+  query: { deliveryId: 'del-xyz-789' } as Record<string, any>,
+}
 jest.mock('next/router', () => ({
-  useRouter: () => ({
-    query: { deliveryId: 'del-xyz-789' },
-  }),
+  useRouter: () => mockRouter,
 }))
 
 // Mock next/head
@@ -43,6 +44,7 @@ describe('DeliveryStatusPage (/manual-request/[deliveryId]/status.tsx)', () => {
 
   beforeEach(() => {
     jest.resetAllMocks()
+    mockRouter.query = { deliveryId: 'del-xyz-789' }
     ;(useCancelManualRequestDeliveryMutation as jest.Mock).mockReturnValue([mockCancel, { isLoading: false }])
     ;(getManualRequestApiMode as jest.Mock).mockReturnValue('partner')
   })
@@ -201,6 +203,76 @@ describe('DeliveryStatusPage (/manual-request/[deliveryId]/status.tsx)', () => {
     await waitFor(() => {
       expect(mockCancel).toHaveBeenCalledWith('del-xyz-789')
       expect(mockRefetch).toHaveBeenCalled()
+    })
+  })
+
+  describe('CustomerSaveNotice integration via router.query.customerSave', () => {
+    const defaultDeliveryData = {
+      id: 'del-xyz-789',
+      status: 'ACCEPTED',
+      createdAt: '2026-09-30T10:00:00Z',
+    }
+
+    it('reads ?customerSave=clash from router and displays phone clash notice', () => {
+      mockRouter.query = { deliveryId: 'del-xyz-789', customerSave: 'clash' }
+      ;(useGetManualRequestDeliveryQuery as jest.Mock).mockReturnValue({
+        data: defaultDeliveryData,
+        isLoading: false,
+        error: undefined,
+        refetch: mockRefetch,
+      })
+
+      render(<DeliveryStatusPage />)
+
+      expect(
+        screen.getByText('Order sent. The customer was not saved: another saved customer has this phone.'),
+      ).toBeInTheDocument()
+    })
+
+    it('reads ?customerSave=invalid from router and displays details refused notice', () => {
+      mockRouter.query = { deliveryId: 'del-xyz-789', customerSave: 'invalid' }
+      ;(useGetManualRequestDeliveryQuery as jest.Mock).mockReturnValue({
+        data: defaultDeliveryData,
+        isLoading: false,
+        error: undefined,
+        refetch: mockRefetch,
+      })
+
+      render(<DeliveryStatusPage />)
+
+      expect(
+        screen.getByText('Order sent. The customer was not saved: the details were refused.'),
+      ).toBeInTheDocument()
+    })
+
+    it('reads ?customerSave=failed from router and displays server did not answer notice', () => {
+      mockRouter.query = { deliveryId: 'del-xyz-789', customerSave: 'failed' }
+      ;(useGetManualRequestDeliveryQuery as jest.Mock).mockReturnValue({
+        data: defaultDeliveryData,
+        isLoading: false,
+        error: undefined,
+        refetch: mockRefetch,
+      })
+
+      render(<DeliveryStatusPage />)
+
+      expect(
+        screen.getByText("Order sent. The customer was not saved: the co-op's server did not answer."),
+      ).toBeInTheDocument()
+    })
+
+    it('renders no notice when customerSave is absent or unrecognized', () => {
+      mockRouter.query = { deliveryId: 'del-xyz-789', customerSave: 'random-junk' }
+      ;(useGetManualRequestDeliveryQuery as jest.Mock).mockReturnValue({
+        data: defaultDeliveryData,
+        isLoading: false,
+        error: undefined,
+        refetch: mockRefetch,
+      })
+
+      render(<DeliveryStatusPage />)
+
+      expect(screen.queryByText(/The customer was not saved/i)).not.toBeInTheDocument()
     })
   })
 })

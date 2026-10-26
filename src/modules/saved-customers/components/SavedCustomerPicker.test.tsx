@@ -73,7 +73,7 @@ describe('SavedCustomerPicker', () => {
       />,
     )
 
-    expect(screen.getByText(/Saved customer:/i)).toBeInTheDocument()
+    expect(screen.getAllByText(/Saved customer:/i).length).toBeGreaterThanOrEqual(1)
     expect(screen.getByText('Maria Papadopoulou')).toBeInTheDocument()
     expect(screen.queryByPlaceholderText('Type a name or phone')).not.toBeInTheDocument()
 
@@ -88,7 +88,7 @@ describe('SavedCustomerPicker', () => {
     render(<SavedCustomerPicker linked={null} onPick={onPickMock} onUnlink={onUnlinkMock} />)
 
     expect(screen.getByRole('status', { name: 'Searching saved customers' })).toBeInTheDocument()
-    expect(screen.getByText('Searching…')).toBeInTheDocument()
+    expect(screen.getByText('Searching saved customers…')).toBeInTheDocument()
   })
 
   it('displays "No saved customer matches. Fill in the fields below." when no customers match', () => {
@@ -181,5 +181,125 @@ describe('SavedCustomerPicker', () => {
     fireEvent.keyDown(input, { key: 'Escape', code: 'Escape' })
 
     expect(screen.queryByText('Maria Papadopoulou')).not.toBeInTheDocument()
+  })
+
+  it('announces pick with status line and focuses Change button; announces clear and returns focus to search input', () => {
+    const { rerender } = render(
+      <SavedCustomerPicker linked={null} onPick={onPickMock} onUnlink={onUnlinkMock} />,
+    )
+
+    // Initially unlinked, combobox exists
+    const input = screen.getByRole('combobox', { name: 'Saved customer' })
+    expect(input).toBeInTheDocument()
+
+    // Pick a customer: rerender with linked
+    rerender(
+      <SavedCustomerPicker
+        linked={{ id: 'cust-1', name: 'Maria Papadopoulou' }}
+        onPick={onPickMock}
+        onUnlink={onUnlinkMock}
+      />,
+    )
+
+    // Status line announces pick
+    const statusElements = screen.getAllByRole('status')
+    const srAnnouncement = statusElements.find((el) =>
+      el.textContent?.includes('Saved customer: Maria Papadopoulou. The drop off fields are filled in.'),
+    )
+    expect(srAnnouncement).toBeInTheDocument()
+
+    // Focus is on Change button
+    const changeBtn = screen.getByRole('button', { name: 'Change' })
+    expect(changeBtn).toHaveFocus()
+
+    // Clear link: rerender with null
+    rerender(<SavedCustomerPicker linked={null} onPick={onPickMock} onUnlink={onUnlinkMock} />)
+
+    // Status line announces clear
+    expect(
+      screen.getByText('Saved customer cleared. The fields keep what they hold.'),
+    ).toBeInTheDocument()
+
+    // Focus is back on the search input
+    const inputAfter = screen.getByRole('combobox', { name: 'Saved customer' })
+    expect(inputAfter).toHaveFocus()
+  })
+
+  it('searching, no match, and error messages are in a role=status element outside the listbox', () => {
+    // 1. Loading state
+    ;(useSavedCustomerSearch as jest.Mock).mockReturnValue({ status: 'loading' })
+    const { rerender } = render(
+      <SavedCustomerPicker linked={null} onPick={onPickMock} onUnlink={onUnlinkMock} />,
+    )
+    const loadingStatus = screen.getByText('Searching saved customers…').closest('[role="status"]')
+    expect(loadingStatus).toBeInTheDocument()
+    expect(loadingStatus?.closest('[role="listbox"]')).toBeNull()
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+
+    // 2. No match state
+    ;(useSavedCustomerSearch as jest.Mock).mockReturnValue({
+      status: 'ready',
+      items: [],
+      total: 0,
+    })
+    rerender(<SavedCustomerPicker linked={null} onPick={onPickMock} onUnlink={onUnlinkMock} />)
+    const noMatchStatus = screen
+      .getByText('No saved customer matches. Fill in the fields below.')
+      .closest('[role="status"]')
+    expect(noMatchStatus).toBeInTheDocument()
+    expect(noMatchStatus?.closest('[role="listbox"]')).toBeNull()
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+
+    // 3. Error state
+    ;(useSavedCustomerSearch as jest.Mock).mockReturnValue({ status: 'error' })
+    rerender(<SavedCustomerPicker linked={null} onPick={onPickMock} onUnlink={onUnlinkMock} />)
+    const errorStatus = screen
+      .getByText('Search is not available. Fill in the fields below.')
+      .closest('[role="status"]')
+    expect(errorStatus).toBeInTheDocument()
+    expect(errorStatus?.closest('[role="listbox"]')).toBeNull()
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+  })
+
+  it('focus leaving the picker closes the list, while clicking a row still picks it', () => {
+    ;(useSavedCustomerSearch as jest.Mock).mockReturnValue({
+      status: 'ready',
+      items: sampleCustomers,
+      total: 2,
+    })
+
+    render(
+      <div>
+        <SavedCustomerPicker linked={null} onPick={onPickMock} onUnlink={onUnlinkMock} />
+        <button type="button" data-testid="outside-button">
+          Outside
+        </button>
+      </div>,
+    )
+
+    // Results list is visible
+    expect(screen.getByText('Maria Papadopoulou')).toBeInTheDocument()
+
+    // Blur from the combobox to an element outside the Command container
+    const input = screen.getByRole('combobox', { name: 'Saved customer' })
+    const outsideBtn = screen.getByTestId('outside-button')
+
+    fireEvent.blur(input, { relatedTarget: outsideBtn })
+
+    // List is closed
+    expect(screen.queryByText('Maria Papadopoulou')).not.toBeInTheDocument()
+
+    // Type in input to re-open
+    fireEvent.change(input, { target: { value: 'Kostas' } })
+    expect(screen.getByText('Maria Papadopoulou')).toBeInTheDocument()
+
+    // Blurring the input with relatedTarget set to an element inside the picker (a row) keeps the list shown
+    const row = screen.getByText('Maria Papadopoulou').closest('[role="option"]')!
+    fireEvent.blur(input, { relatedTarget: row })
+    expect(screen.getByText('Maria Papadopoulou')).toBeInTheDocument()
+
+    // Clicking a row still picks it
+    fireEvent.click(row)
+    expect(onPickMock).toHaveBeenCalledWith(sampleCustomers[0])
   })
 })
