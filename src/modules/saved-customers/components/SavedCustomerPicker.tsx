@@ -1,7 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { UserCircle } from '@phosphor-icons/react'
 import {
-  Button,
   Command,
   CommandGroup,
   CommandInput,
@@ -25,16 +23,18 @@ interface SavedCustomerPickerProps {
   // The saved customer this order is linked to, or null for a typed customer.
   linked: LinkedCustomer | null
   onPick: (customer: SavedCustomer) => void
-  // `Change`: the order goes back to a typed customer.
-  onUnlink: () => void
+  // The Change button that replaces the picker while a customer is linked (the order form's picked
+  // customer card, spec 0006). Focus moves there after a pick.
+  changeRef: React.RefObject<HTMLButtonElement>
 }
 
 /**
- * The "Saved customer" field at the top of the order form's Drop off card. Typing 2 characters or
- * more searches the restaurant's saved customers; picking one fills the drop off fields (the form
- * does that in onPick) and the field turns into "Saved customer: <name>" with a Change button.
+ * The "Saved customer" field at the top of the order form. Typing 2 characters or more searches the
+ * restaurant's saved customers; picking one fills the drop off fields (the form does that in onPick).
+ * While a customer is linked the picker draws nothing but its status line: the form's picked customer
+ * card shows the customer and owns Change (spec 0006, AC-11).
  */
-export function SavedCustomerPicker({ linked, onPick, onUnlink }: SavedCustomerPickerProps) {
+export function SavedCustomerPicker({ linked, onPick, changeRef }: SavedCustomerPickerProps) {
   const [query, setQuery] = useState('')
   // Escape closes the list until the restaurant types again.
   const [dismissed, setDismissed] = useState(false)
@@ -50,7 +50,6 @@ export function SavedCustomerPicker({ linked, onPick, onUnlink }: SavedCustomerP
   // Picking unmounts the search input, and Change unmounts the Change button, both holding focus. So
   // focus moves to what replaced them, and a status line that is always on the page tells a screen
   // reader what happened (a live region is only read when its text changes, not when it appears).
-  const changeRef = useRef<HTMLButtonElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const wasLinked = useRef(linked !== null)
   const [announcement, setAnnouncement] = useState('')
@@ -83,19 +82,7 @@ export function SavedCustomerPicker({ linked, onPick, onUnlink }: SavedCustomerP
       <p role="status" className="sr-only">
         {announcement}
       </p>
-      {linked ? (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-muted/40 px-3 py-2">
-          <p className="flex min-w-0 items-center gap-2 text-sm">
-            <UserCircle className="size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
-            <span className="truncate">
-              Saved customer: <span className="font-medium">{linked.name}</span>
-            </span>
-          </p>
-          <Button ref={changeRef} type="button" variant="outline" size="sm" onClick={onUnlink}>
-            Change
-          </Button>
-        </div>
-      ) : (
+      {linked ? null : (
         <div className="space-y-1.5">
           {/* The visible label. The input's accessible name comes from Command's `label` below: cmdk ties
               its input to a hidden label of its own and overrides any id or aria-labelledby we pass. */}
@@ -128,6 +115,8 @@ export function SavedCustomerPicker({ linked, onPick, onUnlink }: SavedCustomerP
                 setDismissed(false)
               }}
               placeholder="Type a name or phone"
+              // 48 px and 16 px text, so a phone neither misses the tap nor zooms in (spec 0006, AC-3).
+              className="h-12 text-base"
             />
             {showList && search.status === 'ready' ? (
               <CommandList>
@@ -140,7 +129,7 @@ export function SavedCustomerPicker({ linked, onPick, onUnlink }: SavedCustomerP
                         setQuery('')
                         onPick(customer)
                       }}
-                      className="flex flex-wrap gap-x-1.5"
+                      className="flex min-h-12 flex-wrap gap-x-1.5 py-2 text-base"
                     >
                       <span className="font-medium">{customer.name}</span>
                       <span className="text-muted-foreground">· {customer.phone}</span>

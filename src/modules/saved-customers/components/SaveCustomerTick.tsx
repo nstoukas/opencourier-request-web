@@ -8,7 +8,7 @@ interface SaveCustomerTickProps {
 }
 
 /**
- * "Save this customer for next time (they agreed)" at the end of the order form's Drop off card
+ * "Save this customer for next time (they agreed)" near the end of the order form
  * (spec 0005, AC-1). The restaurant asks the customer; the line under it says who sees the details
  * and how long they are kept.
  */
@@ -17,24 +17,29 @@ export function SaveCustomerTick({ checked, onCheckedChange }: SaveCustomerTickP
   const helperId = `${id}-helper`
   const months = useRetentionMonths()
 
+  const labelId = `${id}-label`
+
+  // The whole row is the label, so a tap anywhere on it ticks the box (a 48 px target, spec 0006,
+  // AC-3). The box's name is only the first line (aria-labelledby), the helper line its description.
   return (
-    <div className="flex items-start gap-3 rounded-md border p-3">
+    <label htmlFor={id} className="flex min-h-12 cursor-pointer items-start gap-3 rounded-md border p-3">
       <Checkbox
         id={id}
         checked={checked}
         // Radix gives `true`, `false` or 'indeterminate'; only a real true ticks it.
         onCheckedChange={(value) => onCheckedChange(value === true)}
+        aria-labelledby={labelId}
         aria-describedby={helperId}
-        className="mt-0.5"
+        className="mt-0.5 size-5"
       />
-      <div className="space-y-1">
-        <label htmlFor={id} className="text-sm font-medium leading-snug">
+      <span className="space-y-1">
+        <span id={labelId} className="block text-base font-medium leading-snug">
           Save this customer for next time (they agreed)
-        </label>
-        <p id={helperId} className="text-sm text-muted-foreground">
+        </span>
+        <span id={helperId} className="block text-sm text-muted-foreground">
           {retentionHelperText(months)}
-        </p>
-      </div>
-    </div>
+        </span>
+      </span>
+    </label>
   )
 }

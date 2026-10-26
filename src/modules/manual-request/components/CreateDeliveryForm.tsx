@@ -11,23 +11,17 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import {
+  Alert,
+  AlertDescription,
   Button,
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
   FormMessage,
   Input,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
   Spinner,
   Textarea,
   useToast,
@@ -45,7 +39,8 @@ import {
   ManualRequestQuoteInput,
 } from '../types'
 import { EstimateSummaryCard } from './EstimateSummaryCard'
-import { SavedCustomerPicker, LinkedCustomer } from '../../saved-customers/components/SavedCustomerPicker'
+import { SavedCustomerPicker } from '../../saved-customers/components/SavedCustomerPicker'
+import { PickedCustomerCard } from '../../saved-customers/components/PickedCustomerCard'
 import { SaveCustomerTick } from '../../saved-customers/components/SaveCustomerTick'
 import type { SavedCustomer } from '../../saved-customers/types'
 import {
@@ -62,6 +57,7 @@ import {
 } from '../utils/geocode'
 import {
   composeRiderNote,
+  COUNTER_FROM_SHARE,
   FLOOR_AND_BELL_MAX,
   isQuoteExpired,
   isQuoteFailure,
@@ -72,6 +68,8 @@ import {
   RIDER_NOTE_MAX,
 } from '../utils/orderForm'
 import { AddressSection } from './AddressSection'
+import { ChoicePillOption, ChoicePills } from './ChoicePills'
+import { cn } from '../../../ui-shared-utils'
 import { ErrorBanner } from './ErrorBanner'
 import { useRequestPageNavigator } from '../../../hooks/useRequestPageNavigator'
 import {
@@ -277,6 +275,30 @@ function plainErrorMessage(err: any, fallback: string) {
   return message && !/^Request failed \(HTTP \d+\)$/.test(message) ? message : fallback
 }
 
+// ─── Small pieces ─────────────────────────────────────────────────────────────
+
+const READY_IN_OPTIONS: ChoicePillOption[] = READY_IN_MINUTES.map((minutes) => ({
+  value: String(minutes),
+  label: minutes === 0 ? 'Now' : `${minutes} min`,
+}))
+
+const SIZE_OPTIONS: ChoicePillOption[] = [
+  { value: ManualRequestPackageSize.SMALL, label: 'Small' },
+  { value: ManualRequestPackageSize.MEDIUM, label: 'Medium' },
+  { value: ManualRequestPackageSize.LARGE, label: 'Large' },
+]
+
+// "48 / 60" under a field once 80% of its limit is used; red over the limit (AC-8). The limit is a
+// form rule, not maxLength, so a saved customer's longer text still shows whole.
+function LimitCounter({ length, limit }: { length: number; limit: number }) {
+  if (length < Math.ceil(limit * COUNTER_FROM_SHARE)) return null
+  return (
+    <p className={cn('text-right text-sm tabular-nums', length > limit ? 'text-destructive' : 'text-muted-foreground')}>
+      {length} / {limit}
+    </p>
+  )
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function CreateDeliveryForm() {
@@ -289,7 +311,11 @@ export function CreateDeliveryForm() {
   // A failed price or send, shown in the bar above the button.
   const [barError, setBarError] = useState<string | null>(null)
   // Saved customers (spec 0005): the customer picked for this order, if any, and the save tick.
-  const [linkedCustomer, setLinkedCustomer] = useState<LinkedCustomer | null>(null)
+  const [linkedCustomer, setLinkedCustomer] = useState<SavedCustomer | null>(null)
+  // The picked customer's fields opened with Edit (spec 0006, AC-11).
+  const [editingCustomer, setEditingCustomer] = useState(false)
+  // The picked customer card's Change button, which the picker focuses after a pick.
+  const changeRef = useRef<HTMLButtonElement>(null)
   const [saveCustomer, setSaveCustomer] = useState(false)
   // True from Send until the page changes, so the customer save after the order cannot be
   // raced by a second Send (which would create a second delivery).
@@ -486,8 +512,8 @@ export function CreateDeliveryForm() {
     showPrice(null)
   }
 
-  // A picked customer fills the drop off fields (AC-3), with the coordinates, so the estimate needs no
-  // address search. An estimate already shown was made from other details, so it goes.
+  // A picked customer fills the drop off fields (AC-3), with the coordinates, so the price needs no
+  // address search. A price already shown was made from other details, so it goes.
   const handlePickCustomer = (customer: SavedCustomer) => {
     const values = orderValuesFromCustomer(customer)
     const options = { shouldDirty: true, shouldValidate: true }
@@ -498,7 +524,8 @@ export function CreateDeliveryForm() {
     form.setValue('dropoffAddress', values.dropoffAddress, options)
     form.setValue('dropoffLatitude', values.dropoffLatitude, options)
     form.setValue('dropoffLongitude', values.dropoffLongitude, options)
-    setLinkedCustomer({ id: customer.id, name: customer.name })
+    setLinkedCustomer(customer)
+    setEditingCustomer(false)
     setSaveCustomer(true)
     if (pricedRef.current) handleDiscard()
   }
@@ -506,12 +533,20 @@ export function CreateDeliveryForm() {
   // `Change`: the fields stay as they are, the order becomes a typed customer, the tick goes off.
   const handleUnlinkCustomer = () => {
     setLinkedCustomer(null)
+    setEditingCustomer(false)
     setSaveCustomer(false)
     if (pricedRef.current) handleDiscard()
   }
 
+  // The customer's own fields show with no customer picked, or after Edit on the picked card (AC-11).
+  const showCustomerFields = !linkedCustomer || editingCustomer
+  const pickupPoint =
+    pickupMapped && hasValidCoordinates(pickupMapped.pickupLatitude, pickupMapped.pickupLongitude)
+      ? { latitude: pickupMapped.pickupLatitude, longitude: pickupMapped.pickupLongitude }
+      : undefined
+
   return (
-    <div className="space-y-6 max-w-3xl">
+    <div className="space-y-6">
       {barError && (
         <ErrorBanner title="Could not process request" message={barError} detail={barError} />
       )}
@@ -526,170 +561,212 @@ export function CreateDeliveryForm() {
       )}
 
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(handleGetPrice)} className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Pickup — your restaurant</CardTitle>
-            </CardHeader>
-            <CardContent data-testid="pickup-readonly" className="space-y-1 text-sm">
-              {isProfileLoading ? (
-                <p className="text-muted-foreground">Loading your restaurant&apos;s details…</p>
-              ) : profileError ? (
-                <ErrorBanner
-                  title="Could not load profile"
-                  message={profileError instanceof Error ? profileError.message : 'Failed to load profile.'}
-                />
-              ) : !pickupCheck.usable ? (
-                <>
-                  <p className="text-destructive font-medium">{pickupCheck.reason}</p>
-                  <p className="text-muted-foreground">Only a co-op admin can set your restaurant&apos;s pickup details</p>
-                </>
-              ) : (
-                <p>
-                  {profile?.name}, {pickupMapped?.pickupAddress.formattedAddress || '—'}
-                </p>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Dropoff</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <SavedCustomerPicker
-                linked={linkedCustomer}
-                onPick={handlePickCustomer}
-                onUnlink={handleUnlinkCustomer}
-              />
-              <FormField
-                control={form.control}
-                name="dropoffName"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Customer name</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="dropoffPhoneNumber"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Phone</FormLabel>
-                    <FormControl>
-                      <Input type="tel" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              {/* Remounted when a saved customer is picked or unlinked, so its search box shows that
-                  customer's address instead of what was typed there before. */}
-              <AddressSection
-                key={linkedCustomer?.id ?? 'typed'}
-                control={form.control}
-                prefix="dropoff"
-                label="Dropoff address"
-                initialQuery={linkedCustomer ? form.getValues('dropoffAddress.formattedAddress') ?? '' : ''}
-              />
-              <FormField
-                control={form.control}
-                name="floorAndBell"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Floor and doorbell (optional)</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="readyInMinutes"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Ready in</FormLabel>
-                    <FormControl>
-                      <select
-                        ref={field.ref}
-                        value={field.value === undefined ? '' : String(field.value)}
-                        onChange={(event) => field.onChange(event.target.value === '' ? undefined : Number(event.target.value))}
-                      >
-                        <option value="">Choose</option>
-                        {READY_IN_MINUTES.map((minutes) => (
-                          <option key={minutes} value={minutes}>{minutes === 0 ? 'Now' : `${minutes} min`}</option>
-                        ))}
-                      </select>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="packageSize"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Size</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select size" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value={ManualRequestPackageSize.SMALL}>Small</SelectItem>
-                        <SelectItem value={ManualRequestPackageSize.MEDIUM}>Medium</SelectItem>
-                        <SelectItem value={ManualRequestPackageSize.LARGE}>Large</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="orderTotal"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Order total</FormLabel>
-                    <FormControl>
-                      <Input inputMode="decimal" autoComplete="off" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="note"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Note for the rider (optional)</FormLabel>
-                    <FormControl>
-                      <Textarea className="resize-none" rows={3} {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <SaveCustomerTick checked={saveCustomer} onCheckedChange={setSaveCustomer} />
-            </CardContent>
-          </Card>
-
-          <div className="flex justify-end">
-            <Button type="submit" disabled={isQuoting || !pickupCheck.usable} size="lg">
-              {isQuoting && <Spinner className="mr-2" />}
-              {isQuoting ? 'Getting price…' : 'Get price'}
-            </Button>
+        <form noValidate onSubmit={form.handleSubmit(handleGetPrice)} className="space-y-6">
+          {/* ── From: the restaurant's pickup, from its profile (AC-5) ───────── */}
+          <div data-testid="pickup-readonly">
+            {isProfileLoading ? (
+              <p className="text-sm text-muted-foreground">Loading your restaurant&apos;s details…</p>
+            ) : profileError ? (
+              <Alert variant="destructive">
+                <AlertDescription>
+                  {profileError instanceof Error ? profileError.message : 'Your restaurant’s details could not be loaded.'}
+                </AlertDescription>
+              </Alert>
+            ) : !pickupCheck.usable ? (
+              <Alert variant="destructive">
+                <AlertDescription>
+                  <p className="font-medium">{pickupCheck.reason}</p>
+                  <p>Only a co-op admin can set your restaurant&apos;s pickup details</p>
+                </AlertDescription>
+              </Alert>
+            ) : (
+              <p className="text-sm text-muted-foreground break-words">
+                From: {profile?.name}, {pickupMapped?.pickupAddress.formattedAddress || '—'}
+              </p>
+            )}
           </div>
+
+          {/* ── The customer ────────────────────────────────────────────── */}
+          <div className="space-y-4">
+            <SavedCustomerPicker linked={linkedCustomer} onPick={handlePickCustomer} changeRef={changeRef} />
+
+            {linkedCustomer ? (
+              <PickedCustomerCard
+                customer={linkedCustomer}
+                editing={editingCustomer}
+                onEdit={() => setEditingCustomer(true)}
+                onChange={handleUnlinkCustomer}
+                changeRef={changeRef}
+              />
+            ) : null}
+
+            {showCustomerFields ? (
+              <>
+                <FormField
+                  control={form.control}
+                  name="dropoffName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Customer name</FormLabel>
+                      <FormControl>
+                        <Input autoComplete="off" className="h-12 text-base" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="dropoffPhoneNumber"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Phone</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="tel"
+                          autoComplete="off"
+                          placeholder="e.g. 691 234 5678"
+                          className="h-12 text-base"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* Remounted when a saved customer is picked or unlinked, so its search box shows that
+                    customer's address instead of what was typed there before. */}
+                <AddressSection
+                  key={linkedCustomer?.id ?? 'typed'}
+                  control={form.control}
+                  prefix="dropoff"
+                  label="Address"
+                  initialQuery={linkedCustomer ? form.getValues('dropoffAddress.formattedAddress') ?? '' : ''}
+                  near={pickupPoint}
+                  defaultTown={profile?.pickupAddress?.city ?? ''}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="floorAndBell"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>
+                        Floor and doorbell <span className="font-normal text-muted-foreground">(optional)</span>
+                      </FormLabel>
+                      <FormControl>
+                        <Input
+                          autoComplete="off"
+                          placeholder="3rd floor, Papadopoulou"
+                          className="h-12 text-base"
+                          {...field}
+                        />
+                      </FormControl>
+                      <LimitCounter length={field.value?.length ?? 0} limit={FLOOR_AND_BELL_MAX} />
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </>
+            ) : null}
+          </div>
+
+          {/* ── The order ───────────────────────────────────────────────── */}
+          <FormField
+            control={form.control}
+            name="readyInMinutes"
+            render={({ field }) => (
+              <FormItem>
+                <FormControl>
+                  <ChoicePills
+                    ref={field.ref}
+                    label="Ready in"
+                    options={READY_IN_OPTIONS}
+                    value={field.value === undefined || field.value === null ? '' : String(field.value)}
+                    onValueChange={(value) => field.onChange(Number(value))}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="packageSize"
+            render={({ field }) => (
+              <FormItem>
+                <FormControl>
+                  <ChoicePills
+                    ref={field.ref}
+                    label="Size"
+                    options={SIZE_OPTIONS}
+                    value={field.value ?? ''}
+                    onValueChange={field.onChange}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="orderTotal"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Order total</FormLabel>
+                <div className="relative">
+                  <span
+                    aria-hidden="true"
+                    className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-base text-muted-foreground"
+                  >
+                    €
+                  </span>
+                  <FormControl>
+                    <Input
+                      inputMode="decimal"
+                      autoComplete="off"
+                      className="h-12 pl-8 text-base"
+                      {...field}
+                    />
+                  </FormControl>
+                </div>
+                <FormDescription>0 if it is free</FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="note"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>
+                  Note for the rider <span className="font-normal text-muted-foreground">(optional)</span>
+                </FormLabel>
+                <FormControl>
+                  <Textarea
+                    rows={3}
+                    placeholder="Ring twice, dog in the yard"
+                    className="resize-none text-base"
+                    {...field}
+                  />
+                </FormControl>
+                <LimitCounter length={field.value?.length ?? 0} limit={RIDER_NOTE_MAX} />
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <SaveCustomerTick checked={saveCustomer} onCheckedChange={setSaveCustomer} />
+
+          <Button type="submit" size="xl" className="w-full" disabled={isQuoting || !pickupCheck.usable}>
+            {isQuoting && <Spinner className="mr-2" />}
+            {isQuoting ? 'Getting price…' : 'Get price'}
+          </Button>
         </form>
       </Form>
     </div>
