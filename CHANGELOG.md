@@ -5,7 +5,7 @@ for a Greek workers' cooperative. In this fork, request-web is the **restaurant 
 where a signed-in restaurant places delivery requests.
 
 Everything below sits on top of upstream `main` on the branch `fix/partial-address-form`
-(19 commits, 26 July – 25 October 2026). Each entry names its commit, and the commit message
+(26 commits, 26 July – 26 October 2026). Each entry names its commit, and the commit message
 has the full reasoning and verification notes.
 
 ---
@@ -49,6 +49,23 @@ has the full reasoning and verification notes.
 ### Testing
 - Added Jest and React Testing Library via `next/jest` (run with
   `node node_modules/.bin/jest`). The suite has grown to 86 tests. `6f8cf6e`
+
+### Sign in and the page frame, after the redesign (row 92) — `0b09369`, `6fe1ddf`, `8acef14`, `f5177a8`
+- Every page sits in one frame: a sticky 56px header (app icon, New Delivery, My Orders with
+  the current page marked, Sign Out) over one centered column, at most 768px wide. A skip
+  link moves keyboard focus straight to the page.
+- Signing in is a gate in that frame, not a card on the order page. A signed out visit to
+  any address shows the sign in there, and after signing in you stay on that address; Sign
+  Out keeps it too.
+- The sign in follows the admin sign in board: a card with the co-op mark, Email and
+  Password fields and a full width button. A failed attempt shows an Alert in plain words
+  chosen from the HTTP status (wrong details, too many tries, server down, empty fields);
+  the backend's own text and the status code are never shown. `loginPartner` now keeps the
+  status on the error it throws.
+- New `Field` component from the design system. Phones first: no page scrolls sideways at
+  320px.
+- Tests: 20 more, written by agy (165 in all), including the old order page sign in tests,
+  moved out of `src/pages`. `5d28624`, `ca25102`
 
 ### The OpenCourier design system (row 64) — `ba8fbf8`, `7ee4c4c`, `94670e3`
 - The colours and corner radius come from the co-op's design system
