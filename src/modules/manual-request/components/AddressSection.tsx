@@ -183,6 +183,24 @@ export function AddressSection<T extends FieldValues>({
     setResults([])
   }
 
+  // In the order form the search box is the address, so Clear empties what the order would be sent to
+  // (street, full text, postcode and map point; Town stays) and Get price then asks for one. Clearing only
+  // the box would hide a kept address, after Change say, that Get price still prices. The dialog shows
+  // its typed fields all the time, so there Clear only empties the box, as before.
+  const handleClear = () => {
+    setQuery('')
+    setResults([])
+    setShowResults(false)
+    if (compact) return
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const set = (path: Path<T>, value: any) => setValue(path, value, { shouldDirty: true })
+    set(field('streetAddress.0'), '')
+    set(field('formattedAddress'), '')
+    set(field('zipCode'), '')
+    set(coord('Latitude'), 0)
+    set(coord('Longitude'), 0)
+  }
+
   // 48 px and 16 px text in the order form (spec 0006, AC-3); the dialog keeps its own sizes.
   const control48 = compact ? '' : 'h-12 text-base'
   const searchShowsStreetError = !compact && streetError
@@ -221,7 +239,7 @@ export function AddressSection<T extends FieldValues>({
             {query && (
               <button
                 type="button"
-                onClick={() => { setQuery(''); setResults([]); setShowResults(false) }}
+                onClick={handleClear}
                 // The button shows only an icon, so this is the name a screen reader says.
                 aria-label="Clear search"
                 className={cn(
