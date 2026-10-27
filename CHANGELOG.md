@@ -5,7 +5,7 @@ for a Greek workers' cooperative. In this fork, request-web is the **restaurant 
 where a signed-in restaurant places delivery requests.
 
 Everything below sits on top of upstream `main` on the branch `fix/partial-address-form`
-(38 commits, 26 July – 26 October 2026). Each entry names its commit, and the commit message
+(50 commits, 26 July – 27 October 2026). Each entry names its commit, and the commit message
 has the full reasoning and verification notes.
 
 ---
@@ -33,6 +33,35 @@ has the full reasoning and verification notes.
   converted and floored so the cookie can never outlive its token.
 
 ## Added
+
+### Touch friendly order form (scope row 27, spec 0006): `78ffec0` to `d0157ea`
+Built on the branch `feat/touch-friendly-order-form` and merged on 27 October. The New Delivery page is
+rebuilt for a phone or tablet held in one hand. A repeat order is now: pick the customer, tap when it is
+ready, type the total, Get price, Send order.
+- **One short column** at phone width, one centered column from 768 px. Every control is at least 48 px
+  and every text input uses 16 px text, so phones do not zoom in. The fields the co-op does not use are
+  gone (state, ZIP, country, business name, package type and description, special instructions, pickup
+  notes, the deadlines); the pickup is one "From:" line from the restaurant's profile.
+- **Ready in** is a row of pills (Now, 10, 15, 20, 30 min) and **Size** a row of pills with Small chosen.
+  The ready time is fixed at Get price and the delivery sends the same one the price was made for.
+- **Order total** is required (0 allowed), typed as "12,50" or "12.50", up to 1000 €, and sent in whole
+  cents (1250) on the quote and the delivery, as the backend keeps money. Before, every order went out with 0.
+- **Floor and doorbell** and **Note for the rider** now reach the rider: they are sent as one text in
+  `dropoffSellerNotes` (the rider app) and `dropoffNotes` (admin). Before, the rider never saw them.
+- **Address**: one search box that prefers results near the restaurant (about 15 km, not bounded), with
+  the street in Greek order ("Iasonos 12"), an 8 s timeout, and a "Can't find it? Type it" fallback whose
+  Town starts as the restaurant's own.
+- **A picked saved customer** becomes one short card with Edit and Change.
+- **Get price and Send order** are one button in a bar fixed under the thumb on phones. The price, ETA,
+  distance, the address it was priced for and "valid until" show above it. Any change drops the price;
+  an expired price asks for a new one; errors show in plain words in the bar.
+- The status page's "Back to request form" link is a **New order** button.
+- **Fixes found by review and browser checks before the merge** (`19eed92`, `e03d0bc`): saved customer
+  options could not be tapped at all (a `data-[disabled]` selector matched cmdk's `data-disabled="false"`,
+  which also affected row 26's picker); Get price stayed live during the address lookup; a failed lookup
+  showed the browser's own error text; a refused search showed nothing; after Change, and then after
+  Clear, the old street could be priced with nothing on show.
+- Tests by agy (349 pass), each important one shown to fail with its bug put back.
 
 ### Saved customers for restaurants (scope row 26, spec 0005): `81fddc2` to `f14d9b5`
 Built on the branch `feat/saved-customers` and merged on 26 October, together with the backend and
