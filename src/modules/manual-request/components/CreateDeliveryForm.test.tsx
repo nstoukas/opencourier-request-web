@@ -317,7 +317,7 @@ describe('CreateDeliveryForm (spec 0006)', () => {
       })
 
       const quotePayload = mockCreateQuote.mock.calls[0][0]
-      expect(quotePayload.orderTotalValue).toBe(12.5) // AC-4
+      expect(quotePayload.orderTotalValue).toBe(1250) // AC-4 (whole cents)
       expect(quotePayload.pickupDeadlineAt).toBeNull() // AC-6
       expect(quotePayload.dropoffReadyAt).toBeNull() // AC-6
       expect(quotePayload.dropoffDeadlineAt).toBeNull() // AC-6
@@ -343,7 +343,7 @@ describe('CreateDeliveryForm (spec 0006)', () => {
       expect(deliveryPayload.quoteId).toBe('quote-repeat-1')
       // Delivery reuses the exact same pickupReadyAt as the quote (AC-6)
       expect(deliveryPayload.pickupReadyAt).toBe(pickupReadyAt)
-      expect(deliveryPayload.orderTotalValue).toBe(12.5) // AC-4
+      expect(deliveryPayload.orderTotalValue).toBe(1250) // AC-4 (whole cents)
       expect(deliveryPayload.pickupDeadlineAt).toBeNull() // AC-6
       expect(deliveryPayload.dropoffReadyAt).toBeNull() // AC-6
       expect(deliveryPayload.dropoffDeadlineAt).toBeNull() // AC-6
@@ -367,6 +367,66 @@ describe('CreateDeliveryForm (spec 0006)', () => {
       expect(savedNotes).not.toContain('Floor and doorbell:')
 
       expect(mockNavigator.goToManualRequestStatus).toHaveBeenCalledWith('del-repeat-1')
+    })
+
+    it('AC-4: "0,29" typed sends orderTotalValue 29 on both the quote and the delivery', async () => {
+      ;(usePartnerProfileQuery as jest.Mock).mockReturnValue({
+        data: fixtureProfile,
+        isLoading: false,
+        error: undefined,
+      })
+      ;(useSavedCustomerSearch as jest.Mock).mockReturnValue({
+        status: 'ready',
+        items: [sampleCustomer],
+        total: 1,
+      })
+
+      mockCreateQuote.mockResolvedValue({
+        id: 'quote-cents-29',
+        quoteRangeFrom: 350,
+        quoteRangeTo: 350,
+        currency: 'EUR',
+        duration: 15,
+        distance: 2.0,
+        distanceUnit: 'km',
+        expiresAt: new Date(Date.now() + 600_000).toISOString(),
+        dropoffEta: null,
+        createdAt: new Date().toISOString(),
+      })
+      mockConfirmDelivery.mockResolvedValue({ id: 'del-cents-29', status: 'ACCEPTED' })
+
+      render(<CreateDeliveryForm />)
+
+      // Pick saved customer
+      const customerItem = screen.getByText('Vassilis Spanoulis').closest('[role="option"]')!
+      fireEvent.click(customerItem)
+
+      // Choose ready in "Now"
+      fireEvent.click(screen.getByRole('radio', { name: 'Now' }))
+
+      // Type total "0,29"
+      fireEvent.change(screen.getByLabelText(/Order total/i), { target: { value: '0,29' } })
+
+      // Tap "Get price"
+      fireEvent.click(screen.getByRole('button', { name: 'Get price' }))
+
+      await waitFor(() => {
+        expect(mockCreateQuote).toHaveBeenCalledTimes(1)
+      })
+
+      const quotePayload = mockCreateQuote.mock.calls[0][0]
+      expect(quotePayload.orderTotalValue).toBe(29)
+
+      // Tap "Send order"
+      const sendBtn = await screen.findByRole('button', { name: 'Send order' })
+      fireEvent.click(sendBtn)
+
+      await waitFor(() => {
+        expect(mockConfirmDelivery).toHaveBeenCalledTimes(1)
+      })
+
+      const deliveryPayload = mockConfirmDelivery.mock.calls[0][0]
+      expect(deliveryPayload.orderTotalValue).toBe(29)
     })
 
     it('AC-6: chosen minutes reach pickupReadyAt (Get price moment plus chosen minutes)', async () => {
@@ -659,6 +719,29 @@ describe('CreateDeliveryForm (spec 0006)', () => {
       expect(tickCheckbox).not.toBeChecked()
       expect(screen.queryByText('Saved customer. Edit the details below.')).not.toBeInTheDocument()
       expect(screen.getByLabelText(/Customer name/i)).toHaveValue('Vassilis Spanoulis')
+    })
+
+    it('AC-11: Change keeps the address visible in the address search box and fresh form starts empty', () => {
+      render(<CreateDeliveryForm />)
+
+      // On a fresh form, the search input is empty
+      const freshSearchInput = screen.getByPlaceholderText('e.g. Iasonos 12')
+      expect(freshSearchInput).toHaveValue('')
+
+      // Pick saved customer
+      const customerItem = screen.getByText('Vassilis Spanoulis').closest('[role="option"]')!
+      fireEvent.click(customerItem)
+
+      // Card is shown, search box is hidden
+      expect(screen.getByText('Vassilis Spanoulis')).toBeInTheDocument()
+      expect(screen.queryByPlaceholderText('e.g. Iasonos 12')).not.toBeInTheDocument()
+
+      // Tap Change
+      fireEvent.click(screen.getByRole('button', { name: 'Change' }))
+
+      // Address search box remounts with customer's formattedAddress (not empty)
+      const searchBoxAfterChange = screen.getByPlaceholderText('e.g. Iasonos 12')
+      expect(searchBoxAfterChange).toHaveValue(sampleCustomer.formattedAddress)
     })
 
     it('row 26 (spec 0005 AC-3, spec 0006 AC-11/AC-15): picked customer stored point is used without lookup', async () => {
@@ -1145,6 +1228,382 @@ describe('CreateDeliveryForm (spec 0006)', () => {
         expect(mockNavigator.goToManualRequestStatus).toHaveBeenCalledWith('del-success-1')
       })
       expect(mockNavigator.goToManualRequestStatus.mock.calls[0]).toHaveLength(1)
+    })
+
+    // ── AC-12 & AC-13: Address lookup states and error wording ───────────────────
+    it('AC-12: bar button reads "Getting price…" and is disabled while address lookup is pending, ignores second tap, and continues to price once resolved', async () => {
+      let resolveLookup!: (coords: { latitude: number; longitude: number } | null) => void
+      ;(geocodeCoordinatesFromAddress as jest.Mock).mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            resolveLookup = resolve
+          }),
+      )
+
+      mockCreateQuote.mockResolvedValue({
+        id: 'quote-lookup-resolves',
+        quoteRangeFrom: 350,
+        quoteRangeTo: 350,
+        currency: 'EUR',
+        duration: 15,
+        distance: 2.0,
+        distanceUnit: 'km',
+        expiresAt: new Date(Date.now() + 600_000).toISOString(),
+        dropoffEta: null,
+        createdAt: new Date().toISOString(),
+      })
+
+      render(<CreateDeliveryForm />)
+
+      fireEvent.change(screen.getByLabelText(/Customer name/i), { target: { value: 'Kostas' } })
+      fireEvent.change(screen.getByLabelText(/Phone/i), { target: { value: '6912345678' } })
+      fireEvent.click(screen.getByRole('button', { name: "Can't find it? Type it" }))
+      fireEvent.change(screen.getByLabelText(/Street and number/i), { target: { value: 'Iasonos 10' } })
+      fireEvent.click(screen.getByRole('radio', { name: 'Now' }))
+      fireEvent.change(screen.getByLabelText(/Order total/i), { target: { value: '15' } })
+
+      // Tap Get price
+      fireEvent.click(screen.getByRole('button', { name: 'Get price' }))
+
+      // While lookup is pending, button reads "Getting price…" and is disabled
+      const busyBtn = await screen.findByRole('button', { name: /Getting price…/i })
+      expect(busyBtn).toBeDisabled()
+      expect(busyBtn).toHaveTextContent('Getting price…')
+
+      // Second tap does not start a second lookup or quote
+      fireEvent.click(busyBtn)
+      expect(geocodeCoordinatesFromAddress).toHaveBeenCalledTimes(1)
+      expect(mockCreateQuote).not.toHaveBeenCalled()
+
+      // Resolve the lookup promise
+      await act(async () => {
+        resolveLookup({ latitude: 39.362, longitude: 22.945 })
+      })
+
+      // Flow continues to the price
+      const sendBtn = await screen.findByRole('button', { name: 'Send order' })
+      expect(sendBtn).toBeInTheDocument()
+      expect(mockCreateQuote).toHaveBeenCalledTimes(1)
+    })
+
+    it('AC-12: when address lookup throws, the button comes back to "Get price" enabled', async () => {
+      let rejectLookup!: (err: any) => void
+      ;(geocodeCoordinatesFromAddress as jest.Mock).mockImplementation(
+        () =>
+          new Promise((_, reject) => {
+            rejectLookup = reject
+          }),
+      )
+
+      render(<CreateDeliveryForm />)
+
+      fireEvent.change(screen.getByLabelText(/Customer name/i), { target: { value: 'Kostas' } })
+      fireEvent.change(screen.getByLabelText(/Phone/i), { target: { value: '6912345678' } })
+      fireEvent.click(screen.getByRole('button', { name: "Can't find it? Type it" }))
+      fireEvent.change(screen.getByLabelText(/Street and number/i), { target: { value: 'Iasonos 10' } })
+      fireEvent.click(screen.getByRole('radio', { name: 'Now' }))
+      fireEvent.change(screen.getByLabelText(/Order total/i), { target: { value: '15' } })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Get price' }))
+
+      const busyBtn = await screen.findByRole('button', { name: /Getting price…/i })
+      expect(busyBtn).toBeDisabled()
+
+      await act(async () => {
+        rejectLookup(new Error('lookup network error'))
+      })
+
+      const getPriceBtn = await screen.findByRole('button', { name: 'Get price' })
+      expect(getPriceBtn).toBeInTheDocument()
+      expect(getPriceBtn).toBeEnabled()
+      expect(mockCreateQuote).not.toHaveBeenCalled()
+    })
+
+    it('AC-13: lookup rejection with TimeoutError shows exact plain sentence in the bar with role="alert", hides raw message, and makes no quote', async () => {
+      const timeoutErr = new Error('signal timed out')
+      timeoutErr.name = 'TimeoutError'
+      ;(geocodeCoordinatesFromAddress as jest.Mock).mockRejectedValue(timeoutErr)
+
+      render(<CreateDeliveryForm />)
+
+      fireEvent.change(screen.getByLabelText(/Customer name/i), { target: { value: 'Kostas' } })
+      fireEvent.change(screen.getByLabelText(/Phone/i), { target: { value: '6912345678' } })
+      fireEvent.click(screen.getByRole('button', { name: "Can't find it? Type it" }))
+      fireEvent.change(screen.getByLabelText(/Street and number/i), { target: { value: 'Iasonos 10' } })
+      fireEvent.click(screen.getByRole('radio', { name: 'Now' }))
+      fireEvent.change(screen.getByLabelText(/Order total/i), { target: { value: '15' } })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Get price' }))
+
+      const alert = await screen.findByRole('alert')
+      expect(alert).toHaveTextContent(
+        'The address lookup did not answer. Try again, or search the address and pick a result.',
+      )
+      expect(screen.queryByText(/signal timed out/i)).not.toBeInTheDocument()
+      expect(mockCreateQuote).not.toHaveBeenCalled()
+    })
+
+    it('AC-13: lookup rejection with TypeError("Failed to fetch") shows connection error sentence in the bar with role="alert", hides raw message, and makes no quote', async () => {
+      ;(geocodeCoordinatesFromAddress as jest.Mock).mockRejectedValue(new TypeError('Failed to fetch'))
+
+      render(<CreateDeliveryForm />)
+
+      fireEvent.change(screen.getByLabelText(/Customer name/i), { target: { value: 'Kostas' } })
+      fireEvent.change(screen.getByLabelText(/Phone/i), { target: { value: '6912345678' } })
+      fireEvent.click(screen.getByRole('button', { name: "Can't find it? Type it" }))
+      fireEvent.change(screen.getByLabelText(/Street and number/i), { target: { value: 'Iasonos 10' } })
+      fireEvent.click(screen.getByRole('radio', { name: 'Now' }))
+      fireEvent.change(screen.getByLabelText(/Order total/i), { target: { value: '15' } })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Get price' }))
+
+      const alert = await screen.findByRole('alert')
+      expect(alert).toHaveTextContent('The address lookup failed. Check your connection and try again.')
+      expect(screen.queryByText(/Failed to fetch/i)).not.toBeInTheDocument()
+      expect(mockCreateQuote).not.toHaveBeenCalled()
+    })
+
+    // ── Review form-level gaps (pinning correct behavior) ──────────────────────
+    it('review gap: picking a customer or tapping Change while a price is shown drops the price', async () => {
+      mockCreateQuote.mockResolvedValue({
+        id: 'quote-drop-price',
+        quoteRangeFrom: 350,
+        quoteRangeTo: 350,
+        currency: 'EUR',
+        duration: 15,
+        distance: 2.0,
+        distanceUnit: 'km',
+        expiresAt: new Date(Date.now() + 600_000).toISOString(),
+        dropoffEta: null,
+        createdAt: new Date().toISOString(),
+      })
+
+      // 1. Tapping Change on a picked customer while priced drops the price
+      ;(useSavedCustomerSearch as jest.Mock).mockReturnValue({
+        status: 'ready',
+        items: [sampleCustomer],
+        total: 1,
+      })
+      const { unmount } = render(<CreateDeliveryForm />)
+
+      fireEvent.click(screen.getByText('Vassilis Spanoulis').closest('[role="option"]')!)
+      fireEvent.click(screen.getByRole('radio', { name: 'Now' }))
+      fireEvent.change(screen.getByLabelText(/Order total/i), { target: { value: '15' } })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Get price' }))
+      expect(await screen.findByRole('button', { name: 'Send order' })).toBeInTheDocument()
+
+      // Tapping Change drops the price back to Get price
+      fireEvent.click(screen.getByRole('button', { name: 'Change' }))
+      expect(screen.getByRole('button', { name: 'Get price' })).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Send order' })).not.toBeInTheDocument()
+
+      unmount()
+
+      // 2. Picking a customer while priced on a typed address drops the price
+      render(<CreateDeliveryForm />)
+
+      fireEvent.change(screen.getByLabelText(/Customer name/i), { target: { value: 'Typed Kostas' } })
+      fireEvent.change(screen.getByLabelText(/Phone/i), { target: { value: '6912345678' } })
+      fireEvent.click(screen.getByRole('button', { name: "Can't find it? Type it" }))
+      fireEvent.change(screen.getByLabelText(/Street and number/i), { target: { value: 'Iasonos 10' } })
+      fireEvent.click(screen.getByRole('radio', { name: 'Now' }))
+      fireEvent.change(screen.getByLabelText(/Order total/i), { target: { value: '15' } })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Get price' }))
+      expect(await screen.findByRole('button', { name: 'Send order' })).toBeInTheDocument()
+
+      // Picking a customer drops the price back to Get price
+      fireEvent.click(screen.getByText('Vassilis Spanoulis').closest('[role="option"]')!)
+      expect(screen.getByRole('button', { name: 'Get price' })).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Send order' })).not.toBeInTheDocument()
+    })
+
+    it('review gap: a change while the price is on its way shows exact sentence and no Send order', async () => {
+      let resolveQuote!: (quote: any) => void
+      mockCreateQuote.mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            resolveQuote = resolve
+          }),
+      )
+
+      // Use saved customer so dropoff coordinates fit and createQuote starts immediately
+      ;(useSavedCustomerSearch as jest.Mock).mockReturnValue({
+        status: 'ready',
+        items: [sampleCustomer],
+        total: 1,
+      })
+
+      render(<CreateDeliveryForm />)
+
+      // Pick customer
+      fireEvent.click(screen.getByText('Vassilis Spanoulis').closest('[role="option"]')!)
+      fireEvent.click(screen.getByRole('radio', { name: 'Now' }))
+      const totalInput = screen.getByLabelText(/Order total/i)
+      fireEvent.change(totalInput, { target: { value: '15' } })
+
+      // Tap Get price
+      fireEvent.click(screen.getByRole('button', { name: 'Get price' }))
+
+      // Wait until createQuote is in flight
+      await waitFor(() => {
+        expect(mockCreateQuote).toHaveBeenCalledTimes(1)
+      })
+
+      // While quote is in flight, modify a field (e.g. order total)
+      fireEvent.change(totalInput, { target: { value: '25' } })
+
+      // Now resolve the quote
+      await act(async () => {
+        resolveQuote({
+          id: 'quote-in-flight-stale',
+          quoteRangeFrom: 350,
+          quoteRangeTo: 350,
+          currency: 'EUR',
+          duration: 15,
+          distance: 2.0,
+          distanceUnit: 'km',
+          expiresAt: new Date(Date.now() + 600_000).toISOString(),
+          dropoffEta: null,
+          createdAt: new Date().toISOString(),
+        })
+      })
+
+      const alert = await screen.findByRole('alert')
+      expect(alert).toHaveTextContent('Something changed while the price was on its way. Get the price again.')
+      expect(screen.queryByRole('button', { name: 'Send order' })).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Get price' })).toBeInTheDocument()
+    })
+
+    it('review gap: "Get a new price" on an expired quote ends priced ("Send order"), not at "Get price"', async () => {
+      jest.useFakeTimers()
+      try {
+        const baseTime = new Date('2026-10-27T10:00:00.000Z').getTime()
+        jest.setSystemTime(baseTime)
+
+        const expiredQuote = {
+          id: 'quote-exp-first',
+          quoteRangeFrom: 350,
+          quoteRangeTo: 350,
+          currency: 'EUR',
+          duration: 15,
+          distance: 2.0,
+          distanceUnit: 'km',
+          expiresAt: new Date(baseTime + 10_000).toISOString(), // expires in 10s
+          dropoffEta: null,
+          createdAt: new Date(baseTime).toISOString(),
+        }
+
+        const freshQuote = {
+          id: 'quote-fresh-second',
+          quoteRangeFrom: 400,
+          quoteRangeTo: 400,
+          currency: 'EUR',
+          duration: 15,
+          distance: 2.0,
+          distanceUnit: 'km',
+          expiresAt: new Date(baseTime + 600_000).toISOString(),
+          dropoffEta: null,
+          createdAt: new Date(baseTime + 20_000).toISOString(),
+        }
+
+        mockCreateQuote.mockResolvedValueOnce(expiredQuote).mockResolvedValueOnce(freshQuote)
+
+        render(<CreateDeliveryForm />)
+
+        fireEvent.change(screen.getByLabelText(/Customer name/i), { target: { value: 'Kostas' } })
+        fireEvent.change(screen.getByLabelText(/Phone/i), { target: { value: '6912345678' } })
+        fireEvent.click(screen.getByRole('button', { name: "Can't find it? Type it" }))
+        fireEvent.change(screen.getByLabelText(/Street and number/i), { target: { value: 'Iasonos 10' } })
+        fireEvent.click(screen.getByRole('radio', { name: 'Now' }))
+        fireEvent.change(screen.getByLabelText(/Order total/i), { target: { value: '15' } })
+
+        await act(async () => {
+          fireEvent.click(screen.getByRole('button', { name: 'Get price' }))
+        })
+
+        expect(screen.getByRole('button', { name: 'Send order' })).toBeInTheDocument()
+
+        // Advance system time past expiry and let the 15s interval tick
+        act(() => {
+          jest.advanceTimersByTime(16_000)
+        })
+
+        expect(screen.getByText('This price has expired')).toBeInTheDocument()
+        const getNewPriceBtn = screen.getByRole('button', { name: 'Get a new price' })
+        expect(getNewPriceBtn).toBeInTheDocument()
+
+        // Tap "Get a new price"
+        await act(async () => {
+          fireEvent.click(getNewPriceBtn)
+        })
+
+        // Must end priced ("Send order"), not back at "Get price", and 2 quotes were made
+        expect(mockCreateQuote).toHaveBeenCalledTimes(2)
+        expect(screen.getByRole('button', { name: 'Send order' })).toBeInTheDocument()
+        expect(screen.queryByRole('button', { name: 'Get price' })).not.toBeInTheDocument()
+      } finally {
+        jest.useRealTimers()
+      }
+    })
+
+    it('review gap: a lookup returning null shows exact error sentence and no quote is made', async () => {
+      ;(geocodeCoordinatesFromAddress as jest.Mock).mockResolvedValue(null)
+
+      render(<CreateDeliveryForm />)
+
+      fireEvent.change(screen.getByLabelText(/Customer name/i), { target: { value: 'Kostas' } })
+      fireEvent.change(screen.getByLabelText(/Phone/i), { target: { value: '6912345678' } })
+      fireEvent.click(screen.getByRole('button', { name: "Can't find it? Type it" }))
+      fireEvent.change(screen.getByLabelText(/Street and number/i), { target: { value: 'Unknown Street 999' } })
+      fireEvent.click(screen.getByRole('radio', { name: 'Now' }))
+      fireEvent.change(screen.getByLabelText(/Order total/i), { target: { value: '15' } })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Get price' }))
+
+      const alert = await screen.findByRole('alert')
+      expect(alert).toHaveTextContent('This address was not found on the map. Search for it and pick a result.')
+      expect(mockCreateQuote).not.toHaveBeenCalled()
+    })
+
+    it('review gap: Enter in a field while priced does not re-price (no second quote)', async () => {
+      mockCreateQuote.mockResolvedValue({
+        id: 'quote-priced-enter',
+        quoteRangeFrom: 350,
+        quoteRangeTo: 350,
+        currency: 'EUR',
+        duration: 15,
+        distance: 2.0,
+        distanceUnit: 'km',
+        expiresAt: new Date(Date.now() + 600_000).toISOString(),
+        dropoffEta: null,
+        createdAt: new Date().toISOString(),
+      })
+
+      render(<CreateDeliveryForm />)
+
+      fireEvent.change(screen.getByLabelText(/Customer name/i), { target: { value: 'Kostas' } })
+      fireEvent.change(screen.getByLabelText(/Phone/i), { target: { value: '6912345678' } })
+      fireEvent.click(screen.getByRole('button', { name: "Can't find it? Type it" }))
+      fireEvent.change(screen.getByLabelText(/Street and number/i), { target: { value: 'Iasonos 10' } })
+      fireEvent.click(screen.getByRole('radio', { name: 'Now' }))
+      const totalInput = screen.getByLabelText(/Order total/i)
+      fireEvent.change(totalInput, { target: { value: '15' } })
+
+      // Get price
+      fireEvent.click(screen.getByRole('button', { name: 'Get price' }))
+      expect(await screen.findByRole('button', { name: 'Send order' })).toBeInTheDocument()
+      expect(mockCreateQuote).toHaveBeenCalledTimes(1)
+
+      // Press Enter in an input / submit form
+      await act(async () => {
+        fireEvent.submit(totalInput.closest('form')!)
+      })
+
+      // Guard blocks re-pricing: no second quote call and button remains "Send order"
+      expect(mockCreateQuote).toHaveBeenCalledTimes(1)
+      expect(screen.getByRole('button', { name: 'Send order' })).toBeInTheDocument()
     })
   })
 })

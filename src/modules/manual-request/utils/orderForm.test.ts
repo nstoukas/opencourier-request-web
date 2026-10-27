@@ -1,4 +1,5 @@
 import {
+  euroAmountToCents,
   orderTotalProblem,
   parseEuroAmount,
   readyAtFromMinutes,
@@ -72,6 +73,27 @@ describe('orderForm pure utilities (spec 0006)', () => {
 
       expect(orderTotalProblem('2500,50')).toBe(expectedMessage)
       expect(parseEuroAmount('2500,50')).toBeNull()
+    })
+
+    it('AC-4: euroAmountToCents converts euro amounts to whole cents with rounding and handles refused text', () => {
+      // Basic values
+      expect(euroAmountToCents('12,50')).toBe(1250)
+      expect(euroAmountToCents('12.50')).toBe(1250)
+      expect(euroAmountToCents('0')).toBe(0)
+      expect(euroAmountToCents('1000')).toBe(100000)
+
+      // Floating-point precision edge cases: without Math.round, 0.29 * 100 = 28.999… (28) and 1.15 * 100 = 114.999… (114)
+      expect(euroAmountToCents('0,29')).toBe(29)
+      expect(euroAmountToCents('1,15')).toBe(115)
+
+      // Refused text returns null
+      expect(euroAmountToCents('')).toBeNull()
+      expect(euroAmountToCents('   ')).toBeNull()
+      expect(euroAmountToCents('abc')).toBeNull()
+      expect(euroAmountToCents('.5')).toBeNull()
+      expect(euroAmountToCents('12.')).toBeNull()
+      expect(euroAmountToCents('€12')).toBeNull()
+      expect(euroAmountToCents('1000,01')).toBeNull()
     })
   })
 

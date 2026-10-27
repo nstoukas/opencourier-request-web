@@ -1,10 +1,13 @@
+import { renderHook, act } from '@testing-library/react'
 import {
   loginPartner,
   logoutPartner,
   fetchPartnerSession,
   fetchPartnerDelivery,
   fetchPartnerProfile,
+  useConfirmManualRequestDeliveryMutation,
 } from './manualRequestApi'
+import { ManualRequestDeliveryInput } from '../modules/manual-request/types'
 
 describe('manualRequestApi helper functions', () => {
   const originalFetch = global.fetch
@@ -194,6 +197,81 @@ describe('manualRequestApi helper functions', () => {
       expect(profile).toEqual(mockFixture)
       expect(profile.pickupAddress?.latitude).toBe(39.3628)
       expect(profile.pickupAddress?.longitude).toBe(22.9435)
+    })
+  })
+
+  describe('useConfirmManualRequestDeliveryMutation', () => {
+    const originalApiMode = process.env.NEXT_PUBLIC_MANUAL_REQUEST_API_MODE
+
+    beforeEach(() => {
+      process.env.NEXT_PUBLIC_MANUAL_REQUEST_API_MODE = 'partner'
+    })
+
+    afterEach(() => {
+      process.env.NEXT_PUBLIC_MANUAL_REQUEST_API_MODE = originalApiMode
+    })
+
+    it('sends dropoffSellerNotes, dropoffNotes and orderTotalValue to the wire via partner proxy', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        text: jest.fn().mockResolvedValue(JSON.stringify({ result: { id: 'del-confirm-123', status: 'ACCEPTED' } })),
+      } as any)
+
+      const { result } = renderHook(() => useConfirmManualRequestDeliveryMutation())
+      const [confirmDelivery] = result.current
+
+      const deliveryInput: ManualRequestDeliveryInput = {
+        quoteId: 'quote-abc',
+        idempotencyKey: 'idem-xyz',
+        pickupName: 'Nosh',
+        pickupPhoneNumber: '+302421012345',
+        pickupBusinessName: 'Nosh',
+        pickupAddress: {
+          streetAddress: ['Ermou 120'],
+          city: 'Volos',
+          state: 'Thessaly',
+          zipCode: '38221',
+          countryCode: 'GR',
+        },
+        pickupLatitude: 39.3628,
+        pickupLongitude: 22.9435,
+        dropoffName: 'Vassilis Spanoulis',
+        dropoffPhoneNumber: '+306911223344',
+        dropoffAddress: {
+          streetAddress: ['Iasonos 80'],
+          houseNumber: '',
+          city: 'Volos',
+          state: 'Thessaly',
+          zipCode: '38221',
+          countryCode: 'GR',
+        },
+        dropoffLatitude: 39.361,
+        dropoffLongitude: 22.942,
+        dropoffSellerNotes: 'Floor and doorbell: Floor 4\nRing twice',
+        dropoffNotes: 'Floor and doorbell: Floor 4\nRing twice',
+        orderTotalValue: 1250,
+      }
+
+      let response: any
+      await act(async () => {
+        response = await confirmDelivery(deliveryInput)
+      })
+
+      expect(response).toEqual({ id: 'del-confirm-123', status: 'ACCEPTED' })
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/partner-proxy/deliveries',
+        expect.objectContaining({
+          method: 'POST',
+        }),
+      )
+
+      const fetchCall = (global.fetch as jest.Mock).mock.calls[0]
+      const wireBody = JSON.parse(fetchCall[1].body)
+
+      expect(wireBody.dropoffSellerNotes).toBe('Floor and doorbell: Floor 4\nRing twice')
+      expect(wireBody.dropoffNotes).toBe('Floor and doorbell: Floor 4\nRing twice')
+      expect(wireBody.orderTotalValue).toBe(1250)
+      expect(wireBody.quoteId).toBe('quote-abc')
     })
   })
 })

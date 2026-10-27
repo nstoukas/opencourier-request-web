@@ -94,6 +94,7 @@ describe('AddressSection (/src/modules/manual-request/components/AddressSection.
 
     it('AC-10: picking a search result fills the street in Greek order (name then number: "Iasonos 12")', async () => {
       global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
         json: () =>
           Promise.resolve([
             {
@@ -257,6 +258,7 @@ describe('AddressSection (/src/modules/manual-request/components/AddressSection.
 
     it('renders search results in the page flow (relative, not absolute)', async () => {
       global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
         json: () =>
           Promise.resolve([
             {
@@ -279,6 +281,27 @@ describe('AddressSection (/src/modules/manual-request/components/AddressSection.
       const resultsList = container.querySelector('ul')
       expect(resultsList).toHaveClass('relative')
       expect(resultsList).not.toHaveClass('absolute')
+    })
+
+    it('Search refusal: HTTP non-ok (e.g. 429) shows "Search failed. Check your connection and try again." and no results', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: false,
+        status: 429,
+        json: () => Promise.resolve({ error: 'x' }),
+      })
+
+      const { container } = render(<AddressSectionWrapper />)
+
+      const searchInput = screen.getByPlaceholderText('e.g. Iasonos 12')
+      fireEvent.change(searchInput, { target: { value: 'Rate Limited Street' } })
+      fireEvent.click(screen.getByRole('button', { name: 'Search' }))
+
+      const errorMsg = await screen.findByText('Search failed. Check your connection and try again.')
+      expect(errorMsg).toBeInTheDocument()
+
+      const resultsList = container.querySelector('ul')
+      expect(resultsList).not.toBeInTheDocument()
+      expect(screen.queryByRole('option')).not.toBeInTheDocument()
     })
   })
 })
