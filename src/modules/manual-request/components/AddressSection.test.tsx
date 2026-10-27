@@ -128,6 +128,54 @@ describe('AddressSection (/src/modules/manual-request/components/AddressSection.
       expect(formMethods.getValues('dropoffLongitude')).toBe(22.945)
     })
 
+    it('Clear search empties street, formattedAddress, zipCode, and map coordinates (0, 0), and keeps city', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve([
+            {
+              place_id: 1234,
+              display_name: 'Iasonos 12, Volos 38221, Greece',
+              lat: '39.362',
+              lon: '22.945',
+              address: { road: 'Iasonos', house_number: '12', city: 'Volos', postcode: '38221', country_code: 'gr' },
+            },
+          ]),
+      })
+
+      let formMethods: any
+      render(<AddressSectionWrapper onFormReady={(m) => (formMethods = m)} />)
+
+      const searchInput = screen.getByPlaceholderText('e.g. Iasonos 12')
+      fireEvent.change(searchInput, { target: { value: 'Iasonos 12' } })
+      fireEvent.click(screen.getByRole('button', { name: 'Search' }))
+
+      const resultButton = await screen.findByText('Iasonos 12, Volos 38221, Greece')
+      await act(async () => {
+        fireEvent.click(resultButton)
+      })
+
+      expect(formMethods.getValues('dropoffAddress.streetAddress.0')).toBe('Iasonos 12')
+      expect(formMethods.getValues('dropoffAddress.formattedAddress')).toBe('Iasonos 12, Volos 38221, Greece')
+      expect(formMethods.getValues('dropoffAddress.zipCode')).toBe('38221')
+      expect(formMethods.getValues('dropoffLatitude')).toBe(39.362)
+      expect(formMethods.getValues('dropoffLongitude')).toBe(22.945)
+      expect(formMethods.getValues('dropoffAddress.city')).toBe('Volos')
+
+      const clearButton = screen.getByRole('button', { name: 'Clear search' })
+      expect(clearButton).toBeInTheDocument()
+      fireEvent.click(clearButton)
+
+      expect(searchInput).toHaveValue('')
+      expect(screen.queryByRole('button', { name: 'Clear search' })).not.toBeInTheDocument()
+      expect(formMethods.getValues('dropoffAddress.streetAddress.0')).toBe('')
+      expect(formMethods.getValues('dropoffAddress.formattedAddress')).toBe('')
+      expect(formMethods.getValues('dropoffAddress.zipCode')).toBe('')
+      expect(formMethods.getValues('dropoffLatitude')).toBe(0)
+      expect(formMethods.getValues('dropoffLongitude')).toBe(0)
+      expect(formMethods.getValues('dropoffAddress.city')).toBe('Volos')
+    })
+
     it('AC-10: "Can\'t find it? Type it" opens Street and number plus Town prefilled from defaultTown', () => {
       let formMethods: any
       render(<AddressSectionWrapper defaultTown="Volos" onFormReady={(m) => (formMethods = m)} />)
@@ -302,6 +350,48 @@ describe('AddressSection (/src/modules/manual-request/components/AddressSection.
       const resultsList = container.querySelector('ul')
       expect(resultsList).not.toBeInTheDocument()
       expect(screen.queryByRole('option')).not.toBeInTheDocument()
+    })
+
+    it('in compact mode, Clear search empties only the box and leaves the form street and point as they were', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve([
+            {
+              place_id: 1234,
+              display_name: 'Iasonos 45, Volos 38221, Greece',
+              lat: '39.362',
+              lon: '22.945',
+              address: { road: 'Iasonos', house_number: '45', city: 'Volos', postcode: '38221' },
+            },
+          ]),
+      })
+
+      let formMethods: any
+      render(<AddressSectionWrapper compact={true} onFormReady={(m) => (formMethods = m)} />)
+
+      const searchInput = screen.getByPlaceholderText('Search address to auto-fill')
+      fireEvent.change(searchInput, { target: { value: 'Iasonos 45' } })
+      fireEvent.click(screen.getByRole('button', { name: 'Search' }))
+
+      const resultItem = await screen.findByText('Iasonos 45, Volos 38221, Greece')
+      await act(async () => {
+        fireEvent.click(resultItem)
+      })
+
+      expect(formMethods.getValues('dropoffAddress.streetAddress.0')).toBe('Iasonos 45')
+      expect(formMethods.getValues('dropoffLatitude')).toBe(39.362)
+      expect(formMethods.getValues('dropoffLongitude')).toBe(22.945)
+
+      const clearButton = screen.getByRole('button', { name: 'Clear search' })
+      expect(clearButton).toBeInTheDocument()
+      fireEvent.click(clearButton)
+
+      expect(searchInput).toHaveValue('')
+      expect(screen.queryByRole('button', { name: 'Clear search' })).not.toBeInTheDocument()
+      expect(formMethods.getValues('dropoffAddress.streetAddress.0')).toBe('Iasonos 45')
+      expect(formMethods.getValues('dropoffLatitude')).toBe(39.362)
+      expect(formMethods.getValues('dropoffLongitude')).toBe(22.945)
     })
   })
 })

@@ -590,6 +590,50 @@ describe('CreateDeliveryForm (spec 0006)', () => {
       expect(counter).toHaveClass('text-destructive')
     })
 
+    it('AC-8 & AC-13: picked customer with stored addressLine2 > 60 chars: Get price opens Edit, focuses Floor and doorbell with error, and makes no quote', async () => {
+      const longFloorCustomer = {
+        ...sampleCustomer,
+        addressLine2: 'f'.repeat(61),
+      }
+      ;(useSavedCustomerSearch as jest.Mock).mockReturnValue({
+        status: 'ready',
+        items: [longFloorCustomer],
+        total: 1,
+      })
+
+      render(<CreateDeliveryForm />)
+
+      // Pick the customer
+      const customerItem = screen.getByText('Vassilis Spanoulis').closest('[role="option"]')!
+      fireEvent.click(customerItem)
+
+      // Customer fields are hidden behind the card
+      expect(screen.queryByLabelText(/Floor and doorbell/i)).not.toBeInTheDocument()
+
+      // Choose ready time and order total so only addressLine2 is invalid
+      fireEvent.click(screen.getByRole('radio', { name: 'Now' }))
+      fireEvent.change(screen.getByLabelText(/Order total/i), { target: { value: '15' } })
+
+      // Tap Get price
+      fireEvent.click(screen.getByRole('button', { name: 'Get price' }))
+
+      // Validation error prevents quote
+      expect(mockCreateQuote).not.toHaveBeenCalled()
+
+      // Customer fields (Edit mode) open
+      const floorInput = await screen.findByLabelText(/Floor and doorbell/i)
+      expect(floorInput).toBeInTheDocument()
+      expect(floorInput).toHaveValue('f'.repeat(61))
+
+      // Error message shows
+      expect(await screen.findByText('Keep this to 60 characters')).toBeInTheDocument()
+
+      // Floor and doorbell input is focused
+      await waitFor(() => {
+        expect(document.activeElement).toBe(floorInput)
+      })
+    })
+
     it('AC-10 & AC-13: Get price with no street shows sentence under search box and opens typed fields', async () => {
       render(<CreateDeliveryForm />)
 
@@ -742,6 +786,41 @@ describe('CreateDeliveryForm (spec 0006)', () => {
       // Address search box remounts with customer's formattedAddress (not empty)
       const searchBoxAfterChange = screen.getByPlaceholderText('e.g. Iasonos 12')
       expect(searchBoxAfterChange).toHaveValue(sampleCustomer.formattedAddress)
+    })
+
+    it('AC-10 & AC-11: pick saved customer, tap Change, tap Clear search, tap Get price: no quote is made, validation error shows and typed fields open', async () => {
+      render(<CreateDeliveryForm />)
+
+      // Pick saved customer
+      const customerItem = screen.getByText('Vassilis Spanoulis').closest('[role="option"]')!
+      fireEvent.click(customerItem)
+
+      // Tap Change: search box shows kept address
+      fireEvent.click(screen.getByRole('button', { name: 'Change' }))
+      const searchBox = screen.getByPlaceholderText('e.g. Iasonos 12')
+      expect(searchBox).toHaveValue(sampleCustomer.formattedAddress)
+
+      // Tap Clear search
+      const clearBtn = screen.getByRole('button', { name: 'Clear search' })
+      fireEvent.click(clearBtn)
+      expect(searchBox).toHaveValue('')
+
+      // Fill ready time and total so only the cleared address is missing
+      fireEvent.click(screen.getByRole('radio', { name: 'Now' }))
+      fireEvent.change(screen.getByLabelText(/Order total/i), { target: { value: '15' } })
+
+      // Tap Get price
+      fireEvent.click(screen.getByRole('button', { name: 'Get price' }))
+
+      // No quote is made
+      expect(mockCreateQuote).not.toHaveBeenCalled()
+
+      // "Search the address and pick a result, or type it" shows under the search box
+      expect(await screen.findByText('Search the address and pick a result, or type it')).toBeInTheDocument()
+
+      // Typed fields open
+      expect(screen.getByLabelText(/Street and number/i)).toBeInTheDocument()
+      expect(screen.getByLabelText(/Town/i)).toBeInTheDocument()
     })
 
     it('row 26 (spec 0005 AC-3, spec 0006 AC-11/AC-15): picked customer stored point is used without lookup', async () => {
@@ -1253,7 +1332,7 @@ describe('CreateDeliveryForm (spec 0006)', () => {
         createdAt: new Date().toISOString(),
       })
 
-      render(<CreateDeliveryForm />)
+      const { container } = render(<CreateDeliveryForm />)
 
       fireEvent.change(screen.getByLabelText(/Customer name/i), { target: { value: 'Kostas' } })
       fireEvent.change(screen.getByLabelText(/Phone/i), { target: { value: '6912345678' } })
@@ -1272,6 +1351,9 @@ describe('CreateDeliveryForm (spec 0006)', () => {
 
       // Second tap does not start a second lookup or quote
       fireEvent.click(busyBtn)
+      // Form submit while lookup is pending does not trigger a second lookup or quote
+      const form = container.querySelector('form')!
+      fireEvent.submit(form)
       expect(geocodeCoordinatesFromAddress).toHaveBeenCalledTimes(1)
       expect(mockCreateQuote).not.toHaveBeenCalled()
 
@@ -1283,6 +1365,7 @@ describe('CreateDeliveryForm (spec 0006)', () => {
       // Flow continues to the price
       const sendBtn = await screen.findByRole('button', { name: 'Send order' })
       expect(sendBtn).toBeInTheDocument()
+      expect(geocodeCoordinatesFromAddress).toHaveBeenCalledTimes(1)
       expect(mockCreateQuote).toHaveBeenCalledTimes(1)
     })
 

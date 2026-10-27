@@ -15,6 +15,9 @@ describe('CommandItem (Command.tsx)', () => {
 
     const item = screen.getByText('Test Item')
 
+    // cmdk 1.x writes data-disabled="false" on enabled items (premise for data-[disabled=true]: styling)
+    expect(item).toHaveAttribute('data-disabled', 'false')
+
     // Must match data-[disabled=true]: variant so cmdk 1.x data-disabled="false" does not block clicks
     expect(item.className).toContain('data-[disabled=true]:pointer-events-none')
     expect(item.className).toContain('data-[disabled=true]:opacity-50')
