@@ -5,7 +5,10 @@ import {
   fetchPartnerSession,
   fetchPartnerDelivery,
   fetchPartnerProfile,
+  fetchDispatchState,
+  useDispatchStateQuery,
   useConfirmManualRequestDeliveryMutation,
+  DispatchState,
 } from './manualRequestApi'
 import { ManualRequestDeliveryInput } from '../modules/manual-request/types'
 
@@ -272,6 +275,309 @@ describe('manualRequestApi helper functions', () => {
       expect(wireBody.dropoffNotes).toBe('Floor and doorbell: Floor 4\nRing twice')
       expect(wireBody.orderTotalValue).toBe(1250)
       expect(wireBody.quoteId).toBe('quote-abc')
+    })
+  })
+
+  describe('fetchDispatchState (spec 0014, AC-6)', () => {
+    it('GETs /dispatch-state through the partner proxy and unwraps DispatchState', async () => {
+      const mockDispatchState: DispatchState = {
+        current: {
+          reason: 'HEAT',
+          startsAt: '2026-11-01T10:00:00.000Z',
+          endsAt: '2026-11-01T15:00:00.000Z',
+          message: 'Delivery is stopped until 17:00 (heat).',
+        },
+        next: {
+          reason: 'STORM',
+          startsAt: '2026-11-01T18:00:00.000Z',
+          endsAt: '2026-11-01T22:00:00.000Z',
+          message: 'Delivery stops today 20:00 to 00:00 (storm).',
+        },
+      }
+
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        text: jest.fn().mockResolvedValue(JSON.stringify(mockDispatchState)),
+      } as any)
+
+      const result = await fetchDispatchState()
+
+      // Exact assertion that it routes through /api/partner-proxy/dispatch-state with same-origin credentials
+      // and not a custom route handler like /api/dispatch-state
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/partner-proxy/dispatch-state',
+        expect.objectContaining({
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      )
+      expect(result).toEqual(mockDispatchState)
+    })
+
+    it('unwraps response when payload is enclosed in a result envelope', async () => {
+      const mockDispatchState: DispatchState = {
+        current: null,
+        next: null,
+      }
+
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        text: jest.fn().mockResolvedValue(JSON.stringify({ result: mockDispatchState })),
+      } as any)
+
+      const result = await fetchDispatchState()
+      expect(result).toEqual(mockDispatchState)
+    })
+
+    it('throws error when manualRequestFetch encounters HTTP failure', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: false,
+        status: 503,
+        json: jest.fn().mockResolvedValue({ message: 'Dispatch service unavailable' }),
+      } as any)
+
+      await expect(fetchDispatchState()).rejects.toThrow('Dispatch service unavailable')
+    })
+  })
+
+  describe('useDispatchStateQuery (spec 0014, AC-6)', () => {
+    let visibilitySpy: jest.SpyInstance<DocumentVisibilityState, []>
+
+    beforeEach(() => {
+      jest.useFakeTimers()
+      visibilitySpy = jest.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible')
+    })
+
+    afterEach(() => {
+      jest.useRealTimers()
+      visibilitySpy.mockRestore()
+    })
+
+    it('reads on mount and updates data when request succeeds', async () => {
+      const stateOnMount: DispatchState = {
+        current: {
+          reason: 'HEAT',
+          startsAt: '2026-11-01T10:00:00.000Z',
+          endsAt: null,
+          message: 'Delivery is stopped until dispatch restarts (heat).',
+        },
+        next: null,
+      }
+
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        text: jest.fn().mockResolvedValue(JSON.stringify({ result: stateOnMount })),
+      } as any)
+
+      let hook: any
+      await act(async () => {
+        hook = renderHook(() => useDispatchStateQuery())
+      })
+
+      expect(global.fetch).toHaveBeenCalledTimes(1)
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/partner-proxy/dispatch-state',
+        expect.anything(),
+      )
+      expect(hook.result.current.data).toEqual(stateOnMount)
+    })
+
+    it('polls again every 60000 ms while document.visibilityState is "visible"', async () => {
+      const state1: DispatchState = { current: null, next: null }
+      const state2: DispatchState = {
+        current: {
+          reason: 'STORM',
+          startsAt: '2026-11-01T14:00:00.000Z',
+          endsAt: '2026-11-01T18:00:00.000Z',
+          message: 'Delivery is stopped until 20:00 (storm).',
+        },
+        next: null,
+      }
+
+      global.fetch = jest
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          text: jest.fn().mockResolvedValue(JSON.stringify({ result: state1 })),
+        } as any)
+        .mockResolvedValueOnce({
+          ok: true,
+          text: jest.fn().mockResolvedValue(JSON.stringify({ result: state2 })),
+        } as any)
+
+      let hook: any
+      await act(async () => {
+        hook = renderHook(() => useDispatchStateQuery())
+      })
+
+      expect(hook.result.current.data).toEqual(state1)
+      expect(global.fetch).toHaveBeenCalledTimes(1)
+
+      // Advance 60000ms while visible
+      await act(async () => {
+        jest.advanceTimersByTime(60_000)
+      })
+
+      expect(global.fetch).toHaveBeenCalledTimes(2)
+      expect(hook.result.current.data).toEqual(state2)
+    })
+
+    it('does NOT poll when document.visibilityState is "hidden"', async () => {
+      const state1: DispatchState = { current: null, next: null }
+
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        text: jest.fn().mockResolvedValue(JSON.stringify({ result: state1 })),
+      } as any)
+
+      let hook: any
+      await act(async () => {
+        hook = renderHook(() => useDispatchStateQuery())
+      })
+
+      expect(global.fetch).toHaveBeenCalledTimes(1)
+
+      // Tab is hidden
+      visibilitySpy.mockReturnValue('hidden')
+
+      // Advance 60000ms while hidden
+      await act(async () => {
+        jest.advanceTimersByTime(60_000)
+      })
+
+      // Fetch must not have been triggered by interval while hidden
+      expect(global.fetch).toHaveBeenCalledTimes(1)
+
+      // Advance another 60000ms while still hidden
+      await act(async () => {
+        jest.advanceTimersByTime(60_000)
+      })
+      expect(global.fetch).toHaveBeenCalledTimes(1)
+    })
+
+    it('reads immediately on visibilitychange when transitioning to visible', async () => {
+      const state1: DispatchState = { current: null, next: null }
+      const state2: DispatchState = {
+        current: {
+          reason: 'HEAT',
+          startsAt: '2026-11-01T11:00:00.000Z',
+          endsAt: '2026-11-01T15:00:00.000Z',
+          message: 'Delivery is stopped until 17:00 (heat).',
+        },
+        next: null,
+      }
+
+      global.fetch = jest
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          text: jest.fn().mockResolvedValue(JSON.stringify({ result: state1 })),
+        } as any)
+        .mockResolvedValueOnce({
+          ok: true,
+          text: jest.fn().mockResolvedValue(JSON.stringify({ result: state2 })),
+        } as any)
+
+      let hook: any
+      await act(async () => {
+        hook = renderHook(() => useDispatchStateQuery())
+      })
+      expect(global.fetch).toHaveBeenCalledTimes(1)
+
+      // Tab is hidden and visibilitychange fires
+      visibilitySpy.mockReturnValue('hidden')
+      await act(async () => {
+        document.dispatchEvent(new Event('visibilitychange'))
+      })
+      // Transitioning to hidden does NOT trigger load
+      expect(global.fetch).toHaveBeenCalledTimes(1)
+
+      // Tab becomes visible again and visibilitychange fires
+      visibilitySpy.mockReturnValue('visible')
+      await act(async () => {
+        document.dispatchEvent(new Event('visibilitychange'))
+      })
+
+      // Read is triggered immediately on visibilitychange to visible without waiting 60s
+      expect(global.fetch).toHaveBeenCalledTimes(2)
+      expect(hook.result.current.data).toEqual(state2)
+    })
+
+    it('keeps the last answer and throws nothing when a subsequent read fails', async () => {
+      const state1: DispatchState = {
+        current: {
+          reason: 'HEAT',
+          startsAt: '2026-11-01T10:00:00.000Z',
+          endsAt: '2026-11-01T15:00:00.000Z',
+          message: 'Delivery is stopped until 17:00 (heat).',
+        },
+        next: null,
+      }
+
+      global.fetch = jest.fn().mockResolvedValueOnce({
+        ok: true,
+        text: jest.fn().mockResolvedValue(JSON.stringify({ result: state1 })),
+      } as any)
+
+      let hook: any
+      await act(async () => {
+        hook = renderHook(() => useDispatchStateQuery())
+      })
+      expect(hook.result.current.data).toEqual(state1)
+
+      // Subsequent fetch fails
+      global.fetch = jest.fn().mockRejectedValue(new Error('Network offline'))
+
+      // Advance 60s while visible
+      await act(async () => {
+        jest.advanceTimersByTime(60_000)
+      })
+
+      // Must keep last answer and not throw
+      expect(hook.result.current.data).toEqual(state1)
+
+      // Visibility change to visible also fails
+      await act(async () => {
+        document.dispatchEvent(new Event('visibilitychange'))
+      })
+
+      // Retains the previous good answer
+      expect(hook.result.current.data).toEqual(state1)
+    })
+
+    it('leaves data undefined and throws nothing when initial mount read fails', async () => {
+      global.fetch = jest.fn().mockRejectedValue(new Error('Server unavailable'))
+
+      let hook: any
+      await act(async () => {
+        hook = renderHook(() => useDispatchStateQuery())
+      })
+
+      expect(hook.result.current.data).toBeUndefined()
+    })
+
+    it('cleans up interval timer and visibilitychange listener on unmount', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        text: jest.fn().mockResolvedValue(JSON.stringify({ result: { current: null, next: null } })),
+      } as any)
+
+      let hook: any
+      await act(async () => {
+        hook = renderHook(() => useDispatchStateQuery())
+      })
+      expect(global.fetch).toHaveBeenCalledTimes(1)
+
+      hook.unmount()
+
+      // Advancing timer and dispatching visibilitychange after unmount
+      await act(async () => {
+        jest.advanceTimersByTime(60_000)
+        document.dispatchEvent(new Event('visibilitychange'))
+      })
+
+      // No new fetch calls occur
+      expect(global.fetch).toHaveBeenCalledTimes(1)
     })
   })
 })

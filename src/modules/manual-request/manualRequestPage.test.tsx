@@ -8,6 +8,11 @@ jest.mock('./components/CreateDeliveryForm', () => ({
   CreateDeliveryForm: () => <div data-testid="create-delivery-form">Mocked Create Delivery Form</div>,
 }))
 
+// Mock DispatchBanner to isolate page wrapper rendering and check placement (spec 0014, AC-6)
+jest.mock('./components/DispatchBanner', () => ({
+  DispatchBanner: () => <div data-testid="dispatch-banner">Mocked Dispatch Banner</div>,
+}))
+
 // Mock next/head
 jest.mock('next/head', () => ({
   __esModule: true,
@@ -26,5 +31,22 @@ describe('ManualRequestPage (/manual-request/index.tsx)', () => {
 
     // Form is directly rendered (sign-in gate is now owned by PortalFrame)
     expect(screen.getByTestId('create-delivery-form')).toBeInTheDocument()
+  })
+
+  it('renders DispatchBanner above CreateDeliveryForm', () => {
+    render(<ManualRequestPage />)
+
+    const banner = screen.getByTestId('dispatch-banner')
+    const form = screen.getByTestId('create-delivery-form')
+
+    expect(banner).toBeInTheDocument()
+    expect(form).toBeInTheDocument()
+
+    // DispatchBanner is positioned above CreateDeliveryForm in the DOM flow
+    expect(banner.compareDocumentPosition(form) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    const container = banner.parentElement
+    expect(container).toBe(form.parentElement)
+    const children = Array.from(container?.children ?? [])
+    expect(children.indexOf(banner)).toBeLessThan(children.indexOf(form))
   })
 })
