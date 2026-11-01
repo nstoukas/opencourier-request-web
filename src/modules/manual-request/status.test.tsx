@@ -1,6 +1,6 @@
 import React from 'react'
 import '@testing-library/jest-dom'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import DeliveryStatusPage from '../../pages/manual-request/[deliveryId]/status'
 import {
   useGetManualRequestDeliveryQuery,
@@ -179,6 +179,25 @@ describe('DeliveryStatusPage (/manual-request/[deliveryId]/status.tsx)', () => {
     expect(badge).toBeInTheDocument()
     expect(badge).toHaveClass('bg-destructive')
     expect(screen.getByText('This delivery can no longer be cancelled.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Cancel delivery/i })).toBeDisabled()
+  })
+
+  it('renders StatusBadge and disables cancel button for FAILED status', () => {
+    ;(useGetManualRequestDeliveryQuery as jest.Mock).mockReturnValue({
+      data: {
+        id: 'del-xyz-789',
+        status: 'FAILED',
+        createdAt: '2026-09-30T10:00:00Z',
+      },
+      isLoading: false,
+      error: undefined,
+      refetch: mockRefetch,
+    })
+
+    render(<DeliveryStatusPage />)
+
+    expect(screen.getByText('This delivery can no longer be cancelled.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Cancel delivery/i })).toBeDisabled()
   })
 
   it('renders StatusBadge in admin mode when mode is admin', () => {
@@ -206,7 +225,7 @@ describe('DeliveryStatusPage (/manual-request/[deliveryId]/status.tsx)', () => {
     expect(badge).toHaveClass('bg-secondary')
   })
 
-  it('calls cancel mutation when cancel button is clicked', async () => {
+  it('calls cancel mutation when cancel button is clicked and confirmed in dialog', async () => {
     mockCancel.mockResolvedValue({})
     ;(useGetManualRequestDeliveryQuery as jest.Mock).mockReturnValue({
       data: {
@@ -224,9 +243,83 @@ describe('DeliveryStatusPage (/manual-request/[deliveryId]/status.tsx)', () => {
     const cancelBtn = screen.getByRole('button', { name: /Cancel delivery/i })
     expect(cancelBtn).toBeEnabled()
 
+    // 1. Clicking Cancel does NOT cancel at once: opens dialog instead
     fireEvent.click(cancelBtn)
+    expect(mockCancel).not.toHaveBeenCalled()
+    const dialog = screen.getByRole('alertdialog')
+    expect(dialog).toBeInTheDocument()
+    expect(within(dialog).getByText('Cancel this delivery?')).toBeInTheDocument()
+
+    // 2. Confirming inside dialog calls cancel mutation and refreshes
+    const confirmBtn = within(dialog).getByRole('button', { name: /Cancel delivery/i })
+    fireEvent.click(confirmBtn)
+
     await waitFor(() => {
-      expect(mockCancel).toHaveBeenCalledWith('del-xyz-789')
+      expect(mockCancel).toHaveBeenCalledWith({
+        deliveryId: 'del-xyz-789',
+        cancelledBy: 'RESTAURANT',
+      })
+      expect(mockRefetch).toHaveBeenCalled()
+    })
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+  })
+
+  it('clicking Cancel then Keep it closes the dialog without cancelling or refreshing', async () => {
+    ;(useGetManualRequestDeliveryQuery as jest.Mock).mockReturnValue({
+      data: {
+        id: 'del-xyz-789',
+        status: 'ASSIGNING_COURIER',
+        createdAt: '2026-09-30T10:00:00Z',
+      },
+      isLoading: false,
+      error: undefined,
+      refetch: mockRefetch,
+    })
+
+    render(<DeliveryStatusPage />)
+
+    fireEvent.click(screen.getByRole('button', { name: /Cancel delivery/i }))
+    const dialog = screen.getByRole('alertdialog')
+    expect(dialog).toBeInTheDocument()
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Keep it' }))
+
+    await waitFor(() => {
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    })
+    expect(mockCancel).not.toHaveBeenCalled()
+    expect(mockRefetch).not.toHaveBeenCalled()
+  })
+
+  it('allows selecting customer cancellation and confirms with CUSTOMER', async () => {
+    mockCancel.mockResolvedValue({})
+    ;(useGetManualRequestDeliveryQuery as jest.Mock).mockReturnValue({
+      data: {
+        id: 'del-xyz-789',
+        status: 'ASSIGNING_COURIER',
+        createdAt: '2026-09-30T10:00:00Z',
+      },
+      isLoading: false,
+      error: undefined,
+      refetch: mockRefetch,
+    })
+
+    render(<DeliveryStatusPage />)
+
+    fireEvent.click(screen.getByRole('button', { name: /Cancel delivery/i }))
+    const dialog = screen.getByRole('alertdialog')
+
+    // Select CUSTOMER option
+    fireEvent.click(within(dialog).getByLabelText('The customer asked to cancel'))
+
+    const confirmBtn = within(dialog).getByRole('button', { name: /Cancel delivery/i })
+    fireEvent.click(confirmBtn)
+
+    await waitFor(() => {
+      expect(mockCancel).toHaveBeenCalledWith({
+        deliveryId: 'del-xyz-789',
+        cancelledBy: 'CUSTOMER',
+      })
       expect(mockRefetch).toHaveBeenCalled()
     })
   })

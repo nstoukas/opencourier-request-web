@@ -1,13 +1,13 @@
 import React from 'react'
 import '@testing-library/jest-dom'
-import { render, screen } from '@testing-library/react'
-import DeliveriesPage from './index'
-import { usePartnerSession } from '../../../hooks/usePartnerSession'
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
+import DeliveriesPage from '../../pages/manual-request/deliveries/index'
+import { usePartnerSession } from '../../hooks/usePartnerSession'
 import {
   useListManualRequestDeliveriesQuery,
   useUpdateManualRequestDeliveryMutation,
   useCancelManualRequestDeliveryMutation,
-} from '../../../api/manualRequestApi'
+} from '../../api/manualRequestApi'
 
 // Mock next/head
 jest.mock('next/head', () => ({
@@ -22,11 +22,11 @@ jest.mock('next/link', () => ({
 }))
 
 // Mock custom hooks
-jest.mock('../../../hooks/usePartnerSession', () => ({
+jest.mock('../../hooks/usePartnerSession', () => ({
   usePartnerSession: jest.fn(),
 }))
 
-jest.mock('../../../api/manualRequestApi', () => ({
+jest.mock('../../api/manualRequestApi', () => ({
   fetchPartnerDelivery: jest.fn(),
   useListManualRequestDeliveriesQuery: jest.fn(),
   useUpdateManualRequestDeliveryMutation: jest.fn(),
@@ -34,10 +34,13 @@ jest.mock('../../../api/manualRequestApi', () => ({
 }))
 
 describe('DeliveriesPage (/manual-request/deliveries/index.tsx)', () => {
+  const mockCancel = jest.fn()
+  const mockRefetch = jest.fn()
+
   beforeEach(() => {
     jest.resetAllMocks()
     ;(useUpdateManualRequestDeliveryMutation as jest.Mock).mockReturnValue([jest.fn(), { isLoading: false }])
-    ;(useCancelManualRequestDeliveryMutation as jest.Mock).mockReturnValue([jest.fn(), { isLoading: false }])
+    ;(useCancelManualRequestDeliveryMutation as jest.Mock).mockReturnValue([mockCancel, { isLoading: false }])
   })
 
   it('renders "Loading deliveries..." while session check is loading', () => {
@@ -202,5 +205,186 @@ describe('DeliveriesPage (/manual-request/deliveries/index.tsx)', () => {
     expect(canceledBadge).toBeInTheDocument()
     expect(canceledBadge).toHaveClass('bg-destructive')
     expect(screen.queryByText('CANCELED')).not.toBeInTheDocument()
+
+    // Terminal statuses must not render a Cancel button
+    expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument()
+  })
+
+  it('clicking Cancel does NOT cancel at once but opens dialog, and Keep it closes without cancelling', async () => {
+    ;(usePartnerSession as jest.Mock).mockReturnValue({
+      isSignedIn: true,
+      isLoading: false,
+    })
+    ;(useListManualRequestDeliveriesQuery as jest.Mock).mockReturnValue({
+      data: {
+        data: [
+          {
+            id: 'del-001',
+            status: 'ACCEPTED',
+            orderReference: 'ORD-999',
+            totalCost: 500,
+            currencyCode: 'EUR',
+            createdAt: '2026-07-29T10:00:00Z',
+            pickup: { pickupName: 'Nosh', city: 'Volos' },
+            dropoff: { dropoffName: 'Customer A', city: 'Volos' },
+          },
+        ],
+        pagination: { currentPage: 1, totalPages: 1 },
+      },
+      isLoading: false,
+      error: undefined,
+      refetch: mockRefetch,
+    })
+
+    render(<DeliveriesPage />)
+
+    const cancelBtn = screen.getByRole('button', { name: 'Cancel' })
+    expect(cancelBtn).toBeInTheDocument()
+
+    // 1. Clicking Cancel does NOT cancel at once (no request until dialog confirm)
+    fireEvent.click(cancelBtn)
+    expect(mockCancel).not.toHaveBeenCalled()
+
+    const dialog = screen.getByRole('alertdialog')
+    expect(dialog).toBeInTheDocument()
+    expect(within(dialog).getByText('Cancel this delivery?')).toBeInTheDocument()
+
+    // 2. Keep it dismisses dialog without cancelling
+    const keepBtn = within(dialog).getByRole('button', { name: 'Keep it' })
+    fireEvent.click(keepBtn)
+
+    await waitFor(() => {
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    })
+    expect(mockCancel).not.toHaveBeenCalled()
+    expect(mockRefetch).not.toHaveBeenCalled()
+  })
+
+  it('confirming cancellation in dialog cancels, updates status message and refreshes', async () => {
+    mockCancel.mockResolvedValueOnce({ id: 'del-001', status: 'CANCELED' })
+    ;(usePartnerSession as jest.Mock).mockReturnValue({
+      isSignedIn: true,
+      isLoading: false,
+    })
+    ;(useListManualRequestDeliveriesQuery as jest.Mock).mockReturnValue({
+      data: {
+        data: [
+          {
+            id: 'del-001',
+            status: 'ACCEPTED',
+            orderReference: 'ORD-999',
+            totalCost: 500,
+            currencyCode: 'EUR',
+            createdAt: '2026-07-29T10:00:00Z',
+            pickup: { pickupName: 'Nosh', city: 'Volos' },
+            dropoff: { dropoffName: 'Customer A', city: 'Volos' },
+          },
+        ],
+        pagination: { currentPage: 1, totalPages: 1 },
+      },
+      isLoading: false,
+      error: undefined,
+      refetch: mockRefetch,
+    })
+
+    render(<DeliveriesPage />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    const dialog = screen.getByRole('alertdialog')
+
+    // Confirm with default RESTAURANT selection
+    const confirmBtn = within(dialog).getByRole('button', { name: /Cancel delivery/i })
+    fireEvent.click(confirmBtn)
+
+    await waitFor(() => {
+      expect(mockCancel).toHaveBeenCalledWith({
+        deliveryId: 'del-001',
+        cancelledBy: 'RESTAURANT',
+      })
+      expect(mockRefetch).toHaveBeenCalled()
+      expect(screen.getByText('Delivery cancelled.')).toBeInTheDocument()
+    })
+
+    await waitFor(() => {
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    })
+  })
+
+  it('allows choosing customer cancellation and confirms with CUSTOMER', async () => {
+    mockCancel.mockResolvedValueOnce({ id: 'del-001', status: 'CANCELED' })
+    ;(usePartnerSession as jest.Mock).mockReturnValue({
+      isSignedIn: true,
+      isLoading: false,
+    })
+    ;(useListManualRequestDeliveriesQuery as jest.Mock).mockReturnValue({
+      data: {
+        data: [
+          {
+            id: 'del-001',
+            status: 'ACCEPTED',
+            orderReference: 'ORD-999',
+            totalCost: 500,
+            currencyCode: 'EUR',
+            createdAt: '2026-07-29T10:00:00Z',
+            pickup: { pickupName: 'Nosh', city: 'Volos' },
+            dropoff: { dropoffName: 'Customer A', city: 'Volos' },
+          },
+        ],
+        pagination: { currentPage: 1, totalPages: 1 },
+      },
+      isLoading: false,
+      error: undefined,
+      refetch: mockRefetch,
+    })
+
+    render(<DeliveriesPage />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    const dialog = screen.getByRole('alertdialog')
+
+    // Select CUSTOMER option
+    fireEvent.click(within(dialog).getByLabelText('The customer asked to cancel'))
+
+    const confirmBtn = within(dialog).getByRole('button', { name: /Cancel delivery/i })
+    fireEvent.click(confirmBtn)
+
+    await waitFor(() => {
+      expect(mockCancel).toHaveBeenCalledWith({
+        deliveryId: 'del-001',
+        cancelledBy: 'CUSTOMER',
+      })
+      expect(mockRefetch).toHaveBeenCalled()
+    })
+  })
+
+  it('does not render Cancel button for FAILED terminal status', () => {
+    ;(usePartnerSession as jest.Mock).mockReturnValue({
+      isSignedIn: true,
+      isLoading: false,
+    })
+    ;(useListManualRequestDeliveriesQuery as jest.Mock).mockReturnValue({
+      data: {
+        data: [
+          {
+            id: 'del-failed',
+            status: 'FAILED',
+            orderReference: 'ORD-FAIL',
+            totalCost: 500,
+            currencyCode: 'EUR',
+            createdAt: '2026-07-29T10:00:00Z',
+            pickup: { pickupName: 'Nosh', city: 'Volos' },
+            dropoff: { dropoffName: 'Customer X', city: 'Volos' },
+          },
+        ],
+        pagination: { currentPage: 1, totalPages: 1 },
+      },
+      isLoading: false,
+      error: undefined,
+      refetch: mockRefetch,
+    })
+
+    render(<DeliveriesPage />)
+
+    expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument()
   })
 })

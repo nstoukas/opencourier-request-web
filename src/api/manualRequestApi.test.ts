@@ -8,6 +8,7 @@ import {
   fetchDispatchState,
   useDispatchStateQuery,
   useConfirmManualRequestDeliveryMutation,
+  useCancelManualRequestDeliveryMutation,
   DispatchState,
 } from './manualRequestApi'
 import { ManualRequestDeliveryInput } from '../modules/manual-request/types'
@@ -275,6 +276,117 @@ describe('manualRequestApi helper functions', () => {
       expect(wireBody.dropoffNotes).toBe('Floor and doorbell: Floor 4\nRing twice')
       expect(wireBody.orderTotalValue).toBe(1250)
       expect(wireBody.quoteId).toBe('quote-abc')
+    })
+  })
+
+  describe('useCancelManualRequestDeliveryMutation (spec 0015, AC-5)', () => {
+    const originalApiMode = process.env.NEXT_PUBLIC_MANUAL_REQUEST_API_MODE
+
+    beforeEach(() => {
+      process.env.NEXT_PUBLIC_MANUAL_REQUEST_API_MODE = 'partner'
+    })
+
+    afterEach(() => {
+      process.env.NEXT_PUBLIC_MANUAL_REQUEST_API_MODE = originalApiMode
+    })
+
+    it('in partner mode, sends POST to /deliveries/:id/cancel with body {"cancelledBy":"CUSTOMER"} for CUSTOMER', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        text: jest.fn().mockResolvedValue(JSON.stringify({ result: { id: 'del-123', status: 'CANCELED' } })),
+      } as any)
+
+      const { result } = renderHook(() => useCancelManualRequestDeliveryMutation())
+      const [cancelDelivery] = result.current
+
+      let response: any
+      await act(async () => {
+        response = await cancelDelivery({ deliveryId: 'del-123', cancelledBy: 'CUSTOMER' })
+      })
+
+      expect(response).toEqual({ id: 'del-123', status: 'CANCELED' })
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/partner-proxy/deliveries/del-123/cancel',
+        expect.objectContaining({
+          method: 'POST',
+        }),
+      )
+
+      const fetchCall = (global.fetch as jest.Mock).mock.calls[0]
+      expect(fetchCall[1].body).toBe(JSON.stringify({ cancelledBy: 'CUSTOMER' }))
+    })
+
+    it('in partner mode, sends POST to /deliveries/:id/cancel with body {"cancelledBy":"RESTAURANT"} for RESTAURANT', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        text: jest.fn().mockResolvedValue(JSON.stringify({ result: { id: 'del-456', status: 'CANCELED' } })),
+      } as any)
+
+      const { result } = renderHook(() => useCancelManualRequestDeliveryMutation())
+      const [cancelDelivery] = result.current
+
+      let response: any
+      await act(async () => {
+        response = await cancelDelivery({ deliveryId: 'del-456', cancelledBy: 'RESTAURANT' })
+      })
+
+      expect(response).toEqual({ id: 'del-456', status: 'CANCELED' })
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/partner-proxy/deliveries/del-456/cancel',
+        expect.objectContaining({
+          method: 'POST',
+        }),
+      )
+
+      const fetchCall = (global.fetch as jest.Mock).mock.calls[0]
+      expect(fetchCall[1].body).toBe(JSON.stringify({ cancelledBy: 'RESTAURANT' }))
+    })
+
+    it('in admin mode, sends POST to /delivery/:id/cancel with no body', async () => {
+      process.env.NEXT_PUBLIC_MANUAL_REQUEST_API_MODE = 'admin'
+
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        text: jest.fn().mockResolvedValue(JSON.stringify({ result: { id: 'del-789', status: 'CANCELED' } })),
+      } as any)
+
+      const { result } = renderHook(() => useCancelManualRequestDeliveryMutation())
+      const [cancelDelivery] = result.current
+
+      let response: any
+      await act(async () => {
+        response = await cancelDelivery({ deliveryId: 'del-789', cancelledBy: 'CUSTOMER' })
+      })
+
+      expect(response).toEqual({ id: 'del-789', status: 'CANCELED' })
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/partner-proxy/delivery/del-789/cancel',
+        expect.objectContaining({
+          method: 'POST',
+        }),
+      )
+
+      const fetchCall = (global.fetch as jest.Mock).mock.calls[0]
+      expect(fetchCall[1].body).toBeUndefined()
+    })
+
+    it('propagates server errors when cancel fails', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: false,
+        status: 400,
+        json: jest.fn().mockResolvedValue({
+          result: [{ message: 'Delivery cannot be cancelled in terminal status', statusCode: 400 }],
+        }),
+      } as any)
+
+      const { result } = renderHook(() => useCancelManualRequestDeliveryMutation())
+      const [cancelDelivery] = result.current
+
+      await act(async () => {
+        await expect(
+          cancelDelivery({ deliveryId: 'del-123', cancelledBy: 'RESTAURANT' }),
+        ).rejects.toThrow('Delivery cannot be cancelled in terminal status')
+      })
     })
   })
 
