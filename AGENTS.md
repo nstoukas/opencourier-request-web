@@ -37,5 +37,7 @@ Yarn 1.22, **not Corepack**: run `node node_modules/.bin/next dev -p 3090` and
   AC-4). Never reuse a fixture customer's phone in a test order.
 - The partner proxy forwards a body only for POST, PATCH and PUT, and only a real one: Next.js turns no
   body into `{}`, which the backend would read as a body it never asked for.
+- A dispatch stop (spec 0014): the order page shows the backend's own sentence from `GET /dispatch-state` through the
+  partner proxy, read every minute while the tab is visible; a refused quote already carries the same sentence.
 
 _Drafted by /audit from the repo, worth a quick human pass. Edit freely: once a line stops matching this draft, later runs treat it as curated and will flag rather than overwrite it._
