@@ -238,17 +238,25 @@ export function useConfirmManualRequestDeliveryMutation() {
   })
 }
 
-export function useCancelManualRequestDeliveryMutation() {
-  return useStandaloneMutation<string, ManualRequestDeliveryDto>((deliveryId) => {
-    const apiMode = getManualRequestApiMode()
-    const path = apiMode === 'partner'
-      ? `/deliveries/${deliveryId}/cancel`
-      : `/delivery/${deliveryId}/cancel`
+// Who asked for a cancellation (spec 0015): the restaurant itself, or its customer through it. A
+// restaurant's own cancellation after a rider accepted is charged to it; the rider is paid either way.
+export type PartnerCancelledBy = 'RESTAURANT' | 'CUSTOMER'
 
-    return manualRequestFetch(path, {
-      method: 'POST',
-    })
-  })
+export function useCancelManualRequestDeliveryMutation() {
+  return useStandaloneMutation<{ deliveryId: string; cancelledBy: PartnerCancelledBy }, ManualRequestDeliveryDto>(
+    ({ deliveryId, cancelledBy }) => {
+      const apiMode = getManualRequestApiMode()
+      if (apiMode === 'partner') {
+        return manualRequestFetch(`/deliveries/${deliveryId}/cancel`, {
+          method: 'POST',
+          body: JSON.stringify({ cancelledBy }),
+        })
+      }
+      return manualRequestFetch(`/delivery/${deliveryId}/cancel`, {
+        method: 'POST',
+      })
+    },
+  )
 }
 
 export function useSubmitManualRequestEventMutation() {

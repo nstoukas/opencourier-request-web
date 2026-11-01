@@ -22,12 +22,12 @@ import {
   fetchPartnerDelivery,
   useListManualRequestDeliveriesQuery,
   useUpdateManualRequestDeliveryMutation,
-  useCancelManualRequestDeliveryMutation,
 } from '../../../api/manualRequestApi'
 import { PartnerDeliveryDto } from '../../../modules/manual-request/types'
 import { usePartnerSession } from '../../../hooks/usePartnerSession'
 import { formatDateTime, formatMoney } from '../../../utils/format'
 import { PageHeader } from '../../../modules/portal/components/PortalFrame'
+import { CancelDeliveryDialog } from '../../../modules/cancel/CancelDeliveryDialog'
 
 // Statuses where cancel is no longer possible
 const TERMINAL_STATUSES = new Set(['DROPPED_OFF', 'CANCELED', 'FAILED'])
@@ -218,7 +218,7 @@ export default function DeliveriesPage() {
     skip: !isSignedIn || isSessionLoading,
   })
 
-  const [cancelDelivery, { isLoading: isCanceling }] = useCancelManualRequestDeliveryMutation()
+  // The delivery whose cancel dialog is open (spec 0015: it asks first, and who wanted it).
   const [cancelingId, setCancelingId] = useState<string | null>(null)
   const [editingDelivery, setEditingDelivery] = useState<PartnerDeliveryDto | null>(null)
   const [loadingEditId, setLoadingEditId] = useState<string | null>(null)
@@ -236,18 +236,9 @@ export default function DeliveriesPage() {
     }
   }
 
-  const handleCancel = async (deliveryId: string) => {
-    setCancelingId(deliveryId)
+  const handleCancel = (deliveryId: string) => {
     setStatusMessage('')
-    try {
-      await cancelDelivery(deliveryId)
-      setStatusMessage('Delivery cancelled.')
-      await refetch()
-    } catch (err: any) {
-      setStatusMessage(err?.message ?? 'Cancel failed.')
-    } finally {
-      setCancelingId(null)
-    }
+    setCancelingId(deliveryId)
   }
 
   const pagination = data?.pagination
@@ -350,9 +341,9 @@ export default function DeliveriesPage() {
                             variant="destructive"
                             size="sm"
                             onClick={() => handleCancel(delivery.id)}
-                            disabled={isCancelingThis || isCanceling}
+                            disabled={isCancelingThis}
                           >
-                            {isCancelingThis ? 'Cancelling...' : 'Cancel'}
+                            Cancel
                           </Button>
                         </>
                       ) : null}
@@ -400,6 +391,18 @@ export default function DeliveriesPage() {
           onSaved={() => {
             setEditingDelivery(null)
             setStatusMessage('Delivery updated.')
+            refetch()
+          }}
+        />
+      ) : null}
+
+      {cancelingId ? (
+        <CancelDeliveryDialog
+          deliveryId={cancelingId}
+          onClose={() => setCancelingId(null)}
+          onCancelled={() => {
+            setCancelingId(null)
+            setStatusMessage('Delivery cancelled.')
             refetch()
           }}
         />

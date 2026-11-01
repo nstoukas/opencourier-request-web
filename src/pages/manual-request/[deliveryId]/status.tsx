@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import Head from 'next/head'
 import Link from 'next/link'
 import { useRouter } from 'next/router'
@@ -12,7 +13,6 @@ import {
   StatusBadge,
 } from '../../../admin-web-components'
 import {
-  useCancelManualRequestDeliveryMutation,
   useGetManualRequestDeliveryQuery,
 } from '../../../api/manualRequestApi'
 import type {
@@ -25,6 +25,7 @@ import { getManualRequestApiMode } from '../../../utils/manualRequestAuth'
 import { CustomerSaveNotice } from '../../../modules/saved-customers/components/CustomerSaveNotice'
 import { formatDateTime, formatMoney } from '../../../utils/format'
 import { PageHeader } from '../../../modules/portal/components/PortalFrame'
+import { CancelDeliveryDialog } from '../../../modules/cancel/CancelDeliveryDialog'
 
 const TERMINAL_STATUSES = new Set(['DROPPED_OFF', 'CANCELED', 'FAILED'])
 
@@ -303,7 +304,8 @@ export default function ManualRequestStatusPage() {
   const { data, isLoading, error, refetch } = useGetManualRequestDeliveryQuery(deliveryId, {
     skip: !deliveryId,
   })
-  const [cancelDelivery, { isLoading: isCanceling }] = useCancelManualRequestDeliveryMutation()
+  // The cancel asks first, and asks who wanted it (spec 0015).
+  const [cancelOpen, setCancelOpen] = useState(false)
   const statusCode = (error as any)?.statusCode ?? (error as any)?.status
   const errorMessage =
     statusCode === 401
@@ -312,11 +314,6 @@ export default function ManualRequestStatusPage() {
 
   const isTerminal = data ? TERMINAL_STATUSES.has(data.status) : false
 
-  const handleCancel = async () => {
-    if (!deliveryId) return
-    await cancelDelivery(deliveryId)
-    await refetch()
-  }
 
   return (
     <>
@@ -365,14 +362,24 @@ export default function ManualRequestStatusPage() {
               </Button>
               <Button
                 variant="destructive"
-                onClick={handleCancel}
-                disabled={isCanceling || !data || isTerminal}
+                onClick={() => setCancelOpen(true)}
+                disabled={!data || isTerminal || !deliveryId}
               >
-                {isCanceling ? 'Canceling...' : 'Cancel delivery'}
+                Cancel delivery
               </Button>
             </div>
             {isTerminal ? (
               <p className="text-xs text-muted-foreground">This delivery can no longer be cancelled.</p>
+            ) : null}
+            {cancelOpen ? (
+              <CancelDeliveryDialog
+                deliveryId={deliveryId}
+                onClose={() => setCancelOpen(false)}
+                onCancelled={() => {
+                  setCancelOpen(false)
+                  void refetch()
+                }}
+              />
             ) : null}
           </CardContent>
         </Card>
