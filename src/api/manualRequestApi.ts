@@ -448,3 +448,44 @@ export function useGetManualRequestDeliveryQuery(
 
   return { data, isLoading, error, refetch: fetchDelivery }
 }
+
+// Spec 0014. Whether dispatch is stopped (heat or a storm) and until when, with the sentence the
+// backend wrote for restaurants. `next` is a stop starting within 12 hours.
+export type DispatchStopView = { reason: 'HEAT' | 'STORM' | 'OTHER'; startsAt: string; endsAt: string | null; message: string }
+export type DispatchState = { current: DispatchStopView | null; next: DispatchStopView | null }
+
+export async function fetchDispatchState(): Promise<DispatchState> {
+  return manualRequestFetch<DispatchState>('/dispatch-state')
+}
+
+// Read on mount, then every 60 s while the tab is visible (spec 0014, AC-6). A failed read keeps the
+// last answer and shows nothing new: the quote's own refusal still tells the restaurant.
+export function useDispatchStateQuery(intervalMs = 60_000) {
+  const [data, setData] = useState<DispatchState | undefined>(undefined)
+
+  const load = useCallback(async () => {
+    try {
+      setData(await fetchDispatchState())
+    } catch {
+      // Kept quiet on purpose; see above.
+    }
+  }, [])
+
+  useEffect(() => {
+    void load()
+    const timer = setInterval(() => {
+      if (document.visibilityState === 'visible') void load()
+    }, intervalMs)
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void load()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [load, intervalMs])
+
+  return { data }
+}
+
