@@ -113,7 +113,8 @@ export const SIGN_OUT_FAILED = 'Could not sign out. Check your connection and tr
 export const SESSION_CHECK_FAILED = 'Could not check your sign in. Check your connection and try again.'
 
 export function PortalFrame({ children }: { children: ReactNode }) {
-  const { isSignedIn, email, isLoading, checkFailed, sessionEnded, refresh, recheck, signedIn } = usePartnerSession()
+  const { isSignedIn, email, isLoading, checkFailed, sessionEnded, refresh, recheck, signedIn, signedOut } =
+    usePartnerSession()
   const [signOutError, setSignOutError] = useState<string | null>(null)
 
   // A 401 from any partner call: check the session again, quietly (spec 0017, AC-5).
@@ -128,7 +129,7 @@ export function PortalFrame({ children }: { children: ReactNode }) {
       setSignOutError(SIGN_OUT_FAILED)
       return
     }
-    await refresh()
+    await signedOut()
   }
 
   if (isLoading) {

@@ -52,6 +52,9 @@ export function usePolledFetch<T>(
   useEffect(() => {
     stopped.current = false
     hasData.current = false
+    // Another page or another order: the old answer is not this one's, so it goes and "loading" shows.
+    setData(undefined)
+    setError(undefined)
     void run('first')
     if (!enabled) return
     const timer = setInterval(() => {

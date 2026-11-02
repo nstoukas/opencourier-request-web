@@ -51,6 +51,14 @@ export function usePartnerSession() {
     return recheckRef.current
   }, [])
 
+  // After a sign out the restaurant asked for: a 401 from a poll that lands meanwhile must not read as
+  // "your session ended", so the session counts as signed out before the check, and the flag is cleared.
+  const signedOut = useCallback(async () => {
+    signedInRef.current = false
+    await refresh()
+    setSessionEnded(false)
+  }, [refresh])
+
   // After a successful sign in: the "session ended" sentence has done its job.
   const signedIn = useCallback(async () => {
     setSessionEnded(false)
@@ -61,5 +69,5 @@ export function usePartnerSession() {
     void refresh()
   }, [refresh])
 
-  return { isSignedIn, email, isLoading, checkFailed, sessionEnded, refresh, recheck, signedIn }
+  return { isSignedIn, email, isLoading, checkFailed, sessionEnded, refresh, recheck, signedIn, signedOut }
 }

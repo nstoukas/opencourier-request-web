@@ -308,11 +308,17 @@ export default function ManualRequestStatusPage() {
   })
   // The cancel asks first, and asks who wanted it (spec 0015).
   const [cancelOpen, setCancelOpen] = useState(false)
-  // The server's own sentence when it sent one (a 404 "This order is older than 30 days..." for an old
-  // order, spec 0017), else a general line. A 401 is handled by the frame, which checks the session.
+  // The server's own sentence for a refusal (a 4xx, such as the 404 "This order is older than 30 days..."
+  // for an old order, spec 0017), else a general line: a timeout's or the browser's own words, and a
+  // 5xx's text, are not for restaurants. A 401 is handled by the frame, which checks the session.
+  const errorStatus: number | undefined = (error as any)?.statusCode
   const serverMessage: string | undefined = (error as any)?.message
   const errorMessage =
-    serverMessage && !/^Request failed \(HTTP \d+\)$/.test(serverMessage)
+    errorStatus !== undefined &&
+    errorStatus >= 400 &&
+    errorStatus < 500 &&
+    serverMessage &&
+    !/^Request failed \(HTTP \d+\)$/.test(serverMessage)
       ? serverMessage
       : 'The order could not be loaded. Try again in a moment.'
 
