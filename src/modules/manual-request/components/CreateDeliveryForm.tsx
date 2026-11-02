@@ -13,6 +13,7 @@ import { z } from 'zod'
 import {
   Alert,
   AlertDescription,
+  Button,
   Form,
   FormControl,
   FormDescription,
@@ -51,20 +52,28 @@ import {
   geocodeCoordinatesFromAddress,
   GeocodeCoordinatesResult,
   hasValidCoordinates,
+  lookUpPinForAddress,
 } from '../utils/geocode'
 import {
-  composeRiderNote,
+  composeAdminNote,
+  ConfirmedPin,
   COUNTER_FROM_SHARE,
+  DOORBELL_MAX,
   euroAmountToCents,
-  FLOOR_AND_BELL_MAX,
+  FLOOR_MAX,
+  GeoPoint,
+  isPinConfirmed,
   isQuoteExpired,
   isQuoteFailure,
   orderTotalProblem,
   READY_IN_MINUTES,
   readyAtFromMinutes,
   RIDER_NOTE_MAX,
+  riderNoteText,
+  VOLOS_CENTRE,
 } from '../utils/orderForm'
 import { AddressSection } from './AddressSection'
+import { PinMap } from './PinMap'
 import { ChoicePillOption, ChoicePills } from './ChoicePills'
 import { cn } from '../../../ui-shared-utils'
 import { BarPhase, PriceSendBar } from './PriceSendBar'
@@ -109,8 +118,9 @@ const formSchema = z.object({
   dropoffAddress: addressSchema,
   dropoffLatitude: z.number({ invalid_type_error: 'Enter a valid latitude' }),
   dropoffLongitude: z.number({ invalid_type_error: 'Enter a valid longitude' }),
-  // A form rule, not maxLength: a saved customer's longer text still shows, with a red counter (AC-8).
-  floorAndBell: z.string().max(FLOOR_AND_BELL_MAX, `Keep this to ${FLOOR_AND_BELL_MAX} characters`),
+  // Form rules, not maxLength: a saved customer's longer text still shows, with a red counter (spec 0016, AC-1).
+  floor: z.string().max(FLOOR_MAX, `Keep this to ${FLOOR_MAX} characters`),
+  doorbell: z.string().max(DOORBELL_MAX, `Keep this to ${DOORBELL_MAX} characters`),
   note: z.string().max(RIDER_NOTE_MAX, `Keep this to ${RIDER_NOTE_MAX} characters`),
 
   // The order
@@ -152,7 +162,8 @@ function buildDefaultValues(): CreateDeliveryFormValues {
     dropoffAddress: defaultAddress,
     dropoffLatitude: 0,
     dropoffLongitude: 0,
-    floorAndBell: '',
+    floor: '',
+    doorbell: '',
     note: '',
     // No pill is chosen at the start: the restaurant must say when the order is ready (AC-6).
     readyInMinutes: undefined,
@@ -185,8 +196,9 @@ function stableJson(value: unknown): string {
   )
 }
 
-// The values a price depends on. Left out: what the price step writes itself (the drop off map point
-// and full address text) and the pickup values, which come from the profile.
+// The values a price depends on, the drop off point included: moving the pin drops the price (spec 0016,
+// AC-5). Left out: the full address text, which the price step fills in for the payload, and the pickup
+// values, which come from the profile.
 function pricedValuesKey(values: CreateDeliveryFormValues): string {
   const {
     pickupName,
@@ -195,8 +207,6 @@ function pricedValuesKey(values: CreateDeliveryFormValues): string {
     pickupAddress,
     pickupLatitude,
     pickupLongitude,
-    dropoffLatitude,
-    dropoffLongitude,
     dropoffAddress,
     ...rest
   } = values
@@ -224,7 +234,6 @@ function addressPayload(address: CreateDeliveryFormValues['pickupAddress']) {
 
 // The body of both calls, the quote and the delivery, built from the same priced values (Key invariants).
 function orderPayload(values: CreateDeliveryFormValues, pickupReadyAt: string, orderTotalValue: number): ManualRequestQuoteInput {
-  const riderNote = composeRiderNote(values.floorAndBell, values.note)
   return {
     pickupName: values.pickupName?.trim() || 'Pickup Contact',
     pickupPhoneNumber: values.pickupPhoneNumber?.trim() || '+10000000000',
@@ -236,9 +245,12 @@ function orderPayload(values: CreateDeliveryFormValues, pickupReadyAt: string, o
     pickupDeadlineAt: null,
     dropoffName: values.dropoffName.trim(),
     dropoffPhoneNumber: values.dropoffPhoneNumber.trim(),
-    // The rider app shows dropoffSellerNotes, admin shows dropoffNotes: the same text in both.
-    dropoffNotes: riderNote,
-    dropoffSellerNotes: riderNote,
+    // The rider app shows dropoffSellerNotes: the note alone, since floor and doorbell have their own
+    // fields (spec 0016, AC-2). Admin shows dropoffNotes, which keeps them on a first line.
+    dropoffNotes: composeAdminNote(values.floor, values.doorbell, values.note),
+    dropoffSellerNotes: riderNoteText(values.note),
+    dropoffFloor: values.floor?.trim() || null,
+    dropoffDoorbell: values.doorbell?.trim() || null,
     // houseNumber always empty: the backend shares one address row per street and point, so a doorbell
     // name written there would show on other restaurants' orders to the same building.
     dropoffAddress: { ...addressPayload(values.dropoffAddress), houseNumber: '' },
@@ -281,7 +293,8 @@ const FIELDS_IN_PAGE_ORDER = [
   'dropoffPhoneNumber',
   'dropoffAddress.streetAddress.0',
   'dropoffAddress.city',
-  'floorAndBell',
+  'floor',
+  'doorbell',
   'readyInMinutes',
   'packageSize',
   'orderTotal',
@@ -289,7 +302,9 @@ const FIELDS_IN_PAGE_ORDER = [
 ] as const
 type FocusableField = (typeof FIELDS_IN_PAGE_ORDER)[number]
 // The fields hidden behind a picked customer's card until Edit.
-const CUSTOMER_FIELDS: readonly FocusableField[] = FIELDS_IN_PAGE_ORDER.slice(0, 5)
+const CUSTOMER_FIELDS: readonly FocusableField[] = FIELDS_IN_PAGE_ORDER.slice(0, 6)
+
+export const CONFIRM_PIN_MESSAGE = 'Confirm the pin on the map'
 
 const READY_IN_OPTIONS: ChoicePillOption[] = READY_IN_MINUTES.map((minutes) => ({
   value: String(minutes),
@@ -392,15 +407,36 @@ export function CreateDeliveryForm() {
     return () => clearInterval(timer)
   }, [priced])
 
-  // Which drop off address the current map point belongs to (street, city, zip). The point is set by a
-  // search pick or a picked saved customer; typing in those fields afterwards does not move it, so the
-  // price step looks the address up again when they changed (spec 0005: a picked customer stays editable).
+  // ── The drop off pin (spec 0016, AC-4 and AC-5) ──
+  // The point the order goes to is the one the restaurant confirmed on the map. `confirmedPin` holds that
+  // point and the address it was confirmed for; the pin counts as confirmed only while the form still
+  // holds both, so a drag of the map or an edit of the street undoes it by itself.
   const dropoffLatitude = form.watch('dropoffLatitude')
   const dropoffLongitude = form.watch('dropoffLongitude')
-  const [dropoffPinKey, setDropoffPinKey] = useState('')
+  const currentPinKey = addressPinKey(form.watch('dropoffAddress'))
+  const [confirmedPin, setConfirmedPin] = useState<ConfirmedPin | null>(null)
+  const pinConfirmed = isPinConfirmed(confirmedPin, dropoffLatitude, dropoffLongitude, currentPinKey)
+  const hasDropoffPoint = hasValidCoordinates(dropoffLatitude, dropoffLongitude)
+  // A sentence above the map (an address the lookup did not find), and "Show on map" running.
+  const [pinMessage, setPinMessage] = useState<string | null>(null)
+  const [isLocating, setIsLocating] = useState(false)
+  const pinMapRef = useRef<HTMLDivElement>(null)
+
+  // Which address the current point belongs to (street, town, postcode). A ref, set in the same pass of
+  // effects as the check below, so a search pick (address and point together) never reads as an edit.
+  const pointPinKeyRef = useRef('')
   useEffect(() => {
-    setDropoffPinKey(addressPinKey(form.getValues('dropoffAddress')))
+    pointPinKeyRef.current = addressPinKey(form.getValues('dropoffAddress'))
   }, [dropoffLatitude, dropoffLongitude, form])
+  // The street, town or postcode changed after the point was set: the point belonged to the old address,
+  // so it goes, and the map with it, until the new address is shown on the map (AC-5).
+  useEffect(() => {
+    if (currentPinKey === pointPinKeyRef.current) return
+    if (!hasValidCoordinates(form.getValues('dropoffLatitude'), form.getValues('dropoffLongitude'))) return
+    form.setValue('dropoffLatitude', 0, { shouldDirty: true })
+    form.setValue('dropoffLongitude', 0, { shouldDirty: true })
+    setPinMessage(null)
+  }, [currentPinKey, form])
 
   useEffect(() => {
     if (pickupMapped && checkPartnerPickupUsable(profile).usable) {
@@ -433,6 +469,19 @@ export function CreateDeliveryForm() {
       return
     }
 
+    // No price for a pin nobody checked on the map (spec 0016, AC-5).
+    if (!pinConfirmed) {
+      setBarError(CONFIRM_PIN_MESSAGE)
+      if (linkedCustomer) setEditingCustomer(true)
+      if (pinMapRef.current) {
+        // `?.`: test browsers have no scrollIntoView.
+        pinMapRef.current.scrollIntoView?.({ block: 'center' })
+      } else {
+        setFieldToFocus('dropoffAddress.streetAddress.0')
+      }
+      return
+    }
+
     // Fixed here and reused at Send, so the delivery carries what the quote and its ETA used (AC-6).
     const pickupReadyAt = readyAtFromMinutes(values.readyInMinutes)
     const orderTotalValue = euroAmountToCents(values.orderTotal) ?? 0
@@ -443,22 +492,15 @@ export function CreateDeliveryForm() {
       const pickupLatSource = pickupMapped?.pickupLatitude ?? values.pickupLatitude
       const pickupLngSource = pickupMapped?.pickupLongitude ?? values.pickupLongitude
 
-      const dropoffPointStillFits =
-        hasValidCoordinates(values.dropoffLatitude, values.dropoffLongitude) &&
-        addressPinKey(values.dropoffAddress) === dropoffPinKey
-
-      // The address lookups get their own catch: a timeout or a dropped connection there would otherwise
-      // put the browser's own words ("signal timed out") in the bar.
+      // The drop off point is the confirmed pin, never looked up here (spec 0016, AC-5); only the pickup
+      // can still need a lookup. It gets its own catch: a timeout or a dropped connection there would
+      // otherwise put the browser's own words ("signal timed out") in the bar.
       let pickupCoordinates: { latitude: number; longitude: number } | null
-      let dropoffCoordinates: { latitude: number; longitude: number } | null
+      const dropoffCoordinates = { latitude: values.dropoffLatitude, longitude: values.dropoffLongitude }
       try {
         pickupCoordinates = hasValidCoordinates(pickupLatSource, pickupLngSource)
           ? { latitude: pickupLatSource, longitude: pickupLngSource }
           : await geocodeCoordinatesFromAddress(pickupAddressSource)
-        // A typed address is looked up near the restaurant first (AC-10).
-        dropoffCoordinates = dropoffPointStillFits
-          ? { latitude: values.dropoffLatitude, longitude: values.dropoffLongitude }
-          : await geocodeCoordinatesFromAddress(values.dropoffAddress, pickupCoordinates ?? undefined)
       } catch (lookupError) {
         setBarError(
           (lookupError as Error | undefined)?.name === 'TimeoutError'
@@ -468,27 +510,19 @@ export function CreateDeliveryForm() {
         return
       }
 
-      if (!pickupCoordinates || !dropoffCoordinates) {
+      if (!pickupCoordinates) {
         setBarError('This address was not found on the map. Search for it and pick a result.')
         return
       }
 
       const pickupFormatted = resolveSubmittedFormattedAddress(pickupAddressSource, pickupCoordinates)
-      // A point looked up again belongs to a new address: its old full text must not come along.
-      const dropoffFormatted = resolveSubmittedFormattedAddress(
-        dropoffPointStillFits ? values.dropoffAddress : { ...values.dropoffAddress, formattedAddress: '' },
-        dropoffCoordinates,
-      )
+      const dropoffFormatted = resolveSubmittedFormattedAddress(values.dropoffAddress, null)
 
-      form.setValue('dropoffLatitude', dropoffCoordinates.latitude, { shouldDirty: true, shouldValidate: true })
-      form.setValue('dropoffLongitude', dropoffCoordinates.longitude, { shouldDirty: true, shouldValidate: true })
-      if (dropoffFormatted) {
-        form.setValue('dropoffAddress.formattedAddress', dropoffFormatted, { shouldDirty: true, shouldValidate: true })
-      }
-
-      // The values as priced: the live form with the looked up points, and the pickup from the profile.
+      // The values as priced: the live form with its confirmed drop off pin, and the pickup from the profile.
+      const livePricedValues = copyValues(form.getValues())
       const pricedValues: CreateDeliveryFormValues = {
-        ...copyValues(form.getValues()),
+        ...livePricedValues,
+        dropoffAddress: { ...livePricedValues.dropoffAddress, formattedAddress: dropoffFormatted },
         pickupName: pickupMapped?.pickupName ?? values.pickupName,
         pickupPhoneNumber: pickupMapped?.pickupPhoneNumber ?? values.pickupPhoneNumber,
         pickupBusinessName: pickupMapped?.pickupBusinessName ?? values.pickupBusinessName,
@@ -574,15 +608,59 @@ export function CreateDeliveryForm() {
     const options = { shouldDirty: true, shouldValidate: true }
     form.setValue('dropoffName', values.dropoffName, options)
     form.setValue('dropoffPhoneNumber', values.dropoffPhoneNumber, options)
-    form.setValue('floorAndBell', values.floorAndBell, options)
+    form.setValue('floor', values.floor, options)
+    form.setValue('doorbell', values.doorbell, options)
     form.setValue('note', values.note, options)
     form.setValue('dropoffAddress', values.dropoffAddress, options)
     form.setValue('dropoffLatitude', values.dropoffLatitude, options)
     form.setValue('dropoffLongitude', values.dropoffLongitude, options)
+    // A saved customer's point was confirmed when it was saved, or moved there by a rider (AC-5).
+    setConfirmedPin({
+      latitude: values.dropoffLatitude,
+      longitude: values.dropoffLongitude,
+      pinKey: addressPinKey(values.dropoffAddress),
+    })
+    setPinMessage(null)
     setLinkedCustomer(customer)
     setEditingCustomer(false)
     setSaveCustomer(true)
     if (pricedRef.current) handleDiscard()
+  }
+
+  // "Show on map" for a typed address (AC-4): the lookup, near the restaurant; not found, the map opens at
+  // the restaurant (or Volos centre) and asks the restaurant to move it to the entrance.
+  const handleShowOnMap = async () => {
+    const valid = await form.trigger(['dropoffAddress.streetAddress.0', 'dropoffAddress.city'])
+    if (!valid) return
+    setIsLocating(true)
+    setPinMessage(null)
+    try {
+      const result = await lookUpPinForAddress(form.getValues('dropoffAddress'), pickupPoint, pickupPoint ?? VOLOS_CENTRE)
+      if ('error' in result) {
+        setPinMessage(result.error)
+        return
+      }
+      if (result.formattedAddress) {
+        form.setValue('dropoffAddress.formattedAddress', result.formattedAddress, { shouldDirty: true })
+      }
+      form.setValue('dropoffLatitude', result.point.latitude, { shouldDirty: true })
+      form.setValue('dropoffLongitude', result.point.longitude, { shouldDirty: true })
+      setPinMessage(result.message)
+    } finally {
+      setIsLocating(false)
+    }
+  }
+
+  // The restaurant dragged the map: the pin's point is the map's centre now, not yet confirmed.
+  const handlePinMove = (center: GeoPoint) => {
+    form.setValue('dropoffLatitude', center.latitude, { shouldDirty: true })
+    form.setValue('dropoffLongitude', center.longitude, { shouldDirty: true })
+  }
+
+  const handlePinConfirm = () => {
+    setConfirmedPin({ latitude: dropoffLatitude, longitude: dropoffLongitude, pinKey: currentPinKey })
+    setPinMessage(null)
+    if (barError === CONFIRM_PIN_MESSAGE) setBarError(null)
   }
 
   // `Change`: the fields stay as they are, the order becomes a typed customer, the tick goes off.
@@ -724,27 +802,72 @@ export function CreateDeliveryForm() {
                 defaultTown={profile?.pickupAddress?.city ?? ''}
               />
 
-              <FormField
-                control={form.control}
-                name="floorAndBell"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>
-                      Floor and doorbell <span className="font-normal text-muted-foreground">(optional)</span>
-                    </FormLabel>
-                    <FormControl>
-                      <Input
-                        autoComplete="off"
-                        placeholder="3rd floor, Papadopoulou"
-                        className="h-12 text-base"
-                        {...field}
-                      />
-                    </FormControl>
-                    <LimitCounter length={field.value?.length ?? 0} limit={FLOOR_AND_BELL_MAX} />
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              {/* The pin (spec 0016, AC-4): the map once there is a point, else "Show on map" for a typed street. */}
+              {hasDropoffPoint ? (
+                <PinMap
+                  ref={pinMapRef}
+                  center={{ latitude: dropoffLatitude, longitude: dropoffLongitude }}
+                  confirmed={pinConfirmed}
+                  onMove={handlePinMove}
+                  onConfirm={handlePinConfirm}
+                  message={pinMessage}
+                  large
+                />
+              ) : (
+                <div ref={pinMapRef} className="space-y-2">
+                  {pinMessage ? (
+                    <p role="alert" className="text-sm text-destructive">
+                      {pinMessage}
+                    </p>
+                  ) : null}
+                  {form.watch('dropoffAddress.streetAddress.0')?.trim() ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-12 w-full text-base"
+                      onClick={handleShowOnMap}
+                      disabled={isLocating}
+                    >
+                      {isLocating ? 'Finding the address…' : 'Show on map'}
+                    </Button>
+                  ) : null}
+                </div>
+              )}
+
+              <div className="grid grid-cols-3 gap-3">
+                <FormField
+                  control={form.control}
+                  name="floor"
+                  render={({ field }) => (
+                    <FormItem className="col-span-1">
+                      <FormLabel>
+                        Floor <span className="font-normal text-muted-foreground">(optional)</span>
+                      </FormLabel>
+                      <FormControl>
+                        <Input autoComplete="off" placeholder="3" className="h-12 text-base" {...field} />
+                      </FormControl>
+                      <LimitCounter length={field.value?.length ?? 0} limit={FLOOR_MAX} />
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="doorbell"
+                  render={({ field }) => (
+                    <FormItem className="col-span-2">
+                      <FormLabel>
+                        Name on the doorbell <span className="font-normal text-muted-foreground">(optional)</span>
+                      </FormLabel>
+                      <FormControl>
+                        <Input autoComplete="off" placeholder="Papadopoulou" className="h-12 text-base" {...field} />
+                      </FormControl>
+                      <LimitCounter length={field.value?.length ?? 0} limit={DOORBELL_MAX} />
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
             </>
           ) : null}
         </div>

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -24,7 +24,16 @@ import {
   Textarea,
 } from '../../../admin-web-components'
 import { AddressSection } from '../../manual-request/components/AddressSection'
-import { addressPinKey, geocodeCoordinatesFromAddress, hasValidCoordinates } from '../../manual-request/utils/geocode'
+import { PinMap } from '../../manual-request/components/PinMap'
+import { addressPinKey, hasValidCoordinates, lookUpPinForAddress } from '../../manual-request/utils/geocode'
+import {
+  ConfirmedPin,
+  DOORBELL_MAX,
+  FLOOR_MAX,
+  GeoPoint,
+  isPinConfirmed,
+  VOLOS_CENTRE,
+} from '../../manual-request/utils/orderForm'
 import { addSavedCustomer, listSavedCustomers, updateSavedCustomer } from '../../../api/savedCustomersApi'
 import type { SavedCustomer, SavedCustomerError, SavedCustomerFields } from '../types'
 import { DEFAULT_COUNTRY_CODE, phoneSearchDigits } from '../utils/fields'
@@ -35,6 +44,9 @@ const dialogSchema = z.object({
   name: z.string().trim().min(1, "Enter the customer's name"),
   phone: z.string().trim().min(1, "Enter the customer's phone"),
   notes: z.string().optional(),
+  // Spec 0016: the floor and the name on the doorbell, the backend's column sizes.
+  floor: z.string().max(FLOOR_MAX, `Keep this to ${FLOOR_MAX} characters`).optional(),
+  doorbell: z.string().max(DOORBELL_MAX, `Keep this to ${DOORBELL_MAX} characters`).optional(),
   dropoffAddress: z.object({
     streetAddress: z.array(z.string().trim().min(1, 'Enter the street and number')).min(1),
     houseNumber: z.string().optional(),
@@ -54,9 +66,11 @@ function initialValues(customer: SavedCustomer | null): DialogValues {
     name: customer?.name ?? '',
     phone: customer?.phone ?? '',
     notes: customer?.notes ?? '',
+    floor: customer?.floor ?? '',
+    doorbell: customer?.doorbell ?? '',
     dropoffAddress: {
       streetAddress: [customer?.addressLine1 ?? ''],
-      houseNumber: customer?.addressLine2 ?? '',
+      houseNumber: '',
       city: customer?.city ?? '',
       state: '',
       zipCode: customer?.zipCode ?? '',
@@ -70,6 +84,15 @@ function initialValues(customer: SavedCustomer | null): DialogValues {
 
 // Where the map point came from: see addressPinKey.
 const pinKey = (values: Pick<DialogValues, 'dropoffAddress'>) => addressPinKey(values.dropoffAddress)
+
+export const CONFIRM_PIN_MESSAGE = 'Confirm the pin on the map'
+
+// A customer as loaded counts as confirmed (spec 0016, AC-6): its point was confirmed when it was saved,
+// or moved there by a rider. A new customer starts with nothing confirmed.
+function loadedPin(customer: SavedCustomer | null): ConfirmedPin | null {
+  if (!customer) return null
+  return { latitude: customer.latitude, longitude: customer.longitude, pinKey: pinKey(initialValues(customer)) }
+}
 
 function optional(value: string | undefined): string | null {
   const trimmed = value?.trim() ?? ''
@@ -98,47 +121,85 @@ export function CustomerDialog({ customer, onClose, onSaved, onGone }: CustomerD
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Where the map point came from: the customer as loaded, then each pick from the address search.
+  // The pin (spec 0016, AC-6): confirmed only while the form holds exactly the confirmed point and address.
   const latitude = form.watch('dropoffLatitude')
   const longitude = form.watch('dropoffLongitude')
-  const [pinnedKey, setPinnedKey] = useState(() => pinKey(initialValues(customer)))
+  const currentPinKey = addressPinKey(form.watch('dropoffAddress'))
+  const [confirmedPin, setConfirmedPin] = useState<ConfirmedPin | null>(() => loadedPin(customer))
+  const pinConfirmed = isPinConfirmed(confirmedPin, latitude, longitude, currentPinKey)
+  const [pinMessage, setPinMessage] = useState<string | null>(null)
+  const [isLocating, setIsLocating] = useState(false)
+
+  // Which address the current point belongs to: the customer as loaded, then each pick or lookup. A ref,
+  // set in the same pass of effects as the check below, so a search pick never reads as an edit.
+  const pointPinKeyRef = useRef(pinKey(initialValues(customer)))
   useEffect(() => {
-    // A new point (a pick) belongs to the address as it is now.
-    setPinnedKey(pinKey(form.getValues()))
+    pointPinKeyRef.current = pinKey(form.getValues())
   }, [latitude, longitude, form])
+  // The street, city or postcode changed after the point was set: the point belonged to the old address.
+  useEffect(() => {
+    if (currentPinKey === pointPinKeyRef.current) return
+    if (!hasValidCoordinates(form.getValues('dropoffLatitude'), form.getValues('dropoffLongitude'))) return
+    form.setValue('dropoffLatitude', 0)
+    form.setValue('dropoffLongitude', 0)
+    setPinMessage(null)
+  }, [currentPinKey, form])
+
+  // "Show on map" for a typed address: the lookup near Volos; not found, the map opens at Volos centre.
+  const showOnMap = async () => {
+    const valid = await form.trigger(['dropoffAddress.streetAddress.0', 'dropoffAddress.city'])
+    if (!valid) return
+    setIsLocating(true)
+    setPinMessage(null)
+    try {
+      const result = await lookUpPinForAddress(form.getValues('dropoffAddress'), VOLOS_CENTRE, VOLOS_CENTRE)
+      if ('error' in result) {
+        setPinMessage(result.error)
+        return
+      }
+      if (result.formattedAddress) form.setValue('dropoffAddress.formattedAddress', result.formattedAddress)
+      form.setValue('dropoffLatitude', result.point.latitude)
+      form.setValue('dropoffLongitude', result.point.longitude)
+      setPinMessage(result.message)
+    } finally {
+      setIsLocating(false)
+    }
+  }
+
+  const movePin = (center: GeoPoint) => {
+    form.setValue('dropoffLatitude', center.latitude)
+    form.setValue('dropoffLongitude', center.longitude)
+  }
+
+  const confirmPin = () => {
+    setConfirmedPin({ latitude, longitude, pinKey: currentPinKey })
+    setPinMessage(null)
+    if (error === CONFIRM_PIN_MESSAGE) setError(null)
+  }
 
   const initialQuery = useMemo(() => customer?.formattedAddress ?? '', [customer])
 
   const save = async (values: DialogValues) => {
+    // No save for a pin nobody checked on the map (spec 0016, AC-6). Save never looks an address up.
+    if (!pinConfirmed) {
+      setError(CONFIRM_PIN_MESSAGE)
+      return
+    }
     setError(null)
     setIsSaving(true)
     try {
-      let { dropoffLatitude: lat, dropoffLongitude: lng } = values
-      let formattedAddress = optional(values.dropoffAddress.formattedAddress)
-      // Typed by hand, or changed since the point was set: look the address up, as the order form does.
-      if (!hasValidCoordinates(lat, lng) || pinKey(values) !== pinnedKey) {
-        const found = await geocodeCoordinatesFromAddress(values.dropoffAddress).catch(() => null)
-        if (!found) {
-          setError('Search the address and pick a result.')
-          return
-        }
-        lat = found.latitude
-        lng = found.longitude
-        // A new lookup's own text, or none: never the old address's text beside a new street.
-        formattedAddress = found.displayName ?? null
-      }
-
       const fields: SavedCustomerFields = {
         name: values.name.trim(),
         phone: values.phone.trim(),
         notes: optional(values.notes),
         addressLine1: values.dropoffAddress.streetAddress[0].trim(),
-        addressLine2: optional(values.dropoffAddress.houseNumber),
+        floor: optional(values.floor),
+        doorbell: optional(values.doorbell),
         city: values.dropoffAddress.city.trim(),
         zipCode: optional(values.dropoffAddress.zipCode),
-        latitude: lat,
-        longitude: lng,
-        formattedAddress,
+        latitude: values.dropoffLatitude,
+        longitude: values.dropoffLongitude,
+        formattedAddress: optional(values.dropoffAddress.formattedAddress),
       }
       const saved = isEdit ? await updateSavedCustomer(customer.id, fields) : await addSavedCustomer(fields)
       onSaved(saved)
@@ -202,6 +263,60 @@ export function CustomerDialog({ customer, onClose, onSaved, onGone }: CustomerD
             />
 
             <AddressSection control={form.control} prefix="dropoff" label="Address" compact initialQuery={initialQuery} />
+
+            {hasValidCoordinates(latitude, longitude) ? (
+              <PinMap
+                center={{ latitude, longitude }}
+                confirmed={pinConfirmed}
+                onMove={movePin}
+                onConfirm={confirmPin}
+                message={pinMessage}
+              />
+            ) : (
+              <div className="space-y-2">
+                {pinMessage ? (
+                  <p role="alert" className="text-sm text-destructive">
+                    {pinMessage}
+                  </p>
+                ) : null}
+                <Button type="button" variant="outline" className="w-full" onClick={showOnMap} disabled={isLocating}>
+                  {isLocating ? 'Finding the address…' : 'Show on map'}
+                </Button>
+              </div>
+            )}
+
+            <div className="grid grid-cols-3 gap-3">
+              <FormField
+                control={form.control}
+                name="floor"
+                render={({ field }) => (
+                  <FormItem className="col-span-1">
+                    <FormLabel>
+                      Floor <span className="font-normal text-muted-foreground">(optional)</span>
+                    </FormLabel>
+                    <FormControl>
+                      <Input autoComplete="off" placeholder="3" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="doorbell"
+                render={({ field }) => (
+                  <FormItem className="col-span-2">
+                    <FormLabel>
+                      Name on the doorbell <span className="font-normal text-muted-foreground">(optional)</span>
+                    </FormLabel>
+                    <FormControl>
+                      <Input autoComplete="off" placeholder="Papadopoulou" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
 
             <FormField
               control={form.control}

@@ -1,7 +1,7 @@
 /**
  * The drop off address, in two places: the order form (spec 0006: one search box, with a typed fallback
  * behind "Can't find it? Type it") and, `compact`, the saved customer dialog (spec 0005: search plus
- * the street, floor and doorbell, city and ZIP fields). Picking a search result fills the address
+ * the street, city and ZIP fields; floor and doorbell are the dialog's own fields since spec 0016). Picking a search result fills the address
  * fields and the map point.
  */
 import React, { useEffect, useId, useState } from 'react'
@@ -307,22 +307,6 @@ export function AddressSection<T extends FieldValues>({
                 <FormLabel>Street address or PO Box</FormLabel>
                 <FormControl>
                   <Input placeholder="e.g. Iasonos 12" {...f} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={control}
-            name={field('houseNumber')}
-            render={({ field: f }) => (
-              <FormItem className="sm:col-span-6">
-                <FormLabel>
-                  Floor and doorbell <span className="text-muted-foreground font-normal">(optional)</span>
-                </FormLabel>
-                <FormControl>
-                  <Input placeholder="3rd floor, Papadopoulou" {...f} />
                 </FormControl>
                 <FormMessage />
               </FormItem>

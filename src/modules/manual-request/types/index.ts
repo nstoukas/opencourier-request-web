@@ -59,8 +59,11 @@ export interface ManualRequestQuoteInput {
   dropoffPhoneNumber: string
   dropoffBusinessName?: string | null
   dropoffNotes?: string | null
-  /** The note the rider app shows (spec 0006 sends the same text as `dropoffNotes`). */
+  /** The note the rider app shows: only the restaurant's note (spec 0016). */
   dropoffSellerNotes?: string | null
+  /** The floor and the name on the doorbell, in their own fields (spec 0016). Sent with the delivery only. */
+  dropoffFloor?: string | null
+  dropoffDoorbell?: string | null
   dropoffAddress: ManualRequestAddressInput
   dropoffLatitude: number
   dropoffLongitude: number
@@ -143,6 +146,8 @@ export interface PartnerDeliveryDropoffDto {
   dropoffBusinessName: string | null
   dropoffNotes: string | null
   dropoffSellerNotes?: string | null
+  dropoffFloor?: string | null
+  dropoffDoorbell?: string | null
 }
 
 export interface PartnerDeliveryOrderItemDto {

@@ -197,6 +197,9 @@ function mapDeliveryInputForPartner(input: ManualRequestDeliveryInput) {
     dropoffBusinessName: input.dropoffBusinessName || input.dropoffName,
     dropoffNotes: input.dropoffNotes ?? '',
     dropoffSellerNotes: input.dropoffSellerNotes ?? '',
+    // Spec 0016: their own fields; left out when empty (the backend stores none).
+    ...(input.dropoffFloor?.trim() ? { dropoffFloor: input.dropoffFloor.trim() } : {}),
+    ...(input.dropoffDoorbell?.trim() ? { dropoffDoorbell: input.dropoffDoorbell.trim() } : {}),
     deliverableAction: 'MEET_AT_DOOR',
     orderReference: input.orderReference || input.quoteId,
     orderTotalValue: input.orderTotalValue ?? 0,

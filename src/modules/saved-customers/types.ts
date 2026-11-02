@@ -6,7 +6,11 @@ export interface SavedCustomer {
   phone: string
   notes: string | null
   addressLine1: string
+  // No longer written by this page (spec 0016 moved its values into doorbell).
   addressLine2: string | null
+  // Spec 0016: the floor and the name on the doorbell.
+  floor: string | null
+  doorbell: string | null
   city: string
   zipCode: string | null
   latitude: number
@@ -29,7 +33,8 @@ export interface SavedCustomerFields {
   phone: string
   notes: string | null
   addressLine1: string
-  addressLine2: string | null
+  floor: string | null
+  doorbell: string | null
   city: string
   zipCode: string | null
   latitude: number

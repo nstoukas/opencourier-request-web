@@ -57,21 +57,74 @@ export function isQuoteFailure(error: unknown): boolean {
   return err?.code === 'QUOTE_HAS_EXPIRED' || err?.code === 'NOT_FOUND' || err?.statusCode === 404
 }
 
-// ─── Floor and doorbell, and the note (AC-8) ──────────────────────────────────
+// ─── Floor, doorbell and the note (spec 0016, AC-1 and AC-2) ──────────────────
 
-export const FLOOR_AND_BELL_MAX = 60
+// The backend's column sizes (Delivery.dropoffFloor and dropoffDoorbell, SavedCustomer.floor and doorbell).
+export const FLOOR_MAX = 20
+export const DOORBELL_MAX = 60
 export const RIDER_NOTE_MAX = 250
+// Delivery.dropoffNotes and dropoffSellerNotes are 255 characters in the database.
+export const DELIVERY_NOTE_COLUMN_MAX = 255
 
-// The counter shows once this share of the limit is used (48 of 60, 200 of 250).
+// The counter shows once this share of the limit is used (16 of 20, 48 of 60, 200 of 250).
 export const COUNTER_FROM_SHARE = 0.8
 
-// The one text the rider reads: "Floor and doorbell: <value>" on the first line, the note on the
-// second, either line left out when empty, an empty string when both are. Built only at sending,
-// never written back into the form or the saved customer.
-export function composeRiderNote(floorAndBell: string | undefined, note: string | undefined): string {
-  const floor = (floorAndBell ?? '').trim()
-  const rest = (note ?? '').trim()
-  return [floor ? `Floor and doorbell: ${floor}` : '', rest].filter(Boolean).join('\n')
+// The note the rider app shows (dropoffSellerNotes): only the restaurant's note now. Floor and doorbell
+// travel in their own fields (spec 0016, AC-2).
+export function riderNoteText(note: string | undefined): string {
+  return (note ?? '').trim().slice(0, DELIVERY_NOTE_COLUMN_MAX)
+}
+
+// The note admin shows (dropoffNotes): "Floor: 3 · Doorbell: Papadopoulou" on the first line (each part
+// left out when empty, the line left out when both are), then the note. Admin pages read floor and
+// doorbell only here until they show the new fields. Cut to the column's 255 characters by shortening
+// the note, never the floor line. Built only at sending, never written back into the form.
+export function composeAdminNote(
+  floor: string | undefined,
+  doorbell: string | undefined,
+  note: string | undefined,
+): string {
+  const floorText = (floor ?? '').trim()
+  const doorbellText = (doorbell ?? '').trim()
+  const noteText = (note ?? '').trim()
+  const firstLine = [floorText ? `Floor: ${floorText}` : '', doorbellText ? `Doorbell: ${doorbellText}` : '']
+    .filter(Boolean)
+    .join(' · ')
+  if (!firstLine) return noteText.slice(0, DELIVERY_NOTE_COLUMN_MAX)
+  if (!noteText) return firstLine
+  const room = DELIVERY_NOTE_COLUMN_MAX - firstLine.length - 1
+  return room > 0 ? `${firstLine}\n${noteText.slice(0, room)}` : firstLine
+}
+
+// ─── The drop off pin (spec 0016, AC-4) ───────────────────────────────────────
+
+// The zoom the pin map opens at: about one building across a phone screen.
+export const PIN_MAP_ZOOM = 17
+
+// Where the map opens when a typed address is not found and the restaurant's own pickup point is not
+// usable: Volos centre (the instance this page serves).
+export const VOLOS_CENTRE = { latitude: 39.3622, longitude: 22.9425 }
+
+// A drop off point the restaurant confirmed, and the address it was confirmed for (`addressPinKey`).
+// The pin counts as confirmed only while the form still holds exactly this point and this address.
+export interface ConfirmedPin {
+  latitude: number
+  longitude: number
+  pinKey: string
+}
+
+export function isPinConfirmed(
+  confirmed: ConfirmedPin | null,
+  latitude: number,
+  longitude: number,
+  pinKey: string,
+): boolean {
+  return (
+    confirmed !== null &&
+    confirmed.latitude === latitude &&
+    confirmed.longitude === longitude &&
+    confirmed.pinKey === pinKey
+  )
 }
 
 // ─── The address search's area preference (AC-10) ─────────────────────────────

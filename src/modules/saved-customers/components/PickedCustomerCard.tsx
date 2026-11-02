@@ -15,6 +15,16 @@ interface PickedCustomerCardProps {
   changeRef?: React.Ref<HTMLButtonElement>
 }
 
+// "Floor 3 · Doorbell Papadopoulou" (spec 0016), each part left out when empty; empty when both are.
+export function floorAndDoorbellLine(customer: Pick<SavedCustomer, 'floor' | 'doorbell'>): string {
+  return [
+    customer.floor?.trim() ? `Floor ${customer.floor.trim()}` : '',
+    customer.doorbell?.trim() ? `Doorbell ${customer.doorbell.trim()}` : '',
+  ]
+    .filter(Boolean)
+    .join(' · ')
+}
+
 /**
  * The order form's customer part once a saved customer is picked (spec 0006, AC-11): one short card
  * with the name, phone, street, and floor and doorbell, and Edit and Change. It owns the only Change
@@ -33,7 +43,7 @@ export function PickedCustomerCard({ customer, editing, onEdit, onChange, change
             <>
               <p className="text-sm text-muted-foreground">{customer.phone}</p>
               <p className="text-sm">{customerStreet(customer)}</p>
-              {customer.addressLine2?.trim() ? <p className="text-sm">{customer.addressLine2}</p> : null}
+              {floorAndDoorbellLine(customer) ? <p className="text-sm">{floorAndDoorbellLine(customer)}</p> : null}
             </>
           )}
         </div>

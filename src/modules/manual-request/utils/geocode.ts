@@ -75,3 +75,40 @@ export async function geocodeCoordinatesFromAddress(
     displayName: first.display_name?.trim() || undefined,
   }
 }
+
+// ─── "Show on map" (spec 0016, AC-4) ──────────────────────────────────────────
+
+export const ADDRESS_NOT_FOUND_ON_MAP = "Address not found. Move the map to the customer's entrance."
+
+// Where to put the pin for a typed address: the lookup's point, or, when the lookup finds nothing,
+// `fallback` (the restaurant's own point, else Volos centre) with a sentence asking the restaurant to
+// move the map. A lookup that fails or does not answer is an error, in plain words.
+export type PinLookupResult =
+  | { point: GeoPoint; formattedAddress: string | null; message: string | null }
+  | { error: string }
+
+export async function lookUpPinForAddress(
+  address: GeocodableAddress,
+  near: GeoPoint | undefined,
+  fallback: GeoPoint,
+): Promise<PinLookupResult> {
+  let found: GeocodeCoordinatesResult | null
+  try {
+    found = await geocodeCoordinatesFromAddress(address, near)
+  } catch (lookupError) {
+    return {
+      error:
+        (lookupError as Error | undefined)?.name === 'TimeoutError'
+          ? 'The address lookup did not answer. Try again, or search the address and pick a result.'
+          : 'The address lookup failed. Check your connection and try again.',
+    }
+  }
+  if (!found) {
+    return { point: fallback, formattedAddress: null, message: ADDRESS_NOT_FOUND_ON_MAP }
+  }
+  return {
+    point: { latitude: found.latitude, longitude: found.longitude },
+    formattedAddress: found.displayName ?? null,
+    message: null,
+  }
+}

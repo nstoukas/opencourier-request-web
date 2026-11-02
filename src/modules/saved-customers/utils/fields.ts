@@ -10,8 +10,9 @@ export const DEFAULT_COUNTRY_CODE = 'GR'
 export interface OrderDropoffValues {
   dropoffName?: string
   dropoffPhoneNumber?: string
-  // "Floor and doorbell" and "Note for the rider" (spec 0006)
-  floorAndBell?: string
+  // "Floor", "Name on the doorbell" (spec 0016) and "Note for the rider" (spec 0006)
+  floor?: string
+  doorbell?: string
   note?: string
   dropoffAddress?: {
     streetAddress?: string[]
@@ -31,8 +32,8 @@ function optional(value: string | null | undefined): string | null {
 }
 
 // The customer to save from an order's drop off details (spec 0005, the order flow's mapping).
-// "Floor and doorbell" is the customer's addressLine2 and the rider note its notes (spec 0006, AC-9);
-// the two line text sent to the rider is never saved.
+// Floor and doorbell are the customer's own fields (spec 0016) and the rider note its notes (spec 0006,
+// AC-9); the composed admin text is never saved. The point is the confirmed pin.
 export function customerFieldsFromOrder(values: OrderDropoffValues): SavedCustomerFields {
   const address = values.dropoffAddress ?? {}
   return {
@@ -40,7 +41,8 @@ export function customerFieldsFromOrder(values: OrderDropoffValues): SavedCustom
     phone: (values.dropoffPhoneNumber ?? '').trim(),
     notes: optional(values.note),
     addressLine1: (address.streetAddress?.[0] ?? '').trim(),
-    addressLine2: optional(values.floorAndBell),
+    floor: optional(values.floor),
+    doorbell: optional(values.doorbell),
     city: (address.city ?? '').trim(),
     zipCode: optional(address.zipCode),
     latitude: values.dropoffLatitude ?? 0,
@@ -57,7 +59,8 @@ export function orderValuesFromCustomer(customer: SavedCustomer) {
   return {
     dropoffName: customer.name,
     dropoffPhoneNumber: customer.phone,
-    floorAndBell: customer.addressLine2 ?? '',
+    floor: customer.floor ?? '',
+    doorbell: customer.doorbell ?? '',
     note: customer.notes ?? '',
     dropoffAddress: {
       streetAddress: [customer.addressLine1],

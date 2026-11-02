@@ -138,6 +138,8 @@ function PartnerDeliveryDetails({ data }: { data: PartnerDeliveryDto }) {
                 items={[
                   { label: 'Recipient', value: data.dropoff.dropoffName },
                   { label: 'Phone', value: data.dropoff.dropoffPhoneNumber },
+                  { label: 'Floor', value: data.dropoff.dropoffFloor ?? '—' },
+                  { label: 'Doorbell', value: data.dropoff.dropoffDoorbell ?? '—' },
                   { label: 'Notes', value: data.dropoff.dropoffNotes ?? '—' },
                   { label: 'Seller notes', value: data.dropoff.dropoffSellerNotes ?? '—' },
                 ]}
