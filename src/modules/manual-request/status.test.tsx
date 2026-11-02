@@ -393,4 +393,61 @@ describe('DeliveryStatusPage (/manual-request/[deliveryId]/status.tsx)', () => {
       expect(screen.queryByText(/The customer was not saved/i)).not.toBeInTheDocument()
     })
   })
+
+  describe('spec 0016: Floor and Doorbell rows', () => {
+    it('renders Floor and Doorbell values when present, and dash when absent', () => {
+      ;(useGetManualRequestDeliveryQuery as jest.Mock).mockReturnValue({
+        data: {
+          id: 'del-xyz-789',
+          status: 'ACCEPTED',
+          createdAt: '2026-09-30T10:00:00Z',
+          pickup: { pickupName: 'Nosh', addressLine1: 'Ermou 10', city: 'Volos' },
+          dropoff: {
+            dropoffName: 'Elena K.',
+            dropoffPhoneNumber: '+306912345678',
+            dropoffFloor: '3',
+            dropoffDoorbell: 'Papadopoulou',
+            dropoffNotes: 'Floor: 3 · Doorbell: Papadopoulou',
+            dropoffSellerNotes: 'Ring twice',
+            addressLine1: 'Dimitriadis 25',
+            city: 'Volos',
+          },
+        },
+        isLoading: false,
+        error: undefined,
+        refetch: mockRefetch,
+      })
+
+      const { rerender } = render(<DeliveryStatusPage />)
+
+      expect(screen.getByText('Floor')).toBeInTheDocument()
+      expect(screen.getByText('3')).toBeInTheDocument()
+      expect(screen.getByText('Doorbell')).toBeInTheDocument()
+      expect(screen.getByText('Papadopoulou')).toBeInTheDocument()
+
+      // When absent (null / undefined): renders '—'
+      ;(useGetManualRequestDeliveryQuery as jest.Mock).mockReturnValue({
+        data: {
+          id: 'del-xyz-789',
+          status: 'ACCEPTED',
+          createdAt: '2026-09-30T10:00:00Z',
+          pickup: { pickupName: 'Nosh', addressLine1: 'Ermou 10', city: 'Volos' },
+          dropoff: {
+            dropoffName: 'Elena K.',
+            dropoffPhoneNumber: '+306912345678',
+            dropoffFloor: null,
+            dropoffDoorbell: null,
+            addressLine1: 'Dimitriadis 25',
+            city: 'Volos',
+          },
+        },
+        isLoading: false,
+        error: undefined,
+        refetch: mockRefetch,
+      })
+
+      rerender(<DeliveryStatusPage />)
+      expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(2)
+    })
+  })
 })

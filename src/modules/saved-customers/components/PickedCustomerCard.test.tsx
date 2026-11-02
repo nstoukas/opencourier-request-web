@@ -1,17 +1,19 @@
 import React, { useRef } from 'react'
 import '@testing-library/jest-dom'
 import { render, screen, fireEvent } from '@testing-library/react'
-import { PickedCustomerCard } from './PickedCustomerCard'
+import { PickedCustomerCard, floorAndDoorbellLine } from './PickedCustomerCard'
 import type { SavedCustomer } from '../types'
 
-describe('PickedCustomerCard (spec 0006, AC-11)', () => {
+describe('PickedCustomerCard (spec 0006, AC-11 & spec 0016, AC-3)', () => {
   const sampleCustomer: SavedCustomer = {
     id: 'cust-10',
     name: 'Katerina Sakellaropoulou',
     phone: '+306912345678',
     notes: 'Do not knock',
     addressLine1: 'Politechniou 12',
-    addressLine2: 'Floor 2, Flat B',
+    addressLine2: null,
+    floor: '2',
+    doorbell: 'Sakellaropoulou',
     city: 'Volos',
     zipCode: '38221',
     latitude: 39.362,
@@ -22,7 +24,31 @@ describe('PickedCustomerCard (spec 0006, AC-11)', () => {
     updatedAt: '2026-10-26T12:00:00.000Z',
   }
 
-  it('renders customer name, phone, street, floorAndBell, and Edit and Change buttons', () => {
+  describe('floorAndDoorbellLine (spec 0016, AC-3)', () => {
+    it('formats both floor and doorbell as "Floor <floor> · Doorbell <doorbell>"', () => {
+      expect(floorAndDoorbellLine({ floor: '3', doorbell: 'Papadopoulou' })).toBe('Floor 3 · Doorbell Papadopoulou')
+    })
+
+    it('formats floor only when doorbell is empty or null', () => {
+      expect(floorAndDoorbellLine({ floor: '3', doorbell: null })).toBe('Floor 3')
+      expect(floorAndDoorbellLine({ floor: '3', doorbell: '' })).toBe('Floor 3')
+      expect(floorAndDoorbellLine({ floor: '  3  ', doorbell: '   ' })).toBe('Floor 3')
+    })
+
+    it('formats doorbell only when floor is empty or null', () => {
+      expect(floorAndDoorbellLine({ floor: null, doorbell: 'Papadopoulou' })).toBe('Doorbell Papadopoulou')
+      expect(floorAndDoorbellLine({ floor: '', doorbell: 'Papadopoulou' })).toBe('Doorbell Papadopoulou')
+      expect(floorAndDoorbellLine({ floor: '   ', doorbell: '  Papadopoulou  ' })).toBe('Doorbell Papadopoulou')
+    })
+
+    it('returns empty string when both floor and doorbell are empty, null or undefined', () => {
+      expect(floorAndDoorbellLine({ floor: null, doorbell: null })).toBe('')
+      expect(floorAndDoorbellLine({ floor: '', doorbell: '' })).toBe('')
+      expect(floorAndDoorbellLine({ floor: '   ', doorbell: '   ' })).toBe('')
+    })
+  })
+
+  it('renders customer name, phone, street, floorAndDoorbellLine, and Edit and Change buttons', () => {
     const onEdit = jest.fn()
     const onChange = jest.fn()
 
@@ -38,7 +64,7 @@ describe('PickedCustomerCard (spec 0006, AC-11)', () => {
     expect(screen.getByText('Katerina Sakellaropoulou')).toBeInTheDocument()
     expect(screen.getByText('+306912345678')).toBeInTheDocument()
     expect(screen.getByText('Politechniou 12, Volos, 38221')).toBeInTheDocument()
-    expect(screen.getByText('Floor 2, Flat B')).toBeInTheDocument()
+    expect(screen.getByText('Floor 2 · Doorbell Sakellaropoulou')).toBeInTheDocument()
 
     const editBtn = screen.getByRole('button', { name: 'Edit' })
     const changeBtn = screen.getByRole('button', { name: 'Change' })
@@ -68,7 +94,7 @@ describe('PickedCustomerCard (spec 0006, AC-11)', () => {
     // Details are hidden
     expect(screen.queryByText('+306912345678')).not.toBeInTheDocument()
     expect(screen.queryByText('Politechniou 12, Volos, 38221')).not.toBeInTheDocument()
-    expect(screen.queryByText('Floor 2, Flat B')).not.toBeInTheDocument()
+    expect(screen.queryByText('Floor 2 · Doorbell Sakellaropoulou')).not.toBeInTheDocument()
 
     // Edit button is hidden, Change button remains
     expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument()

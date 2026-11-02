@@ -8,6 +8,7 @@ import {
   fetchDispatchState,
   useDispatchStateQuery,
   useConfirmManualRequestDeliveryMutation,
+  useCreateManualRequestQuoteMutation,
   useCancelManualRequestDeliveryMutation,
   DispatchState,
 } from './manualRequestApi'
@@ -251,8 +252,10 @@ describe('manualRequestApi helper functions', () => {
         },
         dropoffLatitude: 39.361,
         dropoffLongitude: 22.942,
-        dropoffSellerNotes: 'Floor and doorbell: Floor 4\nRing twice',
-        dropoffNotes: 'Floor and doorbell: Floor 4\nRing twice',
+        dropoffFloor: '  4  ',
+        dropoffDoorbell: '  Papadopoulou  ',
+        dropoffSellerNotes: 'Ring twice',
+        dropoffNotes: 'Floor: 4 · Doorbell: Papadopoulou\nRing twice',
         orderTotalValue: 1250,
       }
 
@@ -272,10 +275,146 @@ describe('manualRequestApi helper functions', () => {
       const fetchCall = (global.fetch as jest.Mock).mock.calls[0]
       const wireBody = JSON.parse(fetchCall[1].body)
 
-      expect(wireBody.dropoffSellerNotes).toBe('Floor and doorbell: Floor 4\nRing twice')
-      expect(wireBody.dropoffNotes).toBe('Floor and doorbell: Floor 4\nRing twice')
+      expect(wireBody.dropoffFloor).toBe('4')
+      expect(wireBody.dropoffDoorbell).toBe('Papadopoulou')
+      expect(wireBody.dropoffSellerNotes).toBe('Ring twice')
+      expect(wireBody.dropoffNotes).toBe('Floor: 4 · Doorbell: Papadopoulou\nRing twice')
       expect(wireBody.orderTotalValue).toBe(1250)
       expect(wireBody.quoteId).toBe('quote-abc')
+    })
+
+    it('spec 0016: omits dropoffFloor and dropoffDoorbell when empty, whitespace, or undefined', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        text: jest.fn().mockResolvedValue(JSON.stringify({ result: { id: 'del-confirm-456', status: 'ACCEPTED' } })),
+      } as any)
+
+      const { result } = renderHook(() => useConfirmManualRequestDeliveryMutation())
+      const [confirmDelivery] = result.current
+
+      const deliveryInput: ManualRequestDeliveryInput = {
+        quoteId: 'quote-abc',
+        idempotencyKey: 'idem-xyz',
+        pickupName: 'Nosh',
+        pickupPhoneNumber: '+302421012345',
+        pickupBusinessName: 'Nosh',
+        pickupLatitude: 39.36,
+        pickupLongitude: 22.94,
+        dropoffLatitude: 39.37,
+        dropoffLongitude: 22.95,
+        pickupAddress: {
+          streetAddress: ['Ermou 120'],
+          city: 'Volos',
+          state: '',
+          zipCode: '',
+          countryCode: 'GR',
+        },
+        dropoffName: 'Vassilis Spanoulis',
+        dropoffPhoneNumber: '+306911223344',
+        dropoffAddress: {
+          streetAddress: ['Iasonos 80'],
+          city: 'Volos',
+          state: '',
+          zipCode: '',
+          countryCode: 'GR',
+        },
+        dropoffFloor: '   ',
+        dropoffDoorbell: undefined,
+        dropoffSellerNotes: 'Leave outside',
+        dropoffNotes: 'Leave outside',
+      }
+
+      await act(async () => {
+        await confirmDelivery(deliveryInput)
+      })
+
+      const fetchCall = (global.fetch as jest.Mock).mock.calls[0]
+      const wireBody = JSON.parse(fetchCall[1].body)
+
+      expect('dropoffFloor' in wireBody).toBe(false)
+      expect('dropoffDoorbell' in wireBody).toBe(false)
+      expect(wireBody.dropoffSellerNotes).toBe('Leave outside')
+      expect(wireBody.dropoffNotes).toBe('Leave outside')
+    })
+  })
+
+  describe('useCreateManualRequestQuoteMutation (spec 0016, AC-2 & API table)', () => {
+    const originalApiMode = process.env.NEXT_PUBLIC_MANUAL_REQUEST_API_MODE
+
+    beforeEach(() => {
+      process.env.NEXT_PUBLIC_MANUAL_REQUEST_API_MODE = 'partner'
+    })
+
+    afterEach(() => {
+      process.env.NEXT_PUBLIC_MANUAL_REQUEST_API_MODE = originalApiMode
+    })
+
+    it('quote mapping never sends dropoffFloor or dropoffDoorbell on the wire', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        text: jest.fn().mockResolvedValue(
+          JSON.stringify({
+            result: {
+              quoteId: 'quote-xyz-123',
+              fee: 350,
+              currency: 'EUR',
+              expiresAt: new Date(Date.now() + 60000).toISOString(),
+            },
+          }),
+        ),
+      } as any)
+
+      const { result } = renderHook(() => useCreateManualRequestQuoteMutation())
+      const [createQuote] = result.current
+
+      // Pass input with dropoffFloor and dropoffDoorbell populated
+      const quoteInput: any = {
+        pickupName: 'Nosh',
+        pickupPhoneNumber: '+302421012345',
+        pickupAddress: {
+          streetAddress: ['Ermou 120'],
+          city: 'Volos',
+          state: 'Thessaly',
+          zipCode: '38221',
+          countryCode: 'GR',
+        },
+        pickupLatitude: 39.3628,
+        pickupLongitude: 22.9435,
+        dropoffName: 'Elena K.',
+        dropoffPhoneNumber: '+306911223344',
+        dropoffAddress: {
+          streetAddress: ['Iasonos 80'],
+          city: 'Volos',
+          state: 'Thessaly',
+          zipCode: '38221',
+          countryCode: 'GR',
+        },
+        dropoffLatitude: 39.361,
+        dropoffLongitude: 22.942,
+        dropoffFloor: '3',
+        dropoffDoorbell: 'Kiriakou',
+        dropoffNotes: 'Floor: 3 · Doorbell: Kiriakou\nRing twice',
+        dropoffSellerNotes: 'Ring twice',
+      }
+
+      await act(async () => {
+        await createQuote(quoteInput)
+      })
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/partner-proxy/delivery-quotes',
+        expect.objectContaining({
+          method: 'POST',
+        }),
+      )
+
+      const fetchCall = (global.fetch as jest.Mock).mock.calls[0]
+      const wireBody = JSON.parse(fetchCall[1].body)
+
+      expect('dropoffFloor' in wireBody).toBe(false)
+      expect('dropoffDoorbell' in wireBody).toBe(false)
+      expect(wireBody.dropoffLatitude).toBe(39.361)
+      expect(wireBody.dropoffLongitude).toBe(22.942)
     })
   })
 

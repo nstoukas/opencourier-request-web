@@ -15,6 +15,8 @@ describe('useSavedCustomerSearch', () => {
     notes: null,
     addressLine1: 'Iasonos 45',
     addressLine2: null,
+    floor: null,
+    doorbell: null,
     city: 'Volos',
     zipCode: null,
     latitude: 39.36,

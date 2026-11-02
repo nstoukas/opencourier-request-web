@@ -2,6 +2,8 @@ import {
   addressPinKey,
   hasValidCoordinates,
   geocodeCoordinatesFromAddress,
+  lookUpPinForAddress,
+  ADDRESS_NOT_FOUND_ON_MAP,
   GEOCODE_TIMEOUT_MS,
   GeocodableAddress,
 } from './geocode'
@@ -145,6 +147,75 @@ describe('geocode utils', () => {
 
       const result = await geocodeCoordinatesFromAddress({ streetAddress: ['Ermou 120'] })
       expect(result).toBeNull()
+    })
+  })
+
+  describe('lookUpPinForAddress (spec 0016, AC-4)', () => {
+    const fallbackPoint = { latitude: 39.3622, longitude: 22.9425 }
+    const nearPoint = { latitude: 39.36, longitude: 22.94 }
+    const address: GeocodableAddress = {
+      streetAddress: ['Iasonos 50'],
+      city: 'Volos',
+    }
+
+    it('when found: returns the point and display name, with message null', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: jest.fn().mockResolvedValue([
+          {
+            lat: '39.3595',
+            lon: '22.9490',
+            display_name: 'Iasonos 50, Volos, 38221, Greece',
+          },
+        ]),
+      })
+
+      const result = await lookUpPinForAddress(address, nearPoint, fallbackPoint)
+
+      expect(result).toEqual({
+        point: { latitude: 39.3595, longitude: 22.949 },
+        formattedAddress: 'Iasonos 50, Volos, 38221, Greece',
+        message: null,
+      })
+    })
+
+    it('when not found: returns the fallback point with "Address not found. Move the map to the customer\'s entrance."', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: jest.fn().mockResolvedValue([]),
+      })
+
+      const result = await lookUpPinForAddress(address, nearPoint, fallbackPoint)
+
+      expect(result).toEqual({
+        point: fallbackPoint,
+        formattedAddress: null,
+        message: ADDRESS_NOT_FOUND_ON_MAP,
+      })
+      expect(ADDRESS_NOT_FOUND_ON_MAP).toBe("Address not found. Move the map to the customer's entrance.")
+    })
+
+    it('on TimeoutError: returns the plain sentence "The address lookup did not answer. Try again, or search the address and pick a result."', async () => {
+      const timeoutError = new Error('The operation was aborted due to timeout')
+      timeoutError.name = 'TimeoutError'
+      global.fetch = jest.fn().mockRejectedValue(timeoutError)
+
+      const result = await lookUpPinForAddress(address, nearPoint, fallbackPoint)
+
+      expect(result).toEqual({
+        error: 'The address lookup did not answer. Try again, or search the address and pick a result.',
+      })
+    })
+
+    it('on another error: returns the plain sentence "The address lookup failed. Check your connection and try again."', async () => {
+      const networkError = new TypeError('Failed to fetch')
+      global.fetch = jest.fn().mockRejectedValue(networkError)
+
+      const result = await lookUpPinForAddress(address, nearPoint, fallbackPoint)
+
+      expect(result).toEqual({
+        error: 'The address lookup failed. Check your connection and try again.',
+      })
     })
   })
 })

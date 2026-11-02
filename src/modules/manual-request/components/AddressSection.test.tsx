@@ -287,9 +287,12 @@ describe('AddressSection (/src/modules/manual-request/components/AddressSection.
   })
 
   describe('compact mode (compact=true, for Customers dialog)', () => {
-    it('labels houseNumber as "Floor and doorbell"', () => {
+    it('does not render "Floor and doorbell" (moved to CustomerDialog in spec 0016), renders Street, City and Zip', () => {
       render(<AddressSectionWrapper compact={true} />)
-      expect(screen.getByLabelText(/Floor and doorbell/i)).toBeInTheDocument()
+      expect(screen.queryByLabelText(/Floor and doorbell/i)).not.toBeInTheDocument()
+      expect(screen.getByLabelText(/Street address or PO Box/i)).toBeInTheDocument()
+      expect(screen.getByLabelText(/^City$/i)).toBeInTheDocument()
+      expect(screen.getByLabelText(/ZIP \/ Postal code/i)).toBeInTheDocument()
     })
 
     it('hides State and Country inputs and the helper lines, and starts with initialQuery', () => {

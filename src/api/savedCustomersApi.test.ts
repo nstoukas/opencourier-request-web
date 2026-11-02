@@ -25,7 +25,8 @@ describe('savedCustomersApi', () => {
     phone: '+306912345678',
     notes: '2nd floor',
     addressLine1: 'Iasonos 45',
-    addressLine2: 'Apt 4',
+    floor: '4',
+    doorbell: 'Papadopoulou',
     city: 'Volos',
     zipCode: '38221',
     latitude: 39.36,
@@ -36,6 +37,7 @@ describe('savedCustomersApi', () => {
   const sampleCustomer: SavedCustomer = {
     id: 'cust-123',
     ...sampleFields,
+    addressLine2: null,
     lastUsedAt: '2026-10-26T12:00:00.000Z',
     createdAt: '2026-10-20T10:00:00.000Z',
     updatedAt: '2026-10-26T12:00:00.000Z',

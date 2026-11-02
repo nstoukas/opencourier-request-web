@@ -20,6 +20,8 @@ describe('DeleteCustomerDialog', () => {
     notes: null,
     addressLine1: 'Iasonos 100',
     addressLine2: null,
+    floor: null,
+    doorbell: null,
     city: 'Volos',
     zipCode: '38221',
     latitude: 39.36,

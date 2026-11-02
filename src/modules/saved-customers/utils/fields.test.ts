@@ -9,12 +9,13 @@ import type { SavedCustomer } from '../types'
 
 describe('fields.ts mapping utilities', () => {
   describe('customerFieldsFromOrder', () => {
-    it('maps floorAndBell to addressLine2, note to notes, trims strings, and turns empty optional texts into null', () => {
+    it('maps floor and doorbell, note to notes, trims strings, and turns empty optional texts into null', () => {
       const orderValues = {
         dropoffName: '  Katerina Sakellaropoulou  ',
         dropoffPhoneNumber: '  +30 691 234 5678  ',
         note: '   Ring doorbell twice   ',
-        floorAndBell: '  Floor 2, Flat B  ',
+        floor: '  Floor 2  ',
+        doorbell: '  Flat B  ',
         dropoffAddress: {
           streetAddress: ['  Politechniou 12  '],
           houseNumber: '',
@@ -33,7 +34,8 @@ describe('fields.ts mapping utilities', () => {
         phone: '+30 691 234 5678',
         notes: 'Ring doorbell twice',
         addressLine1: 'Politechniou 12',
-        addressLine2: 'Floor 2, Flat B',
+        floor: 'Floor 2',
+        doorbell: 'Flat B',
         city: 'Volos',
         zipCode: '38221',
         latitude: 39.362,
@@ -47,7 +49,8 @@ describe('fields.ts mapping utilities', () => {
         dropoffName: 'Nikos',
         dropoffPhoneNumber: '2421012345',
         note: '   ',
-        floorAndBell: '   ',
+        floor: '   ',
+        doorbell: '   ',
         dropoffBusinessName: 'Nikos Bakery', // MUST NOT be saved
         dropoffAddress: {
           streetAddress: ['Iasonos 1'],
@@ -61,7 +64,9 @@ describe('fields.ts mapping utilities', () => {
       const result = customerFieldsFromOrder(orderValues)
 
       expect(result.notes).toBeNull()
-      expect(result.addressLine2).toBeNull()
+      expect(result.floor).toBeNull()
+      expect(result.doorbell).toBeNull()
+      expect((result as any).addressLine2).toBeUndefined()
       expect(result.zipCode).toBeNull()
       expect(result.formattedAddress).toBeNull()
       expect((result as any).businessName).toBeUndefined()
@@ -77,7 +82,8 @@ describe('fields.ts mapping utilities', () => {
         phone: '',
         notes: null,
         addressLine1: '',
-        addressLine2: null,
+        floor: null,
+        doorbell: null,
         city: '',
         zipCode: null,
         latitude: 0,
@@ -95,7 +101,9 @@ describe('fields.ts mapping utilities', () => {
         phone: '+306987654321',
         notes: 'Leave at front porch',
         addressLine1: 'Dimitriadis 150',
-        addressLine2: 'Floor 3',
+        addressLine2: null,
+        floor: 'Floor 3',
+        doorbell: 'Diamantidis',
         city: 'Volos',
         zipCode: '38221',
         latitude: 39.358,
@@ -111,7 +119,8 @@ describe('fields.ts mapping utilities', () => {
       expect(orderValues).toEqual({
         dropoffName: 'Dimitris Diamantidis',
         dropoffPhoneNumber: '+306987654321',
-        floorAndBell: 'Floor 3',
+        floor: 'Floor 3',
+        doorbell: 'Diamantidis',
         note: 'Leave at front porch',
         dropoffAddress: {
           streetAddress: ['Dimitriadis 150'],
@@ -136,6 +145,8 @@ describe('fields.ts mapping utilities', () => {
         notes: null,
         addressLine1: 'Ermou 1',
         addressLine2: null,
+        floor: null,
+        doorbell: null,
         city: 'Volos',
         zipCode: null,
         latitude: 39.36,
@@ -149,7 +160,8 @@ describe('fields.ts mapping utilities', () => {
       const orderValues = orderValuesFromCustomer(customer)
 
       expect(orderValues.note).toBe('')
-      expect(orderValues.floorAndBell).toBe('')
+      expect(orderValues.floor).toBe('')
+      expect(orderValues.doorbell).toBe('')
       expect(orderValues.dropoffAddress.houseNumber).toBe('')
       expect(orderValues.dropoffAddress.zipCode).toBe('')
       expect(orderValues.dropoffAddress.formattedAddress).toBe('')
