@@ -552,4 +552,76 @@ describe('DeliveryStatusPage (/manual-request/[deliveryId]/status.tsx)', () => {
       expect(notice).toHaveTextContent('Could not refresh just now. It tries again in 30 seconds.')
     })
   })
+
+  describe('spec 0021 (AC-10): order code on status page', () => {
+    it('renders the order code big (# plus last 6 chars) above the status card title with the full delivery id', () => {
+      mockRouter.query = { deliveryId: 'cly123456789' }
+      ;(useGetManualRequestDeliveryQuery as jest.Mock).mockReturnValue({
+        data: {
+          id: 'cly123456789',
+          status: 'ACCEPTED',
+          createdAt: '2026-09-30T10:00:00Z',
+        },
+        isLoading: false,
+        error: undefined,
+        refetch: mockRefetch,
+      })
+
+      render(<DeliveryStatusPage />)
+
+      // The order code is shown as '#' plus the last 6 characters with data-testid="order-code"
+      const codeElement = screen.getByTestId('order-code')
+      expect(codeElement).toBeInTheDocument()
+      expect(codeElement).toHaveTextContent('#456789')
+      expect(codeElement).toHaveClass('block', 'font-mono', 'text-4xl', 'font-bold')
+      expect(screen.getByText(/Order code/)).toBeInTheDocument()
+
+      // The status card's title still keeps the full delivery id
+      const titleElement = screen.getByText('cly123456789')
+      expect(titleElement).toBeInTheDocument()
+
+      // Order code sits on its own line above the status card's title in the DOM
+      expect(codeElement.compareDocumentPosition(titleElement) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    })
+
+    it('renders the order code for a standard delivery id prefix/suffix', () => {
+      mockRouter.query = { deliveryId: 'del-xyz-789' }
+      ;(useGetManualRequestDeliveryQuery as jest.Mock).mockReturnValue({
+        data: {
+          id: 'del-xyz-789',
+          status: 'ACCEPTED',
+          createdAt: '2026-09-30T10:00:00Z',
+        },
+        isLoading: false,
+        error: undefined,
+        refetch: mockRefetch,
+      })
+
+      render(<DeliveryStatusPage />)
+
+      const codeElement = screen.getByTestId('order-code')
+      expect(codeElement).toHaveTextContent('#yz-789')
+      expect(screen.getByText('del-xyz-789')).toBeInTheDocument()
+    })
+
+    it('shows nothing for order code when there is no delivery id in router query', () => {
+      // Missing or empty deliveryId in router query
+      mockRouter.query = { deliveryId: '' }
+      ;(useGetManualRequestDeliveryQuery as jest.Mock).mockReturnValue({
+        data: undefined,
+        isLoading: false,
+        error: undefined,
+        refetch: mockRefetch,
+      })
+
+      render(<DeliveryStatusPage />)
+
+      // Neither the order code badge nor the "Order code" label should be rendered
+      expect(screen.queryByTestId('order-code')).not.toBeInTheDocument()
+      expect(screen.queryByText(/Order code/)).not.toBeInTheDocument()
+
+      // CardTitle falls back to em dash when there is no id
+      expect(screen.getByText('—')).toBeInTheDocument()
+    })
+  })
 })
