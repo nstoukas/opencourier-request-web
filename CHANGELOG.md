@@ -166,6 +166,12 @@ with their agreement, and picks them on the next order.
   status tests skip cleanly when the design system or backend folder is not beside this
   repo. `d07e1f2`, `7ffe3ea`, `7a036c8`
 
+### The order code on the order's page (row 19, spec 0021) — `4eb433a`, `f6ef38c`
+- The order's status page shows "Order code #k3x9qz" big above the full id. That's the last 6
+  characters of the delivery id, the same code the rider's app shows when collecting, so staff can
+  match the bag at a glance.
+- Tests by agy (`f6ef38c`): 457 pass; 2 checked by hand. Reviewed by Fable (approve with nits).
+
 ## Fixed
 
 - **The default delivery deadline was in the past.** `toISOString()` converted to UTC,
