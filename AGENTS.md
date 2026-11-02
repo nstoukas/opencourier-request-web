@@ -39,5 +39,14 @@ Yarn 1.22, **not Corepack**: run `node node_modules/.bin/next dev -p 3090` and
   body into `{}`, which the backend would read as a body it never asked for.
 - A dispatch stop (spec 0014): the order page shows the backend's own sentence from `GET /dispatch-state` through the
   partner proxy, read every minute while the tab is visible; a refused quote already carries the same sentence.
+- The drop off point is the pin the restaurant confirmed on the map (spec 0016). `confirmedPin` keeps the point and the
+  `addressPinKey` it was confirmed for, and `isPinConfirmed` derives the state on every render; an address edit clears the
+  point and its full address text. Get price and the dialog's Save never look an address up ("Show on map" does).
+- Leaflet loads only through `PinMap`'s `next/dynamic` with `ssr: false` (it needs `window`); react-leaflet is ESM only and
+  next/jest does not transform it, so tests mock `PinMapCanvas`. The map's box needs `isolate`, or Leaflet's z-index (up
+  to 1000) paints over the sticky header and the fixed Get price bar.
+- Floor and doorbell are their own fields (`dropoffFloor`, `dropoffDoorbell`; saved customer `floor`, `doorbell`;
+  `addressLine2` is no longer written). `dropoffSellerNotes` is the note alone; `dropoffNotes` keeps "Floor: · Doorbell:"
+  for admin, cut to its 255 character column by character (`Array.from`), never splitting an emoji.
 
 _Drafted by /audit from the repo, worth a quick human pass. Edit freely: once a line stops matching this draft, later runs treat it as curated and will flag rather than overwrite it._
