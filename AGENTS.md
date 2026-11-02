@@ -56,4 +56,8 @@ Yarn 1.22, **not Corepack**: run `node node_modules/.bin/next dev -p 3090` and
 - The partner list and reads refuse an ended order older than the co-op's period with a sentence; show the backend's
   message, never a generic error (spec 0017).
 
+- The order code (spec 0021) is `orderCodeOf` (`src/utils/orderCode.ts`): the last 6 characters of the delivery id, the
+  same rule as adminweb's `shortId` and the courier app's `orderCodeOf`. Change all three together, or the rider's code
+  stops matching the restaurant's.
+
 _Drafted by /audit from the repo, worth a quick human pass. Edit freely: once a line stops matching this draft, later runs treat it as curated and will flag rather than overwrite it._
