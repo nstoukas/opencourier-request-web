@@ -5,7 +5,7 @@ for a Greek workers' cooperative. In this fork, request-web is the **restaurant 
 where a signed-in restaurant places delivery requests.
 
 Everything below sits on top of upstream `main` on the branch `fix/partial-address-form`
-(50 commits, 26 July – 27 October 2026). Each entry names its commit, and the commit message
+(63 commits, 26 July to 2 November 2026). Each entry names its commit, and the commit message
 has the full reasoning and verification notes.
 
 ---
@@ -33,6 +33,24 @@ has the full reasoning and verification notes.
   converted and floored so the cookie can never outlive its token.
 
 ## Added
+
+On 2 November rows 29, 32, 31 and 28 were merged in. The GA rows (29 and 32) have the entries
+below; rows 31 and 28 are recorded in the workspace's scope and walkthroughs.
+
+### Cancel asks first, and asks who wants it (scope row 32, spec 0015): `1ce1a4f`, `3059a66`
+Needs the backend's row 32.
+- Both Cancel buttons open a dialog first: "We need to cancel it" or "The customer asked to
+  cancel". Before this, one tap cancelled. The restaurant is charged for its own cancellations,
+  and the rider who was on the job is paid by the co-op's rule.
+- Tests by agy (`3059a66`): 383 pass; every put the bug back check repeated by hand.
+
+### Dispatch stop banner on the order page (scope row 29, spec 0014): `72782f2` to `ff950bc`
+Needs the backend's row 29.
+- "No delivery right now" with the backend's sentence while a stop is on, and "Delivery stops
+  soon" when one starts within 12 hours. It is read through the partner proxy when the page opens
+  and every minute while the tab is visible. If the read fails it shows nothing; a quote is
+  refused with the same sentence anyway.
+- Tests by agy (`132b6fd`): 365 pass; every put the bug back check repeated by hand.
 
 ### Touch friendly order form (scope row 27, spec 0006): `78ffec0` to `d0157ea`
 Built on the branch `feat/touch-friendly-order-form` and merged on 27 October. The New Delivery page is
