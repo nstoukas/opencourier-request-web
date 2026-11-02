@@ -1,9 +1,16 @@
 import React from 'react'
 import '@testing-library/jest-dom'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
-import { PortalFrame, PageHeader } from './PortalFrame'
+import {
+  PortalFrame,
+  PageHeader,
+  SESSION_ENDED_NOTICE,
+  SIGN_OUT_FAILED,
+  SESSION_CHECK_FAILED,
+} from './PortalFrame'
 import { usePartnerSession } from '../../../hooks/usePartnerSession'
 import * as api from '../../../api/manualRequestApi'
+import { notifyPartnerUnauthorized } from '../../../api/partnerSessionEvents'
 
 // Mock next/router
 const mockRouter = {
@@ -221,15 +228,16 @@ describe('PortalFrame gate and frame layout', () => {
     expect(myOrdersLink).not.toHaveAttribute('aria-current')
   })
 
-  it('Sign Out calls logoutPartner and refresh, and stays on the current address', async () => {
+  it('Sign Out calls logoutPartner and signedOut, and stays on the current address', async () => {
     mockRouter.pathname = '/manual-request/deliveries'
     ;(api.logoutPartner as jest.Mock).mockResolvedValue(undefined)
-    refreshMock.mockResolvedValue(undefined)
+    const signedOutMock = jest.fn().mockResolvedValue(undefined)
 
     ;(usePartnerSession as jest.Mock).mockReturnValue({
       isSignedIn: true,
       email: 'restaurant@volos.test',
       isLoading: false,
+      signedOut: signedOutMock,
       refresh: refreshMock,
     })
 
@@ -244,12 +252,131 @@ describe('PortalFrame gate and frame layout', () => {
 
     await waitFor(() => {
       expect(api.logoutPartner).toHaveBeenCalledTimes(1)
-      expect(refreshMock).toHaveBeenCalledTimes(1)
+      expect(signedOutMock).toHaveBeenCalledTimes(1)
     })
 
     // PINNED: Sign Out keeps the address (does not router.push or router.replace)
     expect(mockRouter.push).not.toHaveBeenCalled()
     expect(mockRouter.replace).not.toHaveBeenCalled()
+  })
+
+  it('failed sign out keeps restaurant signed in and shows error alert under header (spec 0017, AC-6)', async () => {
+    ;(api.logoutPartner as jest.Mock).mockRejectedValue(new Error('Sign out failed (HTTP 500)'))
+    const signedOutMock = jest.fn()
+
+    ;(usePartnerSession as jest.Mock).mockReturnValue({
+      isSignedIn: true,
+      email: 'restaurant@volos.test',
+      isLoading: false,
+      signedOut: signedOutMock,
+      refresh: refreshMock,
+    })
+
+    render(
+      <PortalFrame>
+        <div data-testid="page-content">Deliveries content</div>
+      </PortalFrame>
+    )
+
+    const signOutBtn = screen.getByRole('button', { name: /Sign Out/i })
+    fireEvent.click(signOutBtn)
+
+    await waitFor(() => {
+      expect(api.logoutPartner).toHaveBeenCalledTimes(1)
+    })
+
+    // signedOut was not called because sign out failed
+    expect(signedOutMock).not.toHaveBeenCalled()
+
+    // Page content is still displayed (restaurant stays signed in)
+    expect(screen.getByTestId('page-content')).toBeInTheDocument()
+
+    // Error alert is displayed with SIGN_OUT_FAILED
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent(SIGN_OUT_FAILED)
+  })
+
+  it('subscribes to onPartnerUnauthorized and triggers recheck on 401 (spec 0017, AC-5)', () => {
+    const recheckMock = jest.fn().mockResolvedValue(undefined)
+    ;(usePartnerSession as jest.Mock).mockReturnValue({
+      isSignedIn: true,
+      email: 'restaurant@volos.test',
+      isLoading: false,
+      recheck: recheckMock,
+      refresh: refreshMock,
+    })
+
+    render(
+      <PortalFrame>
+        <div>Page content</div>
+      </PortalFrame>
+    )
+
+    expect(recheckMock).not.toHaveBeenCalled()
+
+    // 401 occurs elsewhere in manualRequestFetch
+    notifyPartnerUnauthorized()
+
+    expect(recheckMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows SignInScreen with "Your session ended. Sign in again." when sessionEnded is true (spec 0017, AC-5)', () => {
+    ;(usePartnerSession as jest.Mock).mockReturnValue({
+      isSignedIn: false,
+      email: null,
+      isLoading: false,
+      sessionEnded: true,
+      refresh: refreshMock,
+    })
+
+    render(
+      <PortalFrame>
+        <div>Deliveries content</div>
+      </PortalFrame>
+    )
+
+    expect(screen.getByRole('status')).toHaveTextContent(SESSION_ENDED_NOTICE)
+  })
+
+  it('shows SignInScreen without session ended notice on first visit signed out', () => {
+    ;(usePartnerSession as jest.Mock).mockReturnValue({
+      isSignedIn: false,
+      email: null,
+      isLoading: false,
+      sessionEnded: false,
+      refresh: refreshMock,
+    })
+
+    render(
+      <PortalFrame>
+        <div>Deliveries content</div>
+      </PortalFrame>
+    )
+
+    expect(screen.queryByText(SESSION_ENDED_NOTICE)).not.toBeInTheDocument()
+  })
+
+  it('renders check failed screen with Try again button when checkFailed is true and signed out (spec 0017, AC-6)', () => {
+    ;(usePartnerSession as jest.Mock).mockReturnValue({
+      isSignedIn: false,
+      email: null,
+      isLoading: false,
+      checkFailed: true,
+      refresh: refreshMock,
+    })
+
+    render(
+      <PortalFrame>
+        <div>Deliveries content</div>
+      </PortalFrame>
+    )
+
+    expect(screen.getByRole('alert')).toHaveTextContent(SESSION_CHECK_FAILED)
+    const tryAgainBtn = screen.getByRole('button', { name: 'Try again' })
+    expect(tryAgainBtn).toBeInTheDocument()
+
+    fireEvent.click(tryAgainBtn)
+    expect(refreshMock).toHaveBeenCalledTimes(1)
   })
 })
 

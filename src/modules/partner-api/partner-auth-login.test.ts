@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
-import handler from './login'
+import handler from '../../pages/api/partner-auth/login'
 
 // Helper to construct lightweight mock req and res objects for Next.js API routes.
 function createMockReqRes(options: { method?: string; body?: any }) {

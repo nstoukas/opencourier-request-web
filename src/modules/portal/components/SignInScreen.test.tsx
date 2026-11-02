@@ -296,4 +296,12 @@ describe('SignInScreen component', () => {
     ).toBeInTheDocument()
     expect(alert.textContent).not.toMatch(/\b500\b/)
   })
+
+  it('renders notice in Alert with role="status" when notice prop is provided (spec 0017, AC-5)', () => {
+    render(<SignInScreen onSignedIn={onSignedInMock} notice="Your session ended. Sign in again." />)
+
+    const noticeAlert = screen.getByRole('status')
+    expect(noticeAlert).toBeInTheDocument()
+    expect(noticeAlert).toHaveTextContent('Your session ended. Sign in again.')
+  })
 })

@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
-import { PARTNER_SESSION_COOKIE } from '../../../utils/partnerSession'
-import handler, { forwardedBody } from './[...path]'
+import { PARTNER_SESSION_COOKIE } from '../../utils/partnerSession'
+import handler, { forwardedBody } from '../../pages/api/partner-proxy/[...path]'
 
 function createMockReqRes(options: {
   method?: string

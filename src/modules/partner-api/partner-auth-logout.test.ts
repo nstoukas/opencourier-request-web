@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
-import handler from './logout'
+import handler from '../../pages/api/partner-auth/logout'
 
 function createMockReqRes(options: { method?: string }) {
   const req = {

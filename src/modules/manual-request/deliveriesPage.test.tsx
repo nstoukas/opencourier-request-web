@@ -43,16 +43,12 @@ describe('DeliveriesPage (/manual-request/deliveries/index.tsx)', () => {
     ;(useCancelManualRequestDeliveryMutation as jest.Mock).mockReturnValue([mockCancel, { isLoading: false }])
   })
 
-  it('renders "Loading deliveries..." while session check is loading', () => {
-    ;(usePartnerSession as jest.Mock).mockReturnValue({
-      isSignedIn: false,
-      isLoading: true,
-    })
+  it('renders "Loading deliveries..." on initial load when data is not yet loaded', () => {
     ;(useListManualRequestDeliveriesQuery as jest.Mock).mockReturnValue({
       data: undefined,
-      isLoading: false,
+      isLoading: true,
       error: undefined,
-      refetch: jest.fn(),
+      refetch: mockRefetch,
     })
 
     render(<DeliveriesPage />)
@@ -61,41 +57,62 @@ describe('DeliveriesPage (/manual-request/deliveries/index.tsx)', () => {
     expect(useListManualRequestDeliveriesQuery).toHaveBeenCalledWith({
       page: 1,
       perPage: 20,
-      skip: true,
     })
   })
 
-  it('renders "Please sign in to view your deliveries." when user is signed out', () => {
-    ;(usePartnerSession as jest.Mock).mockReturnValue({
-      isSignedIn: false,
-      isLoading: false,
-    })
+  it('renders My Orders description with historyDays ("30 days" and singular "1 day"), and fallback when missing (spec 0017, AC-4)', () => {
+    // Case 1: historyDays = 30
     ;(useListManualRequestDeliveriesQuery as jest.Mock).mockReturnValue({
-      data: undefined,
+      data: {
+        data: [],
+        pagination: { currentPage: 1, totalPages: 1 },
+        historyDays: 30,
+      },
       isLoading: false,
       error: undefined,
-      refetch: jest.fn(),
+      refetch: mockRefetch,
     })
 
-    render(<DeliveriesPage />)
+    const { rerender } = render(<DeliveriesPage />)
+    expect(
+      screen.getByText('Your orders from the last 30 days, and any still open.')
+    ).toBeInTheDocument()
 
-    expect(screen.getByText(/Please/i)).toBeInTheDocument()
-    expect(screen.getByText('sign in')).toBeInTheDocument()
-    expect(screen.getByText(/to view your deliveries\./i)).toBeInTheDocument()
-    expect(useListManualRequestDeliveriesQuery).toHaveBeenCalledWith({
-      page: 1,
-      perPage: 20,
-      skip: true,
+    // Case 2: historyDays = 1 (singular "1 day")
+    ;(useListManualRequestDeliveriesQuery as jest.Mock).mockReturnValue({
+      data: {
+        data: [],
+        pagination: { currentPage: 1, totalPages: 1 },
+        historyDays: 1,
+      },
+      isLoading: false,
+      error: undefined,
+      refetch: mockRefetch,
     })
+
+    rerender(<DeliveriesPage />)
+    expect(
+      screen.getByText('Your orders from the last 1 day, and any still open.')
+    ).toBeInTheDocument()
+
+    // Case 3: historyDays missing / undefined
+    ;(useListManualRequestDeliveriesQuery as jest.Mock).mockReturnValue({
+      data: {
+        data: [],
+        pagination: { currentPage: 1, totalPages: 1 },
+      },
+      isLoading: false,
+      error: undefined,
+      refetch: mockRefetch,
+    })
+
+    rerender(<DeliveriesPage />)
+    expect(
+      screen.getByText("Only your restaurant's deliveries appear here.")
+    ).toBeInTheDocument()
   })
 
-  // Test Plan case 13: Signed in heading is "My Orders" and query called with exact object { page: 1, perPage: 20, skip: false }
-  // Test Plan case 14: Given two deliveries in mocked response, both render without browser-side filtering
-  it('renders My Orders heading and all deliveries returned from partner API query', () => {
-    ;(usePartnerSession as jest.Mock).mockReturnValue({
-      isSignedIn: true,
-      isLoading: false,
-    })
+  it('renders My Orders heading and all deliveries returned from partner API query, with no sign in link branch', () => {
     ;(useListManualRequestDeliveriesQuery as jest.Mock).mockReturnValue({
       data: {
         data: [
@@ -121,21 +138,19 @@ describe('DeliveriesPage (/manual-request/deliveries/index.tsx)', () => {
           },
         ],
         pagination: { currentPage: 1, totalPages: 1 },
+        historyDays: 30,
       },
       isLoading: false,
       error: undefined,
-      refetch: jest.fn(),
+      refetch: mockRefetch,
     })
 
     render(<DeliveriesPage />)
 
-    // Case 13 assertions: "My Orders" heading and exact query argument (no partnerId)
     expect(screen.getByRole('heading', { name: 'My Orders' })).toBeInTheDocument()
-    expect(screen.getByText("Only your restaurant's deliveries appear here.")).toBeInTheDocument()
     expect(useListManualRequestDeliveriesQuery).toHaveBeenCalledWith({
       page: 1,
       perPage: 20,
-      skip: false,
     })
 
     // Case 14 assertion: Both deliveries render (nothing filtered in browser)
@@ -146,12 +161,43 @@ describe('DeliveriesPage (/manual-request/deliveries/index.tsx)', () => {
     expect(screen.getByText('Customer A')).toBeInTheDocument()
     expect(screen.getByText('Customer B')).toBeInTheDocument()
 
-    // Clause 2 assertion: Statuses render through StatusBadge, not raw uppercase enum text
-    expect(screen.getByText('Accepted')).toBeInTheDocument()
-    const acceptedBadge = screen.getByText('Accepted').closest('[data-status]')
-    expect(acceptedBadge).toHaveAttribute('data-status', 'ACCEPTED')
-    expect(acceptedBadge).toHaveClass('bg-secondary')
-    expect(screen.queryByText('ACCEPTED')).not.toBeInTheDocument()
+    // Spec 0017 AC-5: No sign-in link branch
+    expect(screen.queryByText(/Please sign in/i)).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /sign in/i })).not.toBeInTheDocument()
+  })
+
+  it('a failed poll keeps the list on screen and shows "Could not refresh the list just now..." (spec 0017, AC-4)', () => {
+    ;(useListManualRequestDeliveriesQuery as jest.Mock).mockReturnValue({
+      data: {
+        data: [
+          {
+            id: 'del-001',
+            status: 'ACCEPTED',
+            orderReference: 'ORD-999',
+            totalCost: 500,
+            currencyCode: 'EUR',
+            createdAt: '2026-07-29T10:00:00Z',
+            pickup: { pickupName: 'Nosh', city: 'Volos' },
+            dropoff: { dropoffName: 'Customer A', city: 'Volos' },
+          },
+        ],
+        pagination: { currentPage: 1, totalPages: 1 },
+        historyDays: 30,
+      },
+      isLoading: false,
+      error: new Error('Network error on poll'),
+      refetch: mockRefetch,
+    })
+
+    render(<DeliveriesPage />)
+
+    // List is kept on screen
+    expect(screen.getByText('del-001')).toBeInTheDocument()
+    expect(screen.getByText('ORD-999')).toBeInTheDocument()
+
+    // Refresh failure notice is shown with role="status"
+    const notice = screen.getByRole('status')
+    expect(notice).toHaveTextContent('Could not refresh the list just now. It tries again in 30 seconds.')
   })
 
   it('renders statuses through StatusBadge for terminal statuses (DROPPED_OFF and CANCELED)', () => {

@@ -450,4 +450,106 @@ describe('DeliveryStatusPage (/manual-request/[deliveryId]/status.tsx)', () => {
       expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(2)
     })
   })
+
+  describe('error messages and polling refresh failure (spec 0017, AC-4, review fix 9)', () => {
+    it('shows the server message for a 4xx error (e.g. order older than period)', () => {
+      const serverErr = {
+        statusCode: 404,
+        message: 'This order is older than 1 day. The co-op can look it up for you.',
+      }
+      ;(useGetManualRequestDeliveryQuery as jest.Mock).mockReturnValue({
+        data: undefined,
+        isLoading: false,
+        error: serverErr,
+        refetch: mockRefetch,
+      })
+
+      render(<DeliveryStatusPage />)
+
+      expect(
+        screen.getByText('This order is older than 1 day. The co-op can look it up for you.')
+      ).toBeInTheDocument()
+    })
+
+    it('shows general line for 500, generic Request failed HTTP 4xx, network errors, and timeouts', () => {
+      const generalLine = 'The order could not be loaded. Try again in a moment.'
+
+      // 500 status code
+      ;(useGetManualRequestDeliveryQuery as jest.Mock).mockReturnValue({
+        data: undefined,
+        isLoading: false,
+        error: { statusCode: 500, message: 'Request failed (HTTP 500)' },
+        refetch: mockRefetch,
+      })
+
+      const { rerender } = render(<DeliveryStatusPage />)
+      expect(screen.getByText(generalLine)).toBeInTheDocument()
+
+      // 500 status code with server internal error text
+      ;(useGetManualRequestDeliveryQuery as jest.Mock).mockReturnValue({
+        data: undefined,
+        isLoading: false,
+        error: { statusCode: 500, message: 'Internal server error' },
+        refetch: mockRefetch,
+      })
+      rerender(<DeliveryStatusPage />)
+      expect(screen.getByText(generalLine)).toBeInTheDocument()
+
+      // 404 status code with generic "Request failed (HTTP 404)" text
+      ;(useGetManualRequestDeliveryQuery as jest.Mock).mockReturnValue({
+        data: undefined,
+        isLoading: false,
+        error: { statusCode: 404, message: 'Request failed (HTTP 404)' },
+        refetch: mockRefetch,
+      })
+      rerender(<DeliveryStatusPage />)
+      expect(screen.getByText(generalLine)).toBeInTheDocument()
+
+      // Network error without statusCode
+      ;(useGetManualRequestDeliveryQuery as jest.Mock).mockReturnValue({
+        data: undefined,
+        isLoading: false,
+        error: new Error('Failed to fetch'),
+        refetch: mockRefetch,
+      })
+      rerender(<DeliveryStatusPage />)
+      expect(screen.getByText(generalLine)).toBeInTheDocument()
+
+      // Timeout error without statusCode
+      ;(useGetManualRequestDeliveryQuery as jest.Mock).mockReturnValue({
+        data: undefined,
+        isLoading: false,
+        error: new Error('Request timed out after 12s. Check backend availability and token.'),
+        refetch: mockRefetch,
+      })
+      rerender(<DeliveryStatusPage />)
+      expect(screen.getByText(generalLine)).toBeInTheDocument()
+    })
+
+    it('a failed refresh keeps order data on screen and shows "Could not refresh just now..."', () => {
+      ;(useGetManualRequestDeliveryQuery as jest.Mock).mockReturnValue({
+        data: {
+          id: 'del-xyz-789',
+          status: 'ACCEPTED',
+          createdAt: '2026-09-30T10:00:00Z',
+          pickup: { pickupName: 'Taverna Volos', addressLine1: 'Iasonos 10', city: 'Volos' },
+          dropoff: { dropoffName: 'Elena K.', addressLine1: 'Dimitriadis 25', city: 'Volos' },
+        },
+        isLoading: false,
+        error: new Error('Failed to fetch'),
+        refetch: mockRefetch,
+      })
+
+      render(<DeliveryStatusPage />)
+
+      // Order details remain on screen
+      expect(screen.getByText('Accepted')).toBeInTheDocument()
+      expect(screen.getByText('Taverna Volos')).toBeInTheDocument()
+      expect(screen.getAllByText('Elena K.').length).toBeGreaterThanOrEqual(1)
+
+      // Status role refresh notice is shown
+      const notice = screen.getByRole('status')
+      expect(notice).toHaveTextContent('Could not refresh just now. It tries again in 30 seconds.')
+    })
+  })
 })

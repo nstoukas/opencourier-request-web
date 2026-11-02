@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
-import { PARTNER_SESSION_COOKIE } from '../../../utils/partnerSession'
-import handler from './session'
+import { PARTNER_SESSION_COOKIE } from '../../utils/partnerSession'
+import handler from '../../pages/api/partner-auth/session'
 
 function createMockReqRes(options: { method?: string; cookies?: Record<string, string> }) {
   const req = {
@@ -32,7 +32,7 @@ function createMockReqRes(options: { method?: string; cookies?: Record<string, s
   return { req, res, resState }
 }
 
-describe('/api/partner-auth/session API Route', () => {
+describe('/api/partner-auth/session API Route (spec 0017, AC-6)', () => {
   const originalFetch = global.fetch
 
   beforeEach(() => {
@@ -94,7 +94,7 @@ describe('/api/partner-auth/session API Route', () => {
     expect(resState.jsonBody).toEqual({ signedIn: true, email: 'restaurant@volos.test' })
   })
 
-  it('clears session cookie and returns signedIn false when backend /auth/me returns non-ok status', async () => {
+  it('clears session cookie and returns 200 signedIn false when upstream returns 401', async () => {
     global.fetch = jest.fn().mockResolvedValue({
       ok: false,
       status: 401,
@@ -112,12 +112,15 @@ describe('/api/partner-auth/session API Route', () => {
     expect(resState.headers['set-cookie']).toContain('Max-Age=0')
   })
 
-  it('clears session cookie and returns signedIn false when backend request fails', async () => {
-    global.fetch = jest.fn().mockRejectedValue(new Error('Connection error'))
+  it('clears session cookie and returns 200 signedIn false when upstream returns 403 (review fix 10)', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 403,
+    } as any)
 
     const { req, res, resState } = createMockReqRes({
       method: 'GET',
-      cookies: { [PARTNER_SESSION_COOKIE]: 'SOME_TOKEN' },
+      cookies: { [PARTNER_SESSION_COOKIE]: 'REVOKED_SESSION_TOKEN' },
     })
 
     await handler(req, res)
@@ -125,5 +128,38 @@ describe('/api/partner-auth/session API Route', () => {
     expect(resState.statusCode).toBe(200)
     expect(resState.jsonBody).toEqual({ signedIn: false, email: null })
     expect(resState.headers['set-cookie']).toContain('Max-Age=0')
+  })
+
+  it('returns 502 with no Set-Cookie when upstream returns 500 (cookie kept, spec 0017 AC-6)', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+    } as any)
+
+    const { req, res, resState } = createMockReqRes({
+      method: 'GET',
+      cookies: { [PARTNER_SESSION_COOKIE]: 'VALID_TOKEN_DURING_OUTAGE' },
+    })
+
+    await handler(req, res)
+
+    expect(resState.statusCode).toBe(502)
+    expect(resState.jsonBody).toEqual({ message: 'The sign in could not be checked.' })
+    expect(resState.headers['set-cookie']).toBeUndefined()
+  })
+
+  it('returns 502 with no Set-Cookie when upstream fetch rejects or times out (spec 0017 AC-6)', async () => {
+    global.fetch = jest.fn().mockRejectedValue(new Error('Connection refused / timeout'))
+
+    const { req, res, resState } = createMockReqRes({
+      method: 'GET',
+      cookies: { [PARTNER_SESSION_COOKIE]: 'VALID_TOKEN_OFFLINE' },
+    })
+
+    await handler(req, res)
+
+    expect(resState.statusCode).toBe(502)
+    expect(resState.jsonBody).toEqual({ message: 'The sign in could not be checked.' })
+    expect(resState.headers['set-cookie']).toBeUndefined()
   })
 })

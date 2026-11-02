@@ -10,8 +10,13 @@ import {
   useConfirmManualRequestDeliveryMutation,
   useCreateManualRequestQuoteMutation,
   useCancelManualRequestDeliveryMutation,
+  useListManualRequestDeliveriesQuery,
+  useGetManualRequestDeliveryQuery,
+  manualRequestFetch,
+  ENDED_DELIVERY_STATUSES,
   DispatchState,
 } from './manualRequestApi'
+import { onPartnerUnauthorized } from './partnerSessionEvents'
 import { ManualRequestDeliveryInput } from '../modules/manual-request/types'
 
 describe('manualRequestApi helper functions', () => {
@@ -76,7 +81,7 @@ describe('manualRequestApi helper functions', () => {
 
   describe('logoutPartner', () => {
     it('calls /api/partner-auth/logout with POST method', async () => {
-      global.fetch = jest.fn().mockResolvedValue({ ok: true } as any)
+      global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200 } as any)
 
       await logoutPartner()
       expect(global.fetch).toHaveBeenCalledWith('/api/partner-auth/logout', {
@@ -84,10 +89,16 @@ describe('manualRequestApi helper functions', () => {
       })
     })
 
-    it('handles logout network failures silently without crashing', async () => {
+    it('throws when logout request fails with non-ok status (spec 0017, AC-6)', async () => {
+      global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 500 } as any)
+
+      await expect(logoutPartner()).rejects.toThrow('Sign out failed (HTTP 500)')
+    })
+
+    it('throws when logout encounters network failure (spec 0017, AC-6)', async () => {
       global.fetch = jest.fn().mockRejectedValue(new Error('Network offline'))
 
-      await expect(logoutPartner()).resolves.toBeUndefined()
+      await expect(logoutPartner()).rejects.toThrow('Network offline')
     })
   })
 
@@ -95,6 +106,7 @@ describe('manualRequestApi helper functions', () => {
     it('returns session data from /api/partner-auth/session on success', async () => {
       global.fetch = jest.fn().mockResolvedValue({
         ok: true,
+        status: 200,
         json: jest.fn().mockResolvedValue({ signedIn: true, email: 'user@volos.test' }),
       } as any)
 
@@ -102,22 +114,20 @@ describe('manualRequestApi helper functions', () => {
       expect(session).toEqual({ signedIn: true, email: 'user@volos.test' })
     })
 
-    it('returns signedIn false and email null on HTTP error (e.g. 500 response)', async () => {
+    it('throws on non-200 HTTP response (spec 0017, AC-6)', async () => {
       global.fetch = jest.fn().mockResolvedValue({
         ok: false,
-        status: 500,
-        json: jest.fn().mockResolvedValue({ message: 'Internal Server Error' }),
+        status: 502,
+        json: jest.fn().mockResolvedValue({ message: 'The sign in could not be checked.' }),
       } as any)
 
-      const session = await fetchPartnerSession()
-      expect(session).toEqual({ signedIn: false, email: null })
+      await expect(fetchPartnerSession()).rejects.toThrow('Session check failed (HTTP 502)')
     })
 
-    it('returns signedIn false and email null on network failure', async () => {
+    it('throws on network failure (spec 0017, AC-6)', async () => {
       global.fetch = jest.fn().mockRejectedValue(new Error('Network error'))
 
-      const session = await fetchPartnerSession()
-      expect(session).toEqual({ signedIn: false, email: null })
+      await expect(fetchPartnerSession()).rejects.toThrow('Network error')
     })
   })
 
@@ -829,6 +839,93 @@ describe('manualRequestApi helper functions', () => {
 
       // No new fetch calls occur
       expect(global.fetch).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  describe('manualRequestFetch 401 notification (spec 0017, AC-5)', () => {
+    it('calls unauthorized listeners on 401 response only (not on 404 or 500)', async () => {
+      const listener = jest.fn()
+      const unsubscribe = onPartnerUnauthorized(listener)
+
+      // 401 response
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: false,
+        status: 401,
+        text: jest.fn().mockResolvedValue(JSON.stringify({ message: 'Unauthorized' })),
+      } as any)
+
+      await expect(manualRequestFetch('/deliveries')).rejects.toThrow()
+      expect(listener).toHaveBeenCalledTimes(1)
+
+      // 404 response does NOT notify
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: false,
+        status: 404,
+        text: jest.fn().mockResolvedValue(JSON.stringify({ message: 'Not found' })),
+      } as any)
+
+      await expect(manualRequestFetch('/deliveries/missing')).rejects.toThrow()
+      expect(listener).toHaveBeenCalledTimes(1)
+
+      // 500 response does NOT notify
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        text: jest.fn().mockResolvedValue(JSON.stringify({ message: 'Server error' })),
+      } as any)
+
+      await expect(manualRequestFetch('/deliveries')).rejects.toThrow()
+      expect(listener).toHaveBeenCalledTimes(1)
+
+      unsubscribe()
+    })
+  })
+
+  describe('delivery query hooks and ENDED_DELIVERY_STATUSES (spec 0017, AC-4)', () => {
+    it('defines ENDED_DELIVERY_STATUSES as DROPPED_OFF, CANCELED, FAILED', () => {
+      expect(ENDED_DELIVERY_STATUSES).toEqual(['DROPPED_OFF', 'CANCELED', 'FAILED'])
+    })
+
+    it('useGetManualRequestDeliveryQuery stops polling once delivery status is terminal', async () => {
+      jest.useFakeTimers()
+      try {
+        const fetchDeliveryMock = jest
+          .fn()
+          .mockResolvedValueOnce({ id: 'del-1', status: 'IN_TRANSIT' })
+          .mockResolvedValueOnce({ id: 'del-1', status: 'DROPPED_OFF' })
+
+        global.fetch = jest.fn().mockImplementation(async () => ({
+          ok: true,
+          status: 200,
+          text: jest.fn().mockResolvedValue(JSON.stringify({ result: await fetchDeliveryMock() })),
+        }))
+
+        const { result } = renderHook(() =>
+          useGetManualRequestDeliveryQuery('del-1', { pollMs: 30_000 })
+        )
+
+        await act(async () => {
+          await Promise.resolve()
+        })
+        expect(result.current.data?.status).toBe('IN_TRANSIT')
+        expect(fetchDeliveryMock).toHaveBeenCalledTimes(1)
+
+        // Poll 1: delivery updates to DROPPED_OFF
+        await act(async () => {
+          jest.advanceTimersByTime(30_000)
+        })
+        expect(result.current.data?.status).toBe('DROPPED_OFF')
+        expect(fetchDeliveryMock).toHaveBeenCalledTimes(2)
+
+        // Poll 2: timer advances, but polling has stopped!
+        await act(async () => {
+          jest.advanceTimersByTime(30_000)
+        })
+        expect(fetchDeliveryMock).toHaveBeenCalledTimes(2)
+      } finally {
+        jest.clearAllTimers()
+        jest.useRealTimers()
+      }
     })
   })
 })
