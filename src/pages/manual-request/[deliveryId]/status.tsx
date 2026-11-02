@@ -24,6 +24,7 @@ import type {
 import { getManualRequestApiMode } from '../../../utils/manualRequestAuth'
 import { CustomerSaveNotice } from '../../../modules/saved-customers/components/CustomerSaveNotice'
 import { formatDateTime, formatMoney } from '../../../utils/format'
+import { orderCodeOf } from '../../../utils/orderCode'
 import { PageHeader } from '../../../modules/portal/components/PortalFrame'
 import { CancelDeliveryDialog } from '../../../modules/cancel/CancelDeliveryDialog'
 
@@ -355,6 +356,16 @@ export default function ManualRequestStatusPage() {
 
         <Card>
           <CardHeader>
+            {/* Spec 0021 (AC-10): the code the rider shows when collecting, big, so staff match the bag at a
+                glance. The full id stays below it. */}
+            {deliveryId ? (
+              <p className="text-sm text-muted-foreground">
+                Order code{' '}
+                <span className="block font-mono text-4xl font-bold tracking-wide text-foreground" data-testid="order-code">
+                  #{orderCodeOf(deliveryId)}
+                </span>
+              </p>
+            ) : null}
             <CardTitle className="break-all font-mono text-base text-muted-foreground">{deliveryId || '—'}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
