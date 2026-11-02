@@ -308,11 +308,13 @@ export default function ManualRequestStatusPage() {
   })
   // The cancel asks first, and asks who wanted it (spec 0015).
   const [cancelOpen, setCancelOpen] = useState(false)
-  const statusCode = (error as any)?.statusCode ?? (error as any)?.status
+  // The server's own sentence when it sent one (a 404 "This order is older than 30 days..." for an old
+  // order, spec 0017), else a general line. A 401 is handled by the frame, which checks the session.
+  const serverMessage: string | undefined = (error as any)?.message
   const errorMessage =
-    statusCode === 401
-      ? 'Unauthorized (401). Missing or invalid JWT token. Configure accessToken and refresh.'
-      : 'Failed to load delivery status. Check token and backend.'
+    serverMessage && !/^Request failed \(HTTP \d+\)$/.test(serverMessage)
+      ? serverMessage
+      : 'The order could not be loaded. Try again in a moment.'
 
   const isTerminal = data ? TERMINAL_STATUSES.has(data.status) : false
 
@@ -350,8 +352,14 @@ export default function ManualRequestStatusPage() {
             <CardTitle className="break-all font-mono text-base text-muted-foreground">{deliveryId || '—'}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {isLoading ? <p className="text-sm text-muted-foreground">Loading delivery status...</p> : null}
-            {error ? <p className="text-sm text-destructive">{errorMessage}</p> : null}
+            {isLoading && !data ? <p className="text-sm text-muted-foreground">Loading delivery status...</p> : null}
+            {error && !data ? <p className="text-sm text-destructive">{errorMessage}</p> : null}
+            {/* The page refreshes every 30 s until the order ends (spec 0017, AC-4); a failed refresh keeps it. */}
+            {error && data ? (
+              <p role="status" className="text-sm text-muted-foreground">
+                Could not refresh just now. It tries again in 30 seconds.
+              </p>
+            ) : null}
 
             {data && partnerMode ? <PartnerDeliveryDetails data={data as PartnerDeliveryDto} /> : null}
             {data && !partnerMode ? <AdminDeliveryDetails data={data as ManualRequestDeliveryDto} /> : null}

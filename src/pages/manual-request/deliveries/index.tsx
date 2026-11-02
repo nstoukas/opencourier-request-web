@@ -24,7 +24,6 @@ import {
   useUpdateManualRequestDeliveryMutation,
 } from '../../../api/manualRequestApi'
 import { PartnerDeliveryDto } from '../../../modules/manual-request/types'
-import { usePartnerSession } from '../../../hooks/usePartnerSession'
 import { formatDateTime, formatMoney } from '../../../utils/format'
 import { PageHeader } from '../../../modules/portal/components/PortalFrame'
 import { CancelDeliveryDialog } from '../../../modules/cancel/CancelDeliveryDialog'
@@ -210,12 +209,11 @@ function EditDialog({ delivery, onClose, onSaved }: EditDialogProps) {
 export default function DeliveriesPage() {
   const [page, setPage] = useState(1)
   const PER_PAGE = 20
-  const { isSignedIn, isLoading: isSessionLoading } = usePartnerSession()
-
+  // The frame (PortalFrame) shows this page only once the restaurant is signed in, and handles a session
+  // that ends mid visit (spec 0017, AC-5). The list refreshes every 30 s while the tab is visible (AC-4).
   const { data, isLoading, error, refetch } = useListManualRequestDeliveriesQuery({
     page,
     perPage: PER_PAGE,
-    skip: !isSignedIn || isSessionLoading,
   })
 
   // The delivery whose cancel dialog is open (spec 0015: it asks first, and who wanted it).
@@ -251,19 +249,25 @@ export default function DeliveriesPage() {
       </Head>
       {/* The frame (PortalFrame) supplies <main> and the 768px column; this is the page inside it. */}
       <div className="space-y-6">
-        <PageHeader title="My Orders" description={"Only your restaurant's deliveries appear here."} />
+        <PageHeader
+          title="My Orders"
+          description={
+            data?.historyDays
+              ? `Your orders from the last ${data.historyDays} ${data.historyDays === 1 ? 'day' : 'days'}, and any still open.`
+              : "Only your restaurant's deliveries appear here."
+          }
+        />
 
-        {!isSignedIn && !isSessionLoading ? (
-          <p className="text-sm text-muted-foreground">
-            Please{' '}
-            <Link href="/manual-request" className="underline">
-              sign in
-            </Link>{' '}
-            to view your deliveries.
+        {/* A poll that fails keeps the list on screen and says so; only a first load that fails shows the error alone. */}
+        {error && data ? (
+          <p role="status" className="text-sm text-muted-foreground">
+            Could not refresh the list just now. It tries again in 30 seconds.
           </p>
-        ) : isLoading || isSessionLoading ? (
+        ) : null}
+
+        {isLoading && !data ? (
           <p className="text-sm text-muted-foreground">Loading deliveries...</p>
-        ) : error ? (
+        ) : error && !data ? (
           <p className="text-sm text-destructive">
             {(error as any)?.message ?? 'Failed to load deliveries. Check your credentials and try again.'}
           </p>
@@ -355,11 +359,11 @@ export default function DeliveriesPage() {
           </div>
         )}
 
-        {isSignedIn && statusMessage ? (
+        {statusMessage ? (
           <p className="text-sm text-muted-foreground">{statusMessage}</p>
         ) : null}
 
-        {isSignedIn && pagination && pagination.totalPages > 1 ? (
+        {pagination && pagination.totalPages > 1 ? (
           <div className="flex items-center gap-3">
             <Button
               variant="outline"

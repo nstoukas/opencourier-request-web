@@ -12,6 +12,8 @@ import {
   PartnerProfileDto,
 } from '../modules/manual-request/types'
 import { EnumDeliveryEventType } from '../shared-types'
+import { notifyPartnerUnauthorized } from './partnerSessionEvents'
+import { usePolledFetch } from '../hooks/usePolledFetch'
 import {
   getManualRequestApiMode,
   PARTNER_AUTH_BASE_URL,
@@ -78,6 +80,8 @@ export async function manualRequestFetch<T>(
     err.code = wrapped?.code
     // A saved customer's phone clash (409) names the other customer by id (spec 0005, AC-4).
     err.conflictingCustomerId = wrapped?.conflictingCustomerId
+    // The session may have ended mid visit: the portal frame checks it again (spec 0017, AC-5).
+    if (response.status === 401) notifyPartnerUnauthorized()
     throw err
   }
 
@@ -338,58 +342,54 @@ export async function loginPartner(email: string, password: string): Promise<{ e
   return { email: body?.email ?? null }
 }
 
+// Throws when the sign out did not happen (no connection, or the page's server answered an error), so the
+// frame keeps the restaurant signed in and says so instead of pretending (spec 0017, AC-6).
 export async function logoutPartner(): Promise<void> {
-  await fetch(`${PARTNER_AUTH_BASE_URL}/logout`, {
+  const response = await fetch(`${PARTNER_AUTH_BASE_URL}/logout`, {
     method: 'POST',
-  }).catch(() => {})
-}
-
-export async function fetchPartnerSession(): Promise<{ signedIn: boolean; email: string | null }> {
-  try {
-    const response = await fetch(`${PARTNER_AUTH_BASE_URL}/session`)
-    if (!response.ok) return { signedIn: false, email: null }
-    const body = await response.json().catch(() => ({}))
-    return {
-      signedIn: Boolean(body?.signedIn),
-      email: body?.email ?? null,
-    }
-  } catch {
-    return { signedIn: false, email: null }
+  })
+  if (!response.ok) {
+    throw new Error(`Sign out failed (HTTP ${response.status})`)
   }
 }
 
-export function useListManualRequestDeliveriesQuery(options?: { page?: number; perPage?: number; skip?: boolean }) {
-  const [data, setData] = useState<PartnerDeliveryPaginatedDto | undefined>(undefined)
-  const [isLoading, setIsLoading] = useState<boolean>(!options?.skip)
-  const [error, setError] = useState<unknown>(undefined)
+// Signed in or not, as the session route says. Throws when the check itself failed (no connection, or
+// the backend could not be reached: the route then answers 502 and keeps the cookie), so a failed check
+// is never shown as "signed out" (spec 0017, AC-6).
+export async function fetchPartnerSession(): Promise<{ signedIn: boolean; email: string | null }> {
+  const response = await fetch(`${PARTNER_AUTH_BASE_URL}/session`)
+  if (response.status !== 200) {
+    throw new Error(`Session check failed (HTTP ${response.status})`)
+  }
+  const body = await response.json().catch(() => ({}))
+  return {
+    signedIn: Boolean(body?.signedIn),
+    email: body?.email ?? null,
+  }
+}
 
-  const fetchDeliveries = useCallback(async () => {
-    if (options?.skip) return
-    setIsLoading(true)
-    setError(undefined)
-    try {
-      const apiMode = getManualRequestApiMode()
-      if (apiMode !== 'partner') {
-        throw new Error('Listing deliveries is only supported in partner API mode.')
-      }
-      const params = new URLSearchParams()
-      if (options?.page != null) params.set('page', String(options.page))
-      if (options?.perPage != null) params.set('perPage', String(options.perPage))
-      const query = params.toString() ? `?${params}` : ''
-      const response = await manualRequestFetch<PartnerDeliveryPaginatedDto>(`/deliveries${query}`)
-      setData(response)
-    } catch (err) {
-      setError(err)
-    } finally {
-      setIsLoading(false)
+// My Orders (spec 0017, AC-4): read, then again every 30 s while the tab is visible.
+export function useListManualRequestDeliveriesQuery(options?: {
+  page?: number
+  perPage?: number
+  skip?: boolean
+  pollMs?: number
+}) {
+  const page = options?.page
+  const perPage = options?.perPage
+  const load = useCallback(async () => {
+    const apiMode = getManualRequestApiMode()
+    if (apiMode !== 'partner') {
+      throw new Error('Listing deliveries is only supported in partner API mode.')
     }
-  }, [options?.skip, options?.page, options?.perPage])
+    const params = new URLSearchParams()
+    if (page != null) params.set('page', String(page))
+    if (perPage != null) params.set('perPage', String(perPage))
+    const query = params.toString() ? `?${params}` : ''
+    return manualRequestFetch<PartnerDeliveryPaginatedDto>(`/deliveries${query}`)
+  }, [page, perPage])
 
-  useEffect(() => {
-    fetchDeliveries()
-  }, [fetchDeliveries])
-
-  return { data, isLoading, error, refetch: fetchDeliveries }
+  return usePolledFetch(load, { enabled: !options?.skip, intervalMs: options?.pollMs })
 }
 
 const SAFE_VERIFICATION_DEFAULT = {
@@ -429,35 +429,28 @@ export function useUpdateManualRequestDeliveryMutation() {
   )
 }
 
+// The statuses after which an order never changes again (spec 0017: the status page stops polling).
+export const ENDED_DELIVERY_STATUSES = ['DROPPED_OFF', 'CANCELED', 'FAILED']
+
+const deliveryHasEnded = (delivery: ManualRequestDeliveryFetchResult) =>
+  ENDED_DELIVERY_STATUSES.includes(delivery.status)
+
+// The status page (spec 0017, AC-4): read, then every 30 s while visible, until the order has ended.
 export function useGetManualRequestDeliveryQuery(
   deliveryId: string,
-  options?: { skip?: boolean },
+  options?: { skip?: boolean; pollMs?: number },
 ) {
-  const [data, setData] = useState<ManualRequestDeliveryFetchResult | undefined>(undefined)
-  const [isLoading, setIsLoading] = useState<boolean>(!options?.skip)
-  const [error, setError] = useState<unknown>(undefined)
+  const load = useCallback(async () => {
+    const apiMode = getManualRequestApiMode()
+    const path = apiMode === 'partner' ? `/deliveries/${deliveryId}` : `/delivery/${deliveryId}`
+    return manualRequestFetch<ManualRequestDeliveryFetchResult>(path)
+  }, [deliveryId])
 
-  const fetchDelivery = useCallback(async () => {
-    if (!deliveryId || options?.skip) return
-    setIsLoading(true)
-    setError(undefined)
-    try {
-      const apiMode = getManualRequestApiMode()
-      const path = apiMode === 'partner' ? `/deliveries/${deliveryId}` : `/delivery/${deliveryId}`
-      const response = await manualRequestFetch<ManualRequestDeliveryFetchResult>(path)
-      setData(response)
-    } catch (err) {
-      setError(err)
-    } finally {
-      setIsLoading(false)
-    }
-  }, [deliveryId, options?.skip])
-
-  useEffect(() => {
-    fetchDelivery()
-  }, [fetchDelivery])
-
-  return { data, isLoading, error, refetch: fetchDelivery }
+  return usePolledFetch(load, {
+    enabled: Boolean(deliveryId) && !options?.skip,
+    intervalMs: options?.pollMs,
+    stop: deliveryHasEnded,
+  })
 }
 
 // Spec 0014. Whether dispatch is stopped (heat or a storm) and until when, with the sentence the

@@ -202,6 +202,8 @@ export interface PartnerPaginationDto {
 export interface PartnerDeliveryPaginatedDto {
   data: PartnerDeliveryDto[]
   pagination?: PartnerPaginationDto
+  // Spec 0017: how many days back the list reaches for ended orders (open ones always show).
+  historyDays?: number
 }
 
 export interface ManualRequestUpdateDeliveryInput {

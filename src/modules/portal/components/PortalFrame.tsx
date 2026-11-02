@@ -1,10 +1,11 @@
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/router'
 import { SignOut } from '@phosphor-icons/react'
 import { Button, Spinner } from '../../../admin-web-components'
 import { cn } from '../../../ui-shared-utils'
 import { logoutPartner } from '../../../api/manualRequestApi'
+import { onPartnerUnauthorized } from '../../../api/partnerSessionEvents'
 import { usePartnerSession } from '../../../hooks/usePartnerSession'
 import { SignInScreen } from './SignInScreen'
 
@@ -107,11 +108,26 @@ export function PageHeader({ title, description, actions }: PageHeaderProps) {
  * the same address (so after signing in you land on the page you asked for); signed in,
  * the sticky header and one centered column, at most 768px wide, with the page inside.
  */
+export const SESSION_ENDED_NOTICE = 'Your session ended. Sign in again.'
+export const SIGN_OUT_FAILED = 'Could not sign out. Check your connection and try again.'
+export const SESSION_CHECK_FAILED = 'Could not check your sign in. Check your connection and try again.'
+
 export function PortalFrame({ children }: { children: ReactNode }) {
-  const { isSignedIn, email, isLoading, refresh } = usePartnerSession()
+  const { isSignedIn, email, isLoading, checkFailed, sessionEnded, refresh, recheck, signedIn } = usePartnerSession()
+  const [signOutError, setSignOutError] = useState<string | null>(null)
+
+  // A 401 from any partner call: check the session again, quietly (spec 0017, AC-5).
+  useEffect(() => onPartnerUnauthorized(() => void recheck()), [recheck])
 
   const handleSignOut = async () => {
-    await logoutPartner()
+    setSignOutError(null)
+    try {
+      await logoutPartner()
+    } catch {
+      // Still signed in: say so instead of pretending (AC-6).
+      setSignOutError(SIGN_OUT_FAILED)
+      return
+    }
     await refresh()
   }
 
@@ -123,8 +139,21 @@ export function PortalFrame({ children }: { children: ReactNode }) {
     )
   }
 
+  if (checkFailed && !isSignedIn) {
+    return (
+      <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-muted px-4 text-center">
+        <p role="alert" className="max-w-sm text-base">
+          {SESSION_CHECK_FAILED}
+        </p>
+        <Button type="button" className="h-12 px-6 text-base" onClick={() => void refresh()}>
+          Try again
+        </Button>
+      </div>
+    )
+  }
+
   if (!isSignedIn) {
-    return <SignInScreen onSignedIn={refresh} />
+    return <SignInScreen onSignedIn={signedIn} notice={sessionEnded ? SESSION_ENDED_NOTICE : undefined} />
   }
 
   return (
@@ -137,6 +166,12 @@ export function PortalFrame({ children }: { children: ReactNode }) {
         Skip to content
       </a>
       <PortalHeader email={email} onSignOut={handleSignOut} />
+      {/* A sign out that failed, said in words right under the header (spec 0017, AC-6). */}
+      {signOutError ? (
+        <p role="alert" className="border-b bg-destructive/10 px-4 py-2 text-center text-sm text-destructive">
+          {signOutError}
+        </p>
+      ) : null}
       {/* tabIndex -1 lets the skip link move keyboard focus here, not only the scroll. */}
       <main id="main" tabIndex={-1} className="mx-auto w-full max-w-3xl px-4 py-6 outline-none sm:py-8">
         {children}

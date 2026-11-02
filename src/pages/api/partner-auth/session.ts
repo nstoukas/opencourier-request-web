@@ -31,9 +31,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       signal: AbortSignal.timeout(15000),
     })
 
-    if (!upstreamRes.ok) {
+    // Only the backend saying the token is no good ends the session. Anything else (a 5xx, the backend
+    // down) is a failed check: the cookie stays and the page says the check failed (spec 0017, AC-6),
+    // so a backend outage never signs a restaurant out.
+    if (upstreamRes.status === 401 || upstreamRes.status === 403) {
       res.setHeader('Set-Cookie', buildClearedSessionCookie())
       return res.status(200).json({ signedIn: false, email: null })
+    }
+    if (!upstreamRes.ok) {
+      return res.status(502).json({ message: 'The sign in could not be checked.' })
     }
 
     const body = await upstreamRes.json().catch(() => ({}))
@@ -44,7 +50,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       email: payload.email ?? null,
     })
   } catch {
-    res.setHeader('Set-Cookie', buildClearedSessionCookie())
-    return res.status(200).json({ signedIn: false, email: null })
+    // No answer from the backend (down, or the 15 s timeout): a failed check, the cookie stays.
+    return res.status(502).json({ message: 'The sign in could not be checked.' })
   }
 }

@@ -41,13 +41,15 @@ export function signInErrorMessage(error: unknown): string {
 interface SignInScreenProps {
   // Called after the server has set the session cookie, so the frame can check the session again.
   onSignedIn: () => void
+  // Why the screen is shown, when the frame knows (spec 0017, AC-5: "Your session ended. Sign in again.").
+  notice?: string
 }
 
 /**
  * The restaurant's sign in: the design system's Card and Field pattern on the muted ground,
  * after the admin "Sign in" board. The error Alert appears only after a failed attempt.
  */
-export function SignInScreen({ onSignedIn }: SignInScreenProps) {
+export function SignInScreen({ onSignedIn, notice }: SignInScreenProps) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -93,6 +95,11 @@ export function SignInScreen({ onSignedIn }: SignInScreenProps) {
           <CardContent className="p-4 pt-0 sm:p-6 sm:pt-0">
             {/* noValidate: we show our own message in the Alert instead of the browser's bubble,
                 which would follow the computer's language and look different on every phone. */}
+            {notice ? (
+              <Alert className="mb-6">
+                <AlertDescription role="status">{notice}</AlertDescription>
+              </Alert>
+            ) : null}
             <form onSubmit={handleSubmit} noValidate className="space-y-6">
               <FieldGroup>
                 <Field>
