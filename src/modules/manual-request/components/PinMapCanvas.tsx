@@ -22,31 +22,32 @@ function samePlace(a: GeoPoint, b: GeoPoint): boolean {
   return Math.abs(a.latitude - b.latitude) < SAME_PLACE && Math.abs(a.longitude - b.longitude) < SAME_PLACE
 }
 
-// Follows the `center` prop and reports drags. Leaflet fires `moveend` for its own setView too (a pick,
-// Edit, the first draw), so only a move that began with a drag is reported: the map placing itself never
-// clears the restaurant's confirmation or rewrites the point.
+// Follows the `center` prop and reports the restaurant's moves. `placed` is the last centre this
+// component put the map on (the prop). Leaflet fires `moveend` for that setView too, and for a zoom,
+// which keeps the centre: both end where `placed` is, so neither is reported, and the map placing itself
+// never clears the restaurant's confirmation. Any other move (a drag, the arrow keys, a shift drag box
+// zoom) ends somewhere else and is reported, so the point always follows what the pin shows.
 function CenterFollower({ center, onUserMove }: Omit<PinMapCanvasProps, 'zoom'>) {
   const map = useMap()
-  const dragging = useRef(false)
+  const placed = useRef<GeoPoint>(center)
 
   // useMapEvents = react-leaflet's hook that subscribes this component to the map's events.
   useMapEvents({
-    dragstart: () => {
-      dragging.current = true
-    },
     moveend: () => {
-      if (!dragging.current) return
-      dragging.current = false
       const { lat, lng } = map.getCenter()
-      onUserMove({ latitude: lat, longitude: lng })
+      const now = { latitude: lat, longitude: lng }
+      if (samePlace(now, placed.current)) return
+      placed.current = now
+      onUserMove(now)
     },
   })
 
+  // Compared with the last centre set here, not the live one, so a form render during a drag never
+  // snaps the map back.
   useEffect(() => {
-    const current = map.getCenter()
-    if (!samePlace({ latitude: current.lat, longitude: current.lng }, center)) {
-      map.setView([center.latitude, center.longitude], map.getZoom(), { animate: false })
-    }
+    if (samePlace(center, placed.current)) return
+    placed.current = center
+    map.setView([center.latitude, center.longitude], map.getZoom(), { animate: false })
   }, [center, map])
 
   return null
@@ -54,7 +55,13 @@ function CenterFollower({ center, onUserMove }: Omit<PinMapCanvasProps, 'zoom'>)
 
 export function PinMapCanvas({ center, zoom, onUserMove }: PinMapCanvasProps) {
   return (
-    <div className="relative h-[220px] w-full overflow-hidden rounded-md border">
+    // `isolate` starts a stacking context, so Leaflet's own z-index values (up to 1000) stay inside this box
+    // and never paint over the page's sticky header or the fixed Get price bar.
+    <div
+      role="group"
+      aria-label="Map of the customer's entrance. Drag it, or use the arrow keys, to put the pin on the entrance."
+      className="relative isolate h-[220px] w-full overflow-hidden rounded-md border"
+    >
       {/* Zooming keeps the centre where it is ('center'), so only a drag moves the pin's point. */}
       <MapContainer
         center={[center.latitude, center.longitude]}

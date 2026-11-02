@@ -72,7 +72,7 @@ export const COUNTER_FROM_SHARE = 0.8
 // The note the rider app shows (dropoffSellerNotes): only the restaurant's note now. Floor and doorbell
 // travel in their own fields (spec 0016, AC-2).
 export function riderNoteText(note: string | undefined): string {
-  return (note ?? '').trim().slice(0, DELIVERY_NOTE_COLUMN_MAX)
+  return cutToCharacters((note ?? '').trim(), DELIVERY_NOTE_COLUMN_MAX)
 }
 
 // The note admin shows (dropoffNotes): "Floor: 3 · Doorbell: Papadopoulou" on the first line (each part
@@ -90,10 +90,18 @@ export function composeAdminNote(
   const firstLine = [floorText ? `Floor: ${floorText}` : '', doorbellText ? `Doorbell: ${doorbellText}` : '']
     .filter(Boolean)
     .join(' · ')
-  if (!firstLine) return noteText.slice(0, DELIVERY_NOTE_COLUMN_MAX)
+  if (!firstLine) return cutToCharacters(noteText, DELIVERY_NOTE_COLUMN_MAX)
   if (!noteText) return firstLine
   const room = DELIVERY_NOTE_COLUMN_MAX - firstLine.length - 1
-  return room > 0 ? `${firstLine}\n${noteText.slice(0, room)}` : firstLine
+  return room > 0 ? `${firstLine}\n${cutToCharacters(noteText, room)}` : firstLine
+}
+
+// The first `max` characters of a text. `Array.from` splits by character (code point), the way
+// Postgres counts a VarChar, so an emoji is never cut in half (`slice` counts UTF-16 units, and half an
+// emoji arrives as a replacement character).
+function cutToCharacters(text: string, max: number): string {
+  const characters = Array.from(text)
+  return characters.length <= max ? text : characters.slice(0, max).join('')
 }
 
 // ─── The drop off pin (spec 0016, AC-4) ───────────────────────────────────────

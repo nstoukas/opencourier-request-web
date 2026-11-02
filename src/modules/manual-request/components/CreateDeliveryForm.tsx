@@ -53,11 +53,11 @@ import {
   GeocodeCoordinatesResult,
   hasValidCoordinates,
   lookUpPinForAddress,
+  ADDRESS_NOT_FOUND_ON_MAP,
 } from '../utils/geocode'
 import {
   composeAdminNote,
   ConfirmedPin,
-  COUNTER_FROM_SHARE,
   DOORBELL_MAX,
   euroAmountToCents,
   FLOOR_MAX,
@@ -74,6 +74,7 @@ import {
 } from '../utils/orderForm'
 import { AddressSection } from './AddressSection'
 import { PinMap } from './PinMap'
+import { LimitCounter } from './LimitCounter'
 import { ChoicePillOption, ChoicePills } from './ChoicePills'
 import { cn } from '../../../ui-shared-utils'
 import { BarPhase, PriceSendBar } from './PriceSendBar'
@@ -305,6 +306,7 @@ type FocusableField = (typeof FIELDS_IN_PAGE_ORDER)[number]
 const CUSTOMER_FIELDS: readonly FocusableField[] = FIELDS_IN_PAGE_ORDER.slice(0, 6)
 
 export const CONFIRM_PIN_MESSAGE = 'Confirm the pin on the map'
+export const MOVE_FALLBACK_FIRST = "The map shows your restaurant. Move it to the customer's entrance first."
 
 const READY_IN_OPTIONS: ChoicePillOption[] = READY_IN_MINUTES.map((minutes) => ({
   value: String(minutes),
@@ -316,17 +318,6 @@ const SIZE_OPTIONS: ChoicePillOption[] = [
   { value: ManualRequestPackageSize.MEDIUM, label: 'Medium' },
   { value: ManualRequestPackageSize.LARGE, label: 'Large' },
 ]
-
-// "48 / 60" under a field once 80% of its limit is used; red over the limit (AC-8). The limit is a
-// form rule, not maxLength, so a saved customer's longer text still shows whole.
-function LimitCounter({ length, limit }: { length: number; limit: number }) {
-  if (length < Math.ceil(limit * COUNTER_FROM_SHARE)) return null
-  return (
-    <p className={cn('text-right text-sm tabular-nums', length > limit ? 'text-destructive' : 'text-muted-foreground')}>
-      {length} / {limit}
-    </p>
-  )
-}
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -420,6 +411,9 @@ export function CreateDeliveryForm() {
   // A sentence above the map (an address the lookup did not find), and "Show on map" running.
   const [pinMessage, setPinMessage] = useState<string | null>(null)
   const [isLocating, setIsLocating] = useState(false)
+  // The map was opened at the restaurant (the address was not found) and not moved yet: that point is
+  // the restaurant's own door, so confirming it as the customer's is refused until the map is moved.
+  const [fallbackUnmoved, setFallbackUnmoved] = useState(false)
   const pinMapRef = useRef<HTMLDivElement>(null)
 
   // Which address the current point belongs to (street, town, postcode). A ref, set in the same pass of
@@ -435,7 +429,11 @@ export function CreateDeliveryForm() {
     if (!hasValidCoordinates(form.getValues('dropoffLatitude'), form.getValues('dropoffLongitude'))) return
     form.setValue('dropoffLatitude', 0, { shouldDirty: true })
     form.setValue('dropoffLongitude', 0, { shouldDirty: true })
+    // The full address text belonged to the old point too: never send the old street's text beside a
+    // new street (it would be saved on the customer, where it is the line shown first).
+    form.setValue('dropoffAddress.formattedAddress', '', { shouldDirty: true })
     setPinMessage(null)
+    setFallbackUnmoved(false)
   }, [currentPinKey, form])
 
   useEffect(() => {
@@ -496,7 +494,6 @@ export function CreateDeliveryForm() {
       // can still need a lookup. It gets its own catch: a timeout or a dropped connection there would
       // otherwise put the browser's own words ("signal timed out") in the bar.
       let pickupCoordinates: { latitude: number; longitude: number } | null
-      const dropoffCoordinates = { latitude: values.dropoffLatitude, longitude: values.dropoffLongitude }
       try {
         pickupCoordinates = hasValidCoordinates(pickupLatSource, pickupLngSource)
           ? { latitude: pickupLatSource, longitude: pickupLngSource }
@@ -634,8 +631,11 @@ export function CreateDeliveryForm() {
     if (!valid) return
     setIsLocating(true)
     setPinMessage(null)
+    const keyAtStart = addressPinKey(form.getValues('dropoffAddress'))
     try {
       const result = await lookUpPinForAddress(form.getValues('dropoffAddress'), pickupPoint, pickupPoint ?? VOLOS_CENTRE)
+      // The street was edited while the lookup ran: its answer is for the old address.
+      if (addressPinKey(form.getValues('dropoffAddress')) !== keyAtStart) return
       if ('error' in result) {
         setPinMessage(result.error)
         return
@@ -646,6 +646,7 @@ export function CreateDeliveryForm() {
       form.setValue('dropoffLatitude', result.point.latitude, { shouldDirty: true })
       form.setValue('dropoffLongitude', result.point.longitude, { shouldDirty: true })
       setPinMessage(result.message)
+      setFallbackUnmoved(result.message === ADDRESS_NOT_FOUND_ON_MAP)
     } finally {
       setIsLocating(false)
     }
@@ -655,9 +656,14 @@ export function CreateDeliveryForm() {
   const handlePinMove = (center: GeoPoint) => {
     form.setValue('dropoffLatitude', center.latitude, { shouldDirty: true })
     form.setValue('dropoffLongitude', center.longitude, { shouldDirty: true })
+    setFallbackUnmoved(false)
   }
 
   const handlePinConfirm = () => {
+    if (fallbackUnmoved) {
+      setPinMessage(MOVE_FALLBACK_FIRST)
+      return
+    }
     setConfirmedPin({ latitude: dropoffLatitude, longitude: dropoffLongitude, pinKey: currentPinKey })
     setPinMessage(null)
     if (barError === CONFIRM_PIN_MESSAGE) setBarError(null)

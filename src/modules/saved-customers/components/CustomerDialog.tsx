@@ -25,7 +25,13 @@ import {
 } from '../../../admin-web-components'
 import { AddressSection } from '../../manual-request/components/AddressSection'
 import { PinMap } from '../../manual-request/components/PinMap'
-import { addressPinKey, hasValidCoordinates, lookUpPinForAddress } from '../../manual-request/utils/geocode'
+import { LimitCounter } from '../../manual-request/components/LimitCounter'
+import {
+  ADDRESS_NOT_FOUND_ON_MAP,
+  addressPinKey,
+  hasValidCoordinates,
+  lookUpPinForAddress,
+} from '../../manual-request/utils/geocode'
 import {
   ConfirmedPin,
   DOORBELL_MAX,
@@ -86,6 +92,7 @@ function initialValues(customer: SavedCustomer | null): DialogValues {
 const pinKey = (values: Pick<DialogValues, 'dropoffAddress'>) => addressPinKey(values.dropoffAddress)
 
 export const CONFIRM_PIN_MESSAGE = 'Confirm the pin on the map'
+export const MOVE_FALLBACK_FIRST = "The map shows Volos centre. Move it to the customer's entrance first."
 
 // A customer as loaded counts as confirmed (spec 0016, AC-6): its point was confirmed when it was saved,
 // or moved there by a rider. A new customer starts with nothing confirmed.
@@ -129,6 +136,8 @@ export function CustomerDialog({ customer, onClose, onSaved, onGone }: CustomerD
   const pinConfirmed = isPinConfirmed(confirmedPin, latitude, longitude, currentPinKey)
   const [pinMessage, setPinMessage] = useState<string | null>(null)
   const [isLocating, setIsLocating] = useState(false)
+  // The map was opened at Volos centre (the address was not found) and not moved yet: refused as a pin.
+  const [fallbackUnmoved, setFallbackUnmoved] = useState(false)
 
   // Which address the current point belongs to: the customer as loaded, then each pick or lookup. A ref,
   // set in the same pass of effects as the check below, so a search pick never reads as an edit.
@@ -142,7 +151,10 @@ export function CustomerDialog({ customer, onClose, onSaved, onGone }: CustomerD
     if (!hasValidCoordinates(form.getValues('dropoffLatitude'), form.getValues('dropoffLongitude'))) return
     form.setValue('dropoffLatitude', 0)
     form.setValue('dropoffLongitude', 0)
+    // The old point's full address text goes with it, so the old street is never saved beside a new one.
+    form.setValue('dropoffAddress.formattedAddress', '')
     setPinMessage(null)
+    setFallbackUnmoved(false)
   }, [currentPinKey, form])
 
   // "Show on map" for a typed address: the lookup near Volos; not found, the map opens at Volos centre.
@@ -151,8 +163,11 @@ export function CustomerDialog({ customer, onClose, onSaved, onGone }: CustomerD
     if (!valid) return
     setIsLocating(true)
     setPinMessage(null)
+    const keyAtStart = pinKey(form.getValues())
     try {
       const result = await lookUpPinForAddress(form.getValues('dropoffAddress'), VOLOS_CENTRE, VOLOS_CENTRE)
+      // The street was edited while the lookup ran: its answer is for the old address.
+      if (pinKey(form.getValues()) !== keyAtStart) return
       if ('error' in result) {
         setPinMessage(result.error)
         return
@@ -161,6 +176,7 @@ export function CustomerDialog({ customer, onClose, onSaved, onGone }: CustomerD
       form.setValue('dropoffLatitude', result.point.latitude)
       form.setValue('dropoffLongitude', result.point.longitude)
       setPinMessage(result.message)
+      setFallbackUnmoved(result.message === ADDRESS_NOT_FOUND_ON_MAP)
     } finally {
       setIsLocating(false)
     }
@@ -169,9 +185,14 @@ export function CustomerDialog({ customer, onClose, onSaved, onGone }: CustomerD
   const movePin = (center: GeoPoint) => {
     form.setValue('dropoffLatitude', center.latitude)
     form.setValue('dropoffLongitude', center.longitude)
+    setFallbackUnmoved(false)
   }
 
   const confirmPin = () => {
+    if (fallbackUnmoved) {
+      setPinMessage(MOVE_FALLBACK_FIRST)
+      return
+    }
     setConfirmedPin({ latitude, longitude, pinKey: currentPinKey })
     setPinMessage(null)
     if (error === CONFIRM_PIN_MESSAGE) setError(null)
@@ -297,6 +318,7 @@ export function CustomerDialog({ customer, onClose, onSaved, onGone }: CustomerD
                     <FormControl>
                       <Input autoComplete="off" placeholder="3" {...field} />
                     </FormControl>
+                    <LimitCounter length={field.value?.length ?? 0} limit={FLOOR_MAX} />
                     <FormMessage />
                   </FormItem>
                 )}
@@ -312,6 +334,7 @@ export function CustomerDialog({ customer, onClose, onSaved, onGone }: CustomerD
                     <FormControl>
                       <Input autoComplete="off" placeholder="Papadopoulou" {...field} />
                     </FormControl>
+                    <LimitCounter length={field.value?.length ?? 0} limit={DOORBELL_MAX} />
                     <FormMessage />
                   </FormItem>
                 )}
