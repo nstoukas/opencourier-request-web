@@ -48,5 +48,12 @@ Yarn 1.22, **not Corepack**: run `node node_modules/.bin/next dev -p 3090` and
 - Floor and doorbell are their own fields (`dropoffFloor`, `dropoffDoorbell`; saved customer `floor`, `doorbell`;
   `addressLine2` is no longer written). `dropoffSellerNotes` is the note alone; `dropoffNotes` keeps "Floor: · Doorbell:"
   for admin, cut to its 255 character column by character (`Array.from`), never splitting an emoji.
+- Polling goes through `usePolledFetch` (spec 0017): every 30 s while the tab is visible, the loading line on the first
+  load only, no overlap, and an answer older than the latest request is dropped. A 401 from the partner proxy is handed to
+  `PortalFrame` through `onPartnerUnauthorized` (`src/api/partnerSessionEvents.ts`), which checks the session again; only
+  that path shows "Your session ended". The session route answers 502 and keeps the cookie on a backend outage, and
+  clears it only on 401 or 403, so an outage never signs a restaurant out.
+- The partner list and reads refuse an ended order older than the co-op's period with a sentence; show the backend's
+  message, never a generic error (spec 0017).
 
 _Drafted by /audit from the repo, worth a quick human pass. Edit freely: once a line stops matching this draft, later runs treat it as curated and will flag rather than overwrite it._
