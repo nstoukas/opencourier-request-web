@@ -66,7 +66,8 @@ import {
   isQuoteExpired,
   isQuoteFailure,
   orderTotalProblem,
-  READY_IN_MINUTES,
+  isReadyInMinutes,
+  readyInOptions,
   readyAtFromMinutes,
   RIDER_NOTE_MAX,
   riderNoteText,
@@ -127,7 +128,7 @@ const formSchema = z.object({
   // The order
   readyInMinutes: z
     .number({ required_error: READY_IN_REQUIRED, invalid_type_error: READY_IN_REQUIRED })
-    .refine((value) => (READY_IN_MINUTES as readonly number[]).includes(value), READY_IN_REQUIRED),
+    .refine((value) => isReadyInMinutes(value), READY_IN_REQUIRED),
   packageSize: z.nativeEnum(ManualRequestPackageSize, { errorMap: () => ({ message: 'Select a package size' }) }),
   // The text as typed; the number is worked out at Get price (AC-4).
   orderTotal: z.string().superRefine((value, ctx) => {
@@ -308,10 +309,13 @@ const CUSTOMER_FIELDS: readonly FocusableField[] = FIELDS_IN_PAGE_ORDER.slice(0,
 export const CONFIRM_PIN_MESSAGE = 'Confirm the pin on the map'
 export const MOVE_FALLBACK_FIRST = "The map shows your restaurant. Move it to the customer's entrance first."
 
-const READY_IN_OPTIONS: ChoicePillOption[] = READY_IN_MINUTES.map((minutes) => ({
-  value: String(minutes),
-  label: minutes === 0 ? 'Now' : `${minutes} min`,
-}))
+// The Ready in pills for a restaurant whose usual time is `usual` (spec 0023, AC-2).
+function readyInPills(usual: number | null | undefined): ChoicePillOption[] {
+  return readyInOptions(usual).map((minutes) => ({
+    value: String(minutes),
+    label: minutes === 0 ? 'Now' : `${minutes} min`,
+  }))
+}
 
 const SIZE_OPTIONS: ChoicePillOption[] = [
   { value: ManualRequestPackageSize.SMALL, label: 'Small' },
@@ -444,6 +448,16 @@ export function CreateDeliveryForm() {
       })
     }
   }, [pickupMapped, form, profile])
+
+  // Ready in starts on the restaurant's usual time once its profile has answered (spec 0023, AC-2), and
+  // again after each order is sent, unless the restaurant already chose.
+  const usualPrepMinutes = profile?.usualPrepMinutes
+  const readyInChosen = form.watch('readyInMinutes')
+  useEffect(() => {
+    if (typeof usualPrepMinutes === 'number' && readyInChosen === undefined) {
+      form.setValue('readyInMinutes', usualPrepMinutes)
+    }
+  }, [usualPrepMinutes, readyInChosen, form])
 
   const pickupCheck = checkPartnerPickupUsable(profile)
 
@@ -888,7 +902,7 @@ export function CreateDeliveryForm() {
                 <ChoicePills
                   ref={field.ref}
                   label="Ready in"
-                  options={READY_IN_OPTIONS}
+                  options={readyInPills(profile?.usualPrepMinutes)}
                   value={field.value === undefined || field.value === null ? '' : String(field.value)}
                   onValueChange={(value) => field.onChange(Number(value))}
                 />

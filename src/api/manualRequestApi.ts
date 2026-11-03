@@ -287,6 +287,24 @@ export async function fetchPartnerDelivery(deliveryId: string): Promise<PartnerD
 }
 
 // The path is /partner/profile, so the full upstream URL is /api/partner/v1/partner/profile — the doubled partner is deliberate; /api/partner/v1/profile 404s.
+// Spec 0023 (AC-3): move the ready time later. `expectedReadyAt` is the time the restaurant was looking
+// at, so two taps on the same time add once.
+export async function delayDeliveryReady(
+  deliveryId: string,
+  minutes: number,
+  expectedReadyAt: string | null,
+): Promise<PartnerDeliveryDto> {
+  return manualRequestFetch<PartnerDeliveryDto>(`/deliveries/${deliveryId}/ready-delay`, {
+    method: 'POST',
+    body: JSON.stringify({ minutes, expectedReadyAt }),
+  })
+}
+
+// Spec 0023 (AC-4): the food is ready. No body (the proxy forwards none).
+export async function markDeliveryFoodReady(deliveryId: string): Promise<PartnerDeliveryDto> {
+  return manualRequestFetch<PartnerDeliveryDto>(`/deliveries/${deliveryId}/food-ready`, { method: 'POST' })
+}
+
 export async function fetchPartnerProfile(): Promise<PartnerProfileDto> {
   return manualRequestFetch<PartnerProfileDto>('/partner/profile')
 }

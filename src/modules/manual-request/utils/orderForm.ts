@@ -37,6 +37,21 @@ export function euroAmountToCents(text: string): number | null {
 export const READY_IN_MINUTES = [0, 10, 15, 20, 30] as const
 export type ReadyInMinutes = (typeof READY_IN_MINUTES)[number]
 
+// The Ready in choices (spec 0023, AC-2): the fixed ones plus the restaurant's usual time when it is
+// not among them, in order.
+export function readyInOptions(usualPrepMinutes: number | null | undefined): number[] {
+  const all = new Set<number>(READY_IN_MINUTES)
+  if (typeof usualPrepMinutes === 'number' && Number.isInteger(usualPrepMinutes) && usualPrepMinutes >= 0) {
+    all.add(usualPrepMinutes)
+  }
+  return Array.from(all).sort((a, b) => a - b)
+}
+
+// A Ready in the form accepts: a whole number of minutes from 0 to 90 (the usual time's range).
+export function isReadyInMinutes(value: number): boolean {
+  return Number.isInteger(value) && value >= 0 && value <= 90
+}
+
 // The moment the order is ready: now plus the chosen minutes ("Now" is plus 0), as ISO text.
 export function readyAtFromMinutes(minutes: number, now: Date = new Date()): string {
   return new Date(now.getTime() + minutes * 60_000).toISOString()

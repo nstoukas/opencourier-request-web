@@ -171,6 +171,9 @@ export interface PartnerDeliveryDto {
   totalCompensation?: number | null
   createdAt: string
   pickupReadyAt: string | null
+  // Spec 0023: the restaurant's current ready promise, and when it marked the food ready.
+  readyAt: string | null
+  foodReadyAt: string | null
   pickupDeadlineAt: string | null
   dropoffEta: string | null
   dropoffReadyAt: string | null
@@ -286,6 +289,8 @@ export interface PartnerPickupAddressDto {
 export interface PartnerProfileDto {
   name: string
   phoneNumber: string | null
+  // Spec 0023: the minutes the restaurant usually needs; the order form's Ready in starts on it.
+  usualPrepMinutes?: number | null
   pickupAddress: PartnerPickupAddressDto | null
 }
 

@@ -1,3 +1,4 @@
+import { ReadyControls } from '../../../modules/ready/ReadyControls'
 import { useState } from 'react'
 import Head from 'next/head'
 import Link from 'next/link'
@@ -66,9 +67,14 @@ function PartnerDeliveryDetails({ data }: { data: PartnerDeliveryDto }) {
 
       <section className="space-y-2">
         <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Schedule</h2>
+        {/* Spec 0023 (AC-8): the ready promise and its buttons, in place of "Pickup ready", which showed
+            pickupReadyAt (the pickup moment once the rider has the food). */}
+        <ReadyControls
+          deliveryId={data.id}
+          order={{ status: data.status, readyAt: data.readyAt, foodReadyAt: data.foodReadyAt }}
+        />
         <DetailList
           items={[
-            { label: 'Pickup ready', value: formatDateTime(data.pickupReadyAt) },
             { label: 'Pickup deadline', value: formatDateTime(data.pickupDeadlineAt) },
             { label: 'Dropoff ready', value: formatDateTime(data.dropoffReadyAt) },
             { label: 'Dropoff ETA', value: formatDateTime(data.dropoffEta) },

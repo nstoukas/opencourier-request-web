@@ -1,3 +1,4 @@
+import { ReadyControls } from '../../../modules/ready/ReadyControls'
 import { useState } from 'react'
 import Head from 'next/head'
 import Link from 'next/link'
@@ -56,7 +57,9 @@ function fromDatetimeLocal(value: string): string | null {
 function EditDialog({ delivery, onClose, onSaved }: EditDialogProps) {
   const [orderReference, setOrderReference] = useState(delivery.orderReference ?? '')
   const [pickupNotes, setPickupNotes] = useState(delivery.pickup?.pickupNotes ?? '')
-  const [pickupReadyAt, setPickupReadyAt] = useState(toDatetimeLocal(delivery.pickupReadyAt))
+  // The ready time moves only by the audited buttons on the order (spec 0023, decision 21.9); the update
+  // route still wants the field, so the stored value goes back unchanged.
+  const pickupReadyAt = toDatetimeLocal(delivery.pickupReadyAt)
   const [pickupDeadlineAt, setPickupDeadlineAt] = useState(toDatetimeLocal(delivery.pickupDeadlineAt) || defaultDeadline())
   const [dropoffNotes, setDropoffNotes] = useState(delivery.dropoff?.dropoffNotes ?? '')
   const [dropoffReadyAt, setDropoffReadyAt] = useState(toDatetimeLocal(delivery.dropoffReadyAt))
@@ -125,17 +128,6 @@ function EditDialog({ delivery, onClose, onSaved }: EditDialogProps) {
               />
             </div>
             <div className="grid sm:grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="edit-pickup-ready">
-                  Ready At <span className="text-muted-foreground font-normal">(optional)</span>
-                </Label>
-                <Input
-                  id="edit-pickup-ready"
-                  type="datetime-local"
-                  value={pickupReadyAt}
-                  onChange={(e) => setPickupReadyAt(e.target.value)}
-                />
-              </div>
               <div className="space-y-1.5">
                 <Label htmlFor="edit-pickup-deadline">
                   Deadline <span className="text-muted-foreground font-normal">(optional)</span>
@@ -324,6 +316,12 @@ export default function DeliveriesPage() {
                       ) : null}
                       <span>Created: {formatDateTime(delivery.createdAt)}</span>
                     </div>
+
+                    <ReadyControls
+                      deliveryId={delivery.id}
+                      order={{ status: delivery.status, readyAt: delivery.readyAt, foodReadyAt: delivery.foodReadyAt }}
+                      onChanged={refetch}
+                    />
 
                     <Separator />
 
