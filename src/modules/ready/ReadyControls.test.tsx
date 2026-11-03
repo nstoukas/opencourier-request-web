@@ -158,7 +158,7 @@ describe('ReadyControls (spec 0023, AC-8)', () => {
     expect(onChanged).toHaveBeenCalledTimes(1)
   })
 
-  it('a refusal shows the server\'s own sentence in role=alert, keeps the shown time, and does not call onChanged', async () => {
+  it('a refusal shows the server\'s own sentence in role=alert, keeps the shown time, and calls onChanged once (a fresh copy at once)', async () => {
     ;(delayDeliveryReady as jest.Mock).mockRejectedValue(new Error('The ready time just changed. Look again.'))
     const onChanged = jest.fn()
 
@@ -175,7 +175,8 @@ describe('ReadyControls (spec 0023, AC-8)', () => {
     const alert = await screen.findByRole('alert')
     expect(alert).toHaveTextContent('The ready time just changed. Look again.')
     expect(screen.getByText('Ready at 14:32')).toBeInTheDocument()
-    expect(onChanged).not.toHaveBeenCalled()
+    // The page fetches the current time at once, so "Look again" can be acted on without waiting for a poll.
+    expect(onChanged).toHaveBeenCalledTimes(1)
     // The buttons come back so the restaurant can look again and retry.
     for (const name of BUTTON_NAMES) {
       expect(screen.getByRole('button', { name })).toBeEnabled()

@@ -631,6 +631,24 @@ describe('DeliveryStatusPage (/manual-request/[deliveryId]/status.tsx)', () => {
       expect(delayDeliveryReady).toHaveBeenCalledWith('del-xyz-789', 10, '2026-11-03T12:32:00Z')
       expect(await screen.findByText('Ready at 14:42')).toBeInTheDocument()
     })
+
+    it('a successful +10 on the order page asks the page for a fresh copy (its refetch)', async () => {
+      orderWith({})
+      ;(delayDeliveryReady as jest.Mock).mockResolvedValue({
+        id: 'del-xyz-789',
+        status: 'DISPATCHED',
+        readyAt: '2026-11-03T12:42:00Z',
+        foodReadyAt: null,
+      })
+
+      render(<DeliveryStatusPage />)
+      expect(mockRefetch).not.toHaveBeenCalled()
+
+      fireEvent.click(screen.getByRole('button', { name: '+10' }))
+
+      await screen.findByText('Ready at 14:42')
+      await waitFor(() => expect(mockRefetch).toHaveBeenCalledTimes(1))
+    })
   })
 
   describe('spec 0021 (AC-10): order code on status page', () => {
