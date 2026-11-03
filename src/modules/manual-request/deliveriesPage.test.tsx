@@ -4,6 +4,9 @@ import { render, screen, fireEvent, waitFor, within } from '@testing-library/rea
 import DeliveriesPage from '../../pages/manual-request/deliveries/index'
 import { usePartnerSession } from '../../hooks/usePartnerSession'
 import {
+  fetchPartnerDelivery,
+  delayDeliveryReady,
+  markDeliveryFoodReady,
   useListManualRequestDeliveriesQuery,
   useUpdateManualRequestDeliveryMutation,
   useCancelManualRequestDeliveryMutation,
@@ -28,6 +31,8 @@ jest.mock('../../hooks/usePartnerSession', () => ({
 
 jest.mock('../../api/manualRequestApi', () => ({
   fetchPartnerDelivery: jest.fn(),
+  delayDeliveryReady: jest.fn(),
+  markDeliveryFoodReady: jest.fn(),
   useListManualRequestDeliveriesQuery: jest.fn(),
   useUpdateManualRequestDeliveryMutation: jest.fn(),
   useCancelManualRequestDeliveryMutation: jest.fn(),
@@ -432,5 +437,169 @@ describe('DeliveriesPage (/manual-request/deliveries/index.tsx)', () => {
     render(<DeliveriesPage />)
 
     expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument()
+  })
+
+  describe('spec 0023 (AC-8): ready time on My Orders, and the edit dialog', () => {
+    const card = (fields: Record<string, unknown>) => ({
+      id: 'del-ready-1',
+      status: 'ACCEPTED',
+      orderReference: 'ORD-R1',
+      totalCost: 500,
+      currencyCode: 'EUR',
+      createdAt: '2026-11-03T12:00:00Z',
+      pickupReadyAt: '2026-11-03T12:15:00Z',
+      readyAt: '2026-11-03T12:32:00Z',
+      foodReadyAt: null,
+      pickup: { pickupName: 'Nosh', city: 'Volos' },
+      dropoff: { dropoffName: 'Customer R', city: 'Volos' },
+      ...fields,
+    })
+
+    function listOf(...deliveries: Record<string, unknown>[]) {
+      ;(useListManualRequestDeliveriesQuery as jest.Mock).mockReturnValue({
+        data: { data: deliveries, pagination: { currentPage: 1, totalPages: 1 } },
+        isLoading: false,
+        error: undefined,
+        refetch: mockRefetch,
+      })
+    }
+
+    function cardOf(orderReference: string): HTMLElement {
+      // The card is the nearest ancestor holding both the reference and the ready controls.
+      let node: HTMLElement | null = screen.getByText(orderReference)
+      while (node && !node.querySelector('[data-testid="ready-controls"]')) node = node.parentElement
+      if (!node) throw new Error(`no card with ready controls for ${orderReference}`)
+      return node
+    }
+
+    it('each card shows its own ready line: buttons before pickup, "Food ready at" once marked, none after pickup', () => {
+      listOf(
+        card({ id: 'del-a', orderReference: 'ORD-A' }),
+        card({ id: 'del-b', orderReference: 'ORD-B', foodReadyAt: '2026-11-03T12:30:00Z' }),
+        card({ id: 'del-c', orderReference: 'ORD-C', status: 'ON_THE_WAY' }),
+      )
+
+      render(<DeliveriesPage />)
+
+      const a = cardOf('ORD-A')
+      expect(within(a).getByText('Ready at 14:32')).toBeInTheDocument()
+      for (const name of ['+5', '+10', '+15', 'Food ready']) {
+        expect(within(a).getByRole('button', { name })).toBeEnabled()
+      }
+
+      const b = cardOf('ORD-B')
+      expect(within(b).getByText('Food ready at 14:30')).toBeInTheDocument()
+      expect(within(b).queryByRole('button', { name: '+10' })).not.toBeInTheDocument()
+      expect(within(b).queryByRole('button', { name: 'Food ready' })).not.toBeInTheDocument()
+
+      const c = cardOf('ORD-C')
+      expect(within(c).queryByRole('button', { name: '+10' })).not.toBeInTheDocument()
+      expect(within(c).queryByRole('button', { name: 'Food ready' })).not.toBeInTheDocument()
+    })
+
+    it('+10 on a card sends that order\'s id and readyAt, shows the answer at once, then asks for the list again', async () => {
+      listOf(card({ id: 'del-a', orderReference: 'ORD-A' }), card({ id: 'del-b', orderReference: 'ORD-B' }))
+      ;(delayDeliveryReady as jest.Mock).mockResolvedValue({
+        id: 'del-b',
+        status: 'ACCEPTED',
+        readyAt: '2026-11-03T12:42:00Z',
+        foodReadyAt: null,
+      })
+
+      render(<DeliveriesPage />)
+
+      fireEvent.click(within(cardOf('ORD-B')).getByRole('button', { name: '+10' }))
+
+      expect(delayDeliveryReady).toHaveBeenCalledWith('del-b', 10, '2026-11-03T12:32:00Z')
+      expect(await within(cardOf('ORD-B')).findByText('Ready at 14:42')).toBeInTheDocument()
+      // The other card is untouched.
+      expect(within(cardOf('ORD-A')).getByText('Ready at 14:32')).toBeInTheDocument()
+      await waitFor(() => expect(mockRefetch).toHaveBeenCalledTimes(1))
+    })
+
+    it('Food ready on a card calls markDeliveryFoodReady with that order\'s id', async () => {
+      listOf(card({ id: 'del-a', orderReference: 'ORD-A' }))
+      ;(markDeliveryFoodReady as jest.Mock).mockResolvedValue({
+        id: 'del-a',
+        status: 'ACCEPTED',
+        readyAt: '2026-11-03T12:32:00Z',
+        foodReadyAt: '2026-11-03T12:30:00Z',
+      })
+
+      render(<DeliveriesPage />)
+
+      fireEvent.click(within(cardOf('ORD-A')).getByRole('button', { name: 'Food ready' }))
+
+      expect(markDeliveryFoodReady).toHaveBeenCalledWith('del-a')
+      expect(await within(cardOf('ORD-A')).findByText('Food ready at 14:30')).toBeInTheDocument()
+    })
+
+    async function openEditDialog(stored: Record<string, unknown>) {
+      listOf(card({ id: 'del-edit', orderReference: 'ORD-EDIT' }))
+      ;(fetchPartnerDelivery as jest.Mock).mockResolvedValue(
+        card({
+          id: 'del-edit',
+          orderReference: 'ORD-EDIT',
+          pickupDeadlineAt: '2026-11-03T13:00:00Z',
+          dropoffReadyAt: null,
+          dropoffDeadlineAt: '2026-11-03T14:00:00Z',
+          pickup: { pickupName: 'Nosh', city: 'Volos', pickupNotes: '' },
+          dropoff: { dropoffName: 'Customer R', city: 'Volos', dropoffNotes: '', latitude: 39.36, longitude: 22.94 },
+          ...stored,
+        }),
+      )
+      render(<DeliveriesPage />)
+      fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+      return screen.findByRole('dialog')
+    }
+
+    it('the edit dialog offers no pickup "Ready At" field (the dropoff one stays)', async () => {
+      const dialog = await openEditDialog({})
+
+      expect(dialog.querySelector('#edit-pickup-ready')).toBeNull()
+      // The only "Ready At" left is the dropoff one.
+      const readyAtLabels = within(dialog).getAllByText(/Ready At/)
+      expect(readyAtLabels).toHaveLength(1)
+      expect(readyAtLabels[0].closest('label')).toHaveAttribute('for', 'edit-dropoff-ready')
+      expect(within(dialog).getByLabelText(/Deadline/, { selector: '#edit-pickup-deadline' })).toBeInTheDocument()
+    })
+
+    it('Save still sends the stored pickupReadyAt, as the same moment (in the co-op\'s own time zone)', async () => {
+      // The restaurants' browsers run on Athens time; pin it so the result does not depend on the
+      // machine running the test. Node reads process.env.TZ again whenever it is assigned.
+      const originalTz = process.env.TZ
+      process.env.TZ = 'Europe/Athens'
+      try {
+        const mockUpdate = jest.fn().mockResolvedValue({})
+        ;(useUpdateManualRequestDeliveryMutation as jest.Mock).mockReturnValue([mockUpdate, { isLoading: false }])
+
+        // As the form stores it: Get price time plus the chosen minutes, seconds included.
+        const stored = '2026-11-03T12:15:42.123Z'
+        const dialog = await openEditDialog({ pickupReadyAt: stored })
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Save changes' }))
+
+        await waitFor(() => expect(mockUpdate).toHaveBeenCalledTimes(1))
+        const sent = mockUpdate.mock.calls[0][0]
+        expect(sent.deliveryId).toBe('del-edit')
+        // Decision 21.9: the field is gone from the dialog, but the update route wants it, so the stored
+        // value goes back unchanged. Compared as instants, so the text's format does not matter.
+        expect(sent.pickupReadyAt).not.toBeNull()
+        expect(new Date(sent.pickupReadyAt).toISOString()).toBe(stored)
+      } finally {
+        if (originalTz === undefined) delete process.env.TZ
+        else process.env.TZ = originalTz
+      }
+    })
+
+    it('Save sends pickupReadyAt null when none was stored', async () => {
+      const mockUpdate = jest.fn().mockResolvedValue({})
+      ;(useUpdateManualRequestDeliveryMutation as jest.Mock).mockReturnValue([mockUpdate, { isLoading: false }])
+
+      const dialog = await openEditDialog({ pickupReadyAt: null })
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Save changes' }))
+
+      await waitFor(() => expect(mockUpdate).toHaveBeenCalledTimes(1))
+      expect(mockUpdate.mock.calls[0][0].pickupReadyAt).toBeNull()
+    })
   })
 })

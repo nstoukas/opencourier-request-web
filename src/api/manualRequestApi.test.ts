@@ -5,6 +5,8 @@ import {
   fetchPartnerSession,
   fetchPartnerDelivery,
   fetchPartnerProfile,
+  delayDeliveryReady,
+  markDeliveryFoodReady,
   fetchDispatchState,
   useDispatchStateQuery,
   useConfirmManualRequestDeliveryMutation,
@@ -212,6 +214,80 @@ describe('manualRequestApi helper functions', () => {
       expect(profile).toEqual(mockFixture)
       expect(profile.pickupAddress?.latitude).toBe(39.3628)
       expect(profile.pickupAddress?.longitude).toBe(22.9435)
+    })
+  })
+
+  describe('ready signals (spec 0023, AC-3, AC-4, AC-8)', () => {
+    const answered = {
+      id: 'del-123',
+      status: 'ACCEPTED',
+      readyAt: '2026-11-03T12:42:00.000Z',
+      foodReadyAt: null,
+    }
+
+    it('delayDeliveryReady POSTs {minutes, expectedReadyAt} to /deliveries/:id/ready-delay through the partner proxy', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        text: jest.fn().mockResolvedValue(JSON.stringify({ result: answered })),
+      } as any)
+
+      const result = await delayDeliveryReady('del-123', 10, '2026-11-03T12:32:00.000Z')
+
+      expect(global.fetch).toHaveBeenCalledTimes(1)
+      const [url, init] = (global.fetch as jest.Mock).mock.calls[0]
+      expect(url).toBe('/api/partner-proxy/deliveries/del-123/ready-delay')
+      expect(init.method).toBe('POST')
+      expect(init.credentials).toBe('same-origin')
+      expect(JSON.parse(init.body)).toEqual({ minutes: 10, expectedReadyAt: '2026-11-03T12:32:00.000Z' })
+      // minutes goes as a JSON number, never text (the backend refuses one not sent as a number).
+      expect(init.body).toContain('"minutes":10')
+      expect(init.headers).toEqual({ 'Content-Type': 'application/json' })
+      // The answer is unwrapped from its envelope.
+      expect(result).toEqual(answered)
+    })
+
+    it('markDeliveryFoodReady POSTs to /deliveries/:id/food-ready with no body', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        text: jest.fn().mockResolvedValue(JSON.stringify({ result: { ...answered, foodReadyAt: '2026-11-03T12:30:00.000Z' } })),
+      } as any)
+
+      const result = await markDeliveryFoodReady('del-123')
+
+      const [url, init] = (global.fetch as jest.Mock).mock.calls[0]
+      expect(url).toBe('/api/partner-proxy/deliveries/del-123/food-ready')
+      expect(init.method).toBe('POST')
+      expect(init.credentials).toBe('same-origin')
+      expect(init.body).toBeUndefined()
+      expect(result.foodReadyAt).toBe('2026-11-03T12:30:00.000Z')
+    })
+
+    it('a 409 rejects with the server\'s own sentence', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: false,
+        status: 409,
+        statusText: 'Conflict',
+        json: jest.fn().mockResolvedValue({
+          error: true,
+          result: [{ message: 'The ready time just changed. Look again.', statusCode: 409 }],
+        }),
+      } as any)
+
+      await expect(delayDeliveryReady('del-123', 5, '2026-11-03T12:32:00.000Z')).rejects.toThrow(
+        'The ready time just changed. Look again.',
+      )
+
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: false,
+        status: 409,
+        statusText: 'Conflict',
+        json: jest.fn().mockResolvedValue({
+          error: true,
+          result: [{ message: 'This order has ended.', statusCode: 409 }],
+        }),
+      } as any)
+
+      await expect(markDeliveryFoodReady('del-123')).rejects.toThrow('This order has ended.')
     })
   })
 

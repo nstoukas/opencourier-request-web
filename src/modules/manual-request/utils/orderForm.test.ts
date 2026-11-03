@@ -16,6 +16,8 @@ import {
   DELIVERY_NOTE_COLUMN_MAX,
   COUNTER_FROM_SHARE,
   READY_IN_MINUTES,
+  readyInOptions,
+  isReadyInMinutes,
   PIN_MAP_ZOOM,
   VOLOS_CENTRE,
   ConfirmedPin,
@@ -244,6 +246,51 @@ describe('orderForm pure utilities (spec 0006 & 0016)', () => {
 
     it('supports READY_IN_MINUTES options', () => {
       expect(READY_IN_MINUTES).toEqual([0, 10, 15, 20, 30])
+    })
+  })
+
+  describe('readyInOptions (spec 0023, AC-2)', () => {
+    it('no usual time (profile not answered, or an old backend): the fixed options only', () => {
+      expect(readyInOptions(undefined)).toEqual([0, 10, 15, 20, 30])
+      expect(readyInOptions(null)).toEqual([0, 10, 15, 20, 30])
+    })
+
+    it('a usual time not among the fixed ones is added, in order', () => {
+      expect(readyInOptions(25)).toEqual([0, 10, 15, 20, 25, 30])
+      expect(readyInOptions(5)).toEqual([0, 5, 10, 15, 20, 30])
+      expect(readyInOptions(45)).toEqual([0, 10, 15, 20, 30, 45])
+      expect(readyInOptions(90)).toEqual([0, 10, 15, 20, 30, 90])
+    })
+
+    it('a usual time already among the fixed ones adds no duplicate', () => {
+      for (const usual of [0, 10, 15, 20, 30]) {
+        expect(readyInOptions(usual)).toEqual([0, 10, 15, 20, 30])
+      }
+    })
+
+    it('junk usual times are ignored: negative, fractional, NaN, infinite', () => {
+      for (const junk of [-5, 12.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+        expect(readyInOptions(junk)).toEqual([0, 10, 15, 20, 30])
+      }
+    })
+
+    it('never changes the fixed READY_IN_MINUTES list itself', () => {
+      readyInOptions(25)
+      expect(READY_IN_MINUTES).toEqual([0, 10, 15, 20, 30])
+    })
+  })
+
+  describe('isReadyInMinutes (spec 0023, AC-2)', () => {
+    it('accepts every whole number of minutes from 0 to 90', () => {
+      for (let minutes = 0; minutes <= 90; minutes += 1) {
+        expect(isReadyInMinutes(minutes)).toBe(true)
+      }
+    })
+
+    it('refuses negatives, above 90, fractions, NaN and infinity', () => {
+      for (const value of [-1, 91, 120, 12.5, 0.1, Number.NaN, Number.POSITIVE_INFINITY]) {
+        expect(isReadyInMinutes(value)).toBe(false)
+      }
     })
   })
 

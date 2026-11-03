@@ -5,6 +5,7 @@ import DeliveryStatusPage from '../../pages/manual-request/[deliveryId]/status'
 import {
   useGetManualRequestDeliveryQuery,
   useCancelManualRequestDeliveryMutation,
+  delayDeliveryReady,
 } from '../../api/manualRequestApi'
 import { getManualRequestApiMode } from '../../utils/manualRequestAuth'
 
@@ -36,6 +37,8 @@ jest.mock('next/link', () => ({
 jest.mock('../../api/manualRequestApi', () => ({
   useGetManualRequestDeliveryQuery: jest.fn(),
   useCancelManualRequestDeliveryMutation: jest.fn(),
+  delayDeliveryReady: jest.fn(),
+  markDeliveryFoodReady: jest.fn(),
 }))
 
 jest.mock('../../utils/manualRequestAuth', () => ({
@@ -61,6 +64,8 @@ describe('DeliveryStatusPage (/manual-request/[deliveryId]/status.tsx)', () => {
         orderReference: 'ORD-555',
         createdAt: '2026-09-30T10:00:00Z',
         pickupReadyAt: '2026-09-30T10:15:00Z',
+        readyAt: '2026-09-30T10:20:00Z',
+        foodReadyAt: null,
         pickupDeadlineAt: '2026-09-30T10:30:00Z',
         dropoffReadyAt: null,
         dropoffEta: '2026-09-30T10:45:00Z',
@@ -99,7 +104,11 @@ describe('DeliveryStatusPage (/manual-request/[deliveryId]/status.tsx)', () => {
 
     // Schedule rendered through DetailList
     expect(screen.getByText('Schedule')).toBeInTheDocument()
-    expect(screen.getByText('Pickup ready')).toBeInTheDocument()
+    // Spec 0023 (AC-8): the "Pickup ready" row (pickupReadyAt) became the ready line, from readyAt
+    // (10:20Z is 13:20 in Athens), with its buttons.
+    expect(screen.queryByText('Pickup ready')).not.toBeInTheDocument()
+    expect(screen.getByText('Ready at 13:20')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '+10' })).toBeInTheDocument()
     expect(screen.getByText('Dropoff ready')).toBeInTheDocument()
 
     // Courier details rendered through DetailList with mono for courier ID
@@ -550,6 +559,77 @@ describe('DeliveryStatusPage (/manual-request/[deliveryId]/status.tsx)', () => {
       // Status role refresh notice is shown
       const notice = screen.getByRole('status')
       expect(notice).toHaveTextContent('Could not refresh just now. It tries again in 30 seconds.')
+    })
+  })
+
+  describe('spec 0023 (AC-8): the ready line on the order page', () => {
+    function orderWith(fields: Record<string, unknown>) {
+      ;(useGetManualRequestDeliveryQuery as jest.Mock).mockReturnValue({
+        data: {
+          id: 'del-xyz-789',
+          status: 'DISPATCHED',
+          createdAt: '2026-11-03T12:00:00Z',
+          pickupReadyAt: '2026-11-03T12:15:00Z',
+          readyAt: '2026-11-03T12:32:00Z',
+          foodReadyAt: null,
+          ...fields,
+        },
+        isLoading: false,
+        error: undefined,
+        refetch: mockRefetch,
+      })
+    }
+
+    it('in the Schedule section: "Ready at 14:32" from readyAt (not pickupReadyAt) with +5, +10, +15 and Food ready', () => {
+      orderWith({})
+
+      render(<DeliveryStatusPage />)
+
+      expect(screen.queryByText('Pickup ready')).not.toBeInTheDocument()
+      const controls = screen.getByTestId('ready-controls')
+      expect(within(controls).getByText('Ready at 14:32')).toBeInTheDocument()
+      for (const name of ['+5', '+10', '+15', 'Food ready']) {
+        expect(within(controls).getByRole('button', { name })).toBeEnabled()
+      }
+      // It sits in the Schedule section.
+      const schedule = screen.getByText('Schedule').closest('section')!
+      expect(schedule).toContainElement(controls)
+    })
+
+    it('food marked ready: "Food ready at 14:30" and no ready buttons', () => {
+      orderWith({ foodReadyAt: '2026-11-03T12:30:00Z' })
+
+      render(<DeliveryStatusPage />)
+
+      const controls = screen.getByTestId('ready-controls')
+      expect(within(controls).getByText('Food ready at 14:30')).toBeInTheDocument()
+      expect(within(controls).queryAllByRole('button')).toHaveLength(0)
+    })
+
+    it('picked up: no ready buttons', () => {
+      orderWith({ status: 'PICKED_UP' })
+
+      render(<DeliveryStatusPage />)
+
+      expect(screen.queryByRole('button', { name: '+10' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Food ready' })).not.toBeInTheDocument()
+    })
+
+    it('+10 sends the shown readyAt and shows the answer at once', async () => {
+      orderWith({})
+      ;(delayDeliveryReady as jest.Mock).mockResolvedValue({
+        id: 'del-xyz-789',
+        status: 'DISPATCHED',
+        readyAt: '2026-11-03T12:42:00Z',
+        foodReadyAt: null,
+      })
+
+      render(<DeliveryStatusPage />)
+
+      fireEvent.click(screen.getByRole('button', { name: '+10' }))
+
+      expect(delayDeliveryReady).toHaveBeenCalledWith('del-xyz-789', 10, '2026-11-03T12:32:00Z')
+      expect(await screen.findByText('Ready at 14:42')).toBeInTheDocument()
     })
   })
 
