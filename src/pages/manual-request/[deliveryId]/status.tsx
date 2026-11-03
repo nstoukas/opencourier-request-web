@@ -54,7 +54,7 @@ function courierLabel(d: PartnerDeliveryDto): string {
   return name || c.id || 'Assigned'
 }
 
-function PartnerDeliveryDetails({ data }: { data: PartnerDeliveryDto }) {
+function PartnerDeliveryDetails({ data, onChanged }: { data: PartnerDeliveryDto; onChanged?: () => void }) {
   const tips = data.tips ?? 0
   const orderItems = data.orderItems ?? []
 
@@ -72,6 +72,7 @@ function PartnerDeliveryDetails({ data }: { data: PartnerDeliveryDto }) {
         <ReadyControls
           deliveryId={data.id}
           order={{ status: data.status, readyAt: data.readyAt, foodReadyAt: data.foodReadyAt }}
+          onChanged={onChanged}
         />
         <DetailList
           items={[
@@ -384,7 +385,7 @@ export default function ManualRequestStatusPage() {
               </p>
             ) : null}
 
-            {data && partnerMode ? <PartnerDeliveryDetails data={data as PartnerDeliveryDto} /> : null}
+            {data && partnerMode ? <PartnerDeliveryDetails data={data as PartnerDeliveryDto} onChanged={() => void refetch()} /> : null}
             {data && !partnerMode ? <AdminDeliveryDetails data={data as ManualRequestDeliveryDto} /> : null}
 
             <Separator />

@@ -31,8 +31,10 @@ export function ReadyControls({ deliveryId, order, onChanged }: Props) {
       setShown({ status: updated.status, readyAt: updated.readyAt, foodReadyAt: updated.foodReadyAt })
       onChanged?.()
     } catch (err: any) {
-      // The backend's own sentence ("The ready time just changed. Look again.").
+      // The backend's own sentence ("The ready time just changed. Look again."), and a fresh copy at
+      // once, so "look again" shows the current time rather than waiting for the next poll.
       setError(err?.message || 'The ready time could not be changed.')
+      onChanged?.()
     } finally {
       setSending(false)
     }
