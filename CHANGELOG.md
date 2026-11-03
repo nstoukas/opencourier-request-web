@@ -37,6 +37,13 @@ has the full reasoning and verification notes.
 On 2 November rows 29, 32, 31 and 28 were merged in. The GA rows (29 and 32) have the entries
 below; rows 31 and 28 are recorded in the workspace's scope and walkthroughs.
 
+### "Pin moved by a rider" on a saved customer (scope row 99, from spec 0016): `ab9b33d`, `eeb88ea`
+Built on the branch `feat/pin-corrections-shown` and merged on 3 November, with the backend half.
+- When a rider at the door moved a saved customer's pin, the Customers page card says "Pin moved by a
+  rider on 03/11/2026, 14:32" (Athens time). The mark stays until the restaurant edits the customer to a
+  different point; an order never clears it (decision 99.1).
+- 5 tests by a fresh Claude subagent while agy was out of quota (462 pass); put back by hand. Reviewed by Fable.
+
 ### Cancel asks first, and asks who wants it (scope row 32, spec 0015): `1ce1a4f`, `3059a66`
 Needs the backend's row 32.
 - Both Cancel buttons open a dialog first: "We need to cancel it" or "The customer asked to
