@@ -206,6 +206,20 @@ describe('CustomersPage', () => {
     )
   })
 
+  // Row 99 (decision 99.1): the moved pin line reaches the page from what the backend lists.
+  it('shows "Pin moved by a rider on" only on the listed customer whose pin a rider moved', async () => {
+    ;(listSavedCustomers as jest.Mock).mockResolvedValue({
+      items: [{ ...customer1, pinMovedByRiderAt: '2026-11-03T12:32:00.000Z' }, { ...customer2, pinMovedByRiderAt: null }],
+      total: 2,
+    })
+
+    render(<CustomersPage />)
+
+    expect(await screen.findByText('Giannis Antetokounmpo')).toBeInTheDocument()
+    expect(screen.getAllByText(/Pin moved by a rider on/)).toHaveLength(1)
+    expect(screen.getByText(/Pin moved by a rider on/)).toHaveTextContent('03/11/2026, 14:32')
+  })
+
   it('displays customers in order (most recently used first as returned by backend)', async () => {
     ;(listSavedCustomers as jest.Mock).mockResolvedValue({
       items: [customer1, customer2],
