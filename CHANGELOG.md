@@ -37,6 +37,16 @@ has the full reasoning and verification notes.
 On 2 November rows 29, 32, 31 and 28 were merged in. The GA rows (29 and 32) have the entries
 below; rows 31 and 28 are recorded in the workspace's scope and walkthroughs.
 
+### Optional item lines, each markable as a drink or a side (scope row 103, spec 0028): `ec009aa` to `232985b`
+Built on the branch `feat/item-kinds` and merged on 3 November, with the backend and courier app halves.
+- **The form.** A collapsed "Add items (optional)" between Size and Order total: a name, a quantity stepper,
+  and Drink and Side toggles. With no lines the order sends today's single Package item byte for byte.
+- **The price.** Items never drop a price. Send reads them live and checks them without waiting, so the
+  second Send guard holds.
+- **The order page.** It shows each item's mark.
+- Tests by a fresh Claude subagent while agy was out of quota: 519 pass; put back by hand. Reviewed by Fable
+  (the label fix in `232985b`).
+
 ### "Pin moved by a rider" on a saved customer (scope row 99, from spec 0016): `ab9b33d`, `eeb88ea`
 Built on the branch `feat/pin-corrections-shown` and merged on 3 November, with the backend half.
 - When a rider at the door moved a saved customer's pin, the Customers page card says "Pin moved by a
