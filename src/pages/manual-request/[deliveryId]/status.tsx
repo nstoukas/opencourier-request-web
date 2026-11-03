@@ -179,7 +179,7 @@ function PartnerDeliveryDetails({ data }: { data: PartnerDeliveryDto }) {
                   <span className="font-medium">
                     {item.name}
                     {/* Spec 0028: the restaurant's mark, so it sees what the rider will see first. */}
-                    {item.kind ? (
+                    {item.kind === 'DRINK' || item.kind === 'SIDE' ? (
                       <span className="ml-2 rounded-full bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground">
                         {item.kind === 'DRINK' ? 'Drink' : 'Side'}
                       </span>

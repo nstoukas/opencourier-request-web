@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { useFieldArray, type UseFormReturn } from 'react-hook-form'
+import { useFieldArray, useWatch, type UseFormReturn } from 'react-hook-form'
 import { Minus, Plus, X } from '@phosphor-icons/react'
 import { Button, FormControl, FormField, FormItem, FormMessage, Input } from '../../../admin-web-components'
 import { cn } from '../../../ui-shared-utils'
@@ -108,11 +108,7 @@ export function OrderItemsSection({ form }: { form: UseFormReturn<CreateDelivery
               control={form.control}
               name={`items.${index}.kind`}
               render={({ field }) => (
-                <div
-                  className="flex gap-2"
-                  role="group"
-                  aria-label={`Kind of ${form.getValues(`items.${index}.name`)?.trim() || `item ${index + 1}`}`}
-                >
+                <KindGroup form={form} index={index}>
                   {KINDS.map((kind) => {
                     const pressed = field.value === kind.value
                     return (
@@ -130,7 +126,7 @@ export function OrderItemsSection({ form }: { form: UseFormReturn<CreateDelivery
                       </button>
                     )
                   })}
-                </div>
+                </KindGroup>
               )}
             />
           </div>
@@ -143,5 +139,24 @@ export function OrderItemsSection({ form }: { form: UseFormReturn<CreateDelivery
         </Button>
       ) : null}
     </fieldset>
+  )
+}
+
+// The Drink and Side group, labelled with the line's name as it is typed (useWatch redraws it on each
+// keystroke of that name), so a screen reader hears "Kind of Cola" (row 103 review).
+function KindGroup({
+  form,
+  index,
+  children,
+}: {
+  form: UseFormReturn<CreateDeliveryFormValues>
+  index: number
+  children: React.ReactNode
+}) {
+  const name = useWatch({ control: form.control, name: `items.${index}.name` })
+  return (
+    <div className="flex gap-2" role="group" aria-label={`Kind of ${name?.trim() || `item ${index + 1}`}`}>
+      {children}
+    </div>
   )
 }
