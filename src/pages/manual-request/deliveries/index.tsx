@@ -58,8 +58,9 @@ function EditDialog({ delivery, onClose, onSaved }: EditDialogProps) {
   const [orderReference, setOrderReference] = useState(delivery.orderReference ?? '')
   const [pickupNotes, setPickupNotes] = useState(delivery.pickup?.pickupNotes ?? '')
   // The ready time moves only by the audited buttons on the order (spec 0023, decision 21.9); the update
-  // route still wants the field, so the stored value goes back unchanged.
-  const pickupReadyAt = toDatetimeLocal(delivery.pickupReadyAt)
+  // route still wants the field, so the stored value goes back exactly as it came, never through a
+  // local date box (which would read it as browser time and move it by the time zone's offset).
+  const storedPickupReadyAt = delivery.pickupReadyAt ?? null
   const [pickupDeadlineAt, setPickupDeadlineAt] = useState(toDatetimeLocal(delivery.pickupDeadlineAt) || defaultDeadline())
   const [dropoffNotes, setDropoffNotes] = useState(delivery.dropoff?.dropoffNotes ?? '')
   const [dropoffReadyAt, setDropoffReadyAt] = useState(toDatetimeLocal(delivery.dropoffReadyAt))
@@ -81,7 +82,7 @@ function EditDialog({ delivery, onClose, onSaved }: EditDialogProps) {
         deliveryId: delivery.id,
         orderReference,
         pickupNotes,
-        pickupReadyAt: fromDatetimeLocal(pickupReadyAt),
+        pickupReadyAt: storedPickupReadyAt,
         pickupDeadlineAt: fromDatetimeLocal(pickupDeadlineAt),
         dropoffNotes,
         dropoffLatitude: dropoffLat,

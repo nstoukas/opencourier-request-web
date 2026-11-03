@@ -22,6 +22,8 @@ export type ReadyFields = {
 // 'none': nothing to press (picked up, ended, or an order made before ready times existed).
 export function readyView(order: ReadyFields): 'actions' | 'ready' | 'none' {
   if (order.foodReadyAt) return 'ready'
+  // An order made before ready times existed has none to move (spec 0023, AC-7's rule on the phone).
+  if (!order.readyAt) return 'none'
   if (!READY_ACTION_STATUSES.includes(order.status)) return 'none'
   return 'actions'
 }
