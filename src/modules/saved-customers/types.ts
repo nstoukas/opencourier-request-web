@@ -17,6 +17,9 @@ export interface SavedCustomer {
   longitude: number
   formattedAddress: string | null
   lastUsedAt: string
+  // Row 99: when a rider last moved this customer's pin, or null (cleared when the restaurant sets a
+  // different point).
+  pinMovedByRiderAt?: string | null
   createdAt: string
   updatedAt: string
 }

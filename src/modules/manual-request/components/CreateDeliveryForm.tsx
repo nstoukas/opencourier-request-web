@@ -77,6 +77,15 @@ import { AddressSection } from './AddressSection'
 import { PinMap } from './PinMap'
 import { LimitCounter } from './LimitCounter'
 import { ChoicePillOption, ChoicePills } from './ChoicePills'
+import { OrderItemsSection } from './OrderItemsSection'
+import {
+  ITEM_LINES_MAX,
+  ITEM_NAME_MAX,
+  ITEM_NAME_REQUIRED,
+  ITEM_NAME_TOO_LONG,
+  ITEM_QUANTITY_MAX,
+  orderItemsPayload,
+} from '../utils/orderItems'
 import { cn } from '../../../ui-shared-utils'
 import { BarPhase, PriceSendBar } from './PriceSendBar'
 import { useRequestPageNavigator } from '../../../hooks/useRequestPageNavigator'
@@ -130,6 +139,19 @@ const formSchema = z.object({
     .number({ required_error: READY_IN_REQUIRED, invalid_type_error: READY_IN_REQUIRED })
     .refine((value) => isReadyInMinutes(value), READY_IN_REQUIRED),
   packageSize: z.nativeEnum(ManualRequestPackageSize, { errorMap: () => ({ message: 'Select a package size' }) }),
+  // Spec 0028: optional item lines, each named, with a quantity and an optional Drink or Side mark.
+  items: z
+    .array(
+      z.object({
+        name: z
+          .string()
+          .refine((value) => value.trim() !== '', ITEM_NAME_REQUIRED)
+          .refine((value) => value.trim().length <= ITEM_NAME_MAX, ITEM_NAME_TOO_LONG),
+        quantity: z.number().int().min(1).max(ITEM_QUANTITY_MAX),
+        kind: z.enum(['DRINK', 'SIDE']).nullable(),
+      }),
+    )
+    .max(ITEM_LINES_MAX),
   // The text as typed; the number is worked out at Get price (AC-4).
   orderTotal: z.string().superRefine((value, ctx) => {
     const problem = orderTotalProblem(value)
@@ -170,6 +192,7 @@ function buildDefaultValues(): CreateDeliveryFormValues {
     // No pill is chosen at the start: the restaurant must say when the order is ready (AC-6).
     readyInMinutes: undefined,
     packageSize: ManualRequestPackageSize.SMALL,
+    items: [],
     orderTotal: '',
   }
 }
@@ -210,6 +233,8 @@ function pricedValuesKey(values: CreateDeliveryFormValues): string {
     pickupLatitude,
     pickupLongitude,
     dropoffAddress,
+    // Spec 0028: items are not on the quote, so editing them never drops a price; Send reads them live.
+    items,
     ...rest
   } = values
   const { formattedAddress, ...address } = dropoffAddress ?? defaultAddress
@@ -342,7 +367,7 @@ export function CreateDeliveryForm() {
   const changeRef = useRef<HTMLButtonElement>(null)
   // The fixed bar's height, and the refused field to focus once it is on the page.
   const [barHeight, setBarHeight] = useState(0)
-  const [fieldToFocus, setFieldToFocus] = useState<FocusableField | null>(null)
+  const [fieldToFocus, setFieldToFocus] = useState<FocusableField | `items.${number}.name` | null>(null)
   const [saveCustomer, setSaveCustomer] = useState(false)
   // True from Send until the page changes, so the customer save after the order cannot be
   // raced by a second Send (which would create a second delivery).
@@ -564,8 +589,16 @@ export function CreateDeliveryForm() {
     }
     setBarError(null)
 
+    // Spec 0028: the item lines are read from the live form (editing them never drops the price), so they
+    // are checked again here. Checked without waiting, so the valid path reaches "Sending…" in the same
+    // tick as before and a second tap stays guarded; only a refusal waits, to show its messages.
+    if (!formSchema.shape.items.safeParse(form.getValues('items')).success) {
+      void form.trigger('items').then(() => handleInvalid())
+      return
+    }
     const payload: ManualRequestDeliveryInput = {
       ...orderPayload(order.values, order.pickupReadyAt, order.orderTotalValue),
+      orderItems: orderItemsPayload(form.getValues('items'), order.values.packageSize),
       idempotencyKey: `${order.quote.id}-${Date.now()}`,
       quoteId: order.quote.id,
     }
@@ -705,9 +738,13 @@ export function CreateDeliveryForm() {
   // The first field Get price refused: shown (Edit opens for a picked customer's fields), scrolled to the
   // middle of the screen, never under the bar, and focused (AC-13).
   const handleInvalid = () => {
-    const first = FIELDS_IN_PAGE_ORDER.find((name) => form.getFieldState(name).error)
+    // The item lines sit between Size and Order total (spec 0028).
+    const itemNames = form.getValues('items').map((_line, index) => `items.${index}.name` as const)
+    const inOrder = [...FIELDS_IN_PAGE_ORDER.slice(0, 8), ...itemNames, ...FIELDS_IN_PAGE_ORDER.slice(8)]
+    const first = inOrder.find((name) => form.getFieldState(name).error)
     if (!first) return
-    if (linkedCustomer && CUSTOMER_FIELDS.includes(first)) setEditingCustomer(true)
+    // An item line is never one of the picked customer's fields.
+    if (linkedCustomer && (CUSTOMER_FIELDS as readonly string[]).includes(first)) setEditingCustomer(true)
     setFieldToFocus(first)
   }
 
@@ -930,6 +967,9 @@ export function CreateDeliveryForm() {
             </FormItem>
           )}
         />
+
+        {/* Spec 0028: optional items, a drink or a side marked in one tap. */}
+        <OrderItemsSection form={form} />
 
         <FormField
           control={form.control}

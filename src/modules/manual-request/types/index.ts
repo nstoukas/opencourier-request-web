@@ -80,6 +80,8 @@ export interface ManualRequestOrderItemInput {
   name: string
   quantity: number
   size?: string
+  // Spec 0028: a drink or a side; absent means neither.
+  kind?: 'DRINK' | 'SIDE'
   dimensions?: {
     length: number
     height: number
@@ -154,6 +156,8 @@ export interface PartnerDeliveryOrderItemDto {
   name: string
   quantity: number
   size?: string
+  // Spec 0028: a drink or a side; absent on unmarked items and on orders sent before row 103.
+  kind?: 'DRINK' | 'SIDE'
 }
 
 export interface PartnerDeliveryDto {

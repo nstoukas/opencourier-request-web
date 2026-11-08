@@ -183,7 +183,15 @@ function PartnerDeliveryDetails({ data, onChanged }: { data: PartnerDeliveryDto;
             <ul className="divide-y rounded-md border text-sm">
               {orderItems.map((item, i) => (
                 <li key={`${item.name}-${i}`} className="flex flex-wrap justify-between gap-2 px-3 py-2">
-                  <span className="font-medium">{item.name}</span>
+                  <span className="font-medium">
+                    {item.name}
+                    {/* Spec 0028: the restaurant's mark, so it sees what the rider will see first. */}
+                    {item.kind === 'DRINK' || item.kind === 'SIDE' ? (
+                      <span className="ml-2 rounded-full bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground">
+                        {item.kind === 'DRINK' ? 'Drink' : 'Side'}
+                      </span>
+                    ) : null}
+                  </span>
                   <span className="text-muted-foreground">
                     ×{item.quantity}
                     {item.size ? ` · ${item.size}` : ''}

@@ -4,6 +4,7 @@ import { PencilSimple, Trash } from '@phosphor-icons/react'
 import { Button, Card, CardContent } from '../../../admin-web-components'
 import type { SavedCustomer } from '../types'
 import { customerStreet } from '../utils/fields'
+import { formatDateTime } from '../../../utils/format'
 
 interface CustomerCardProps {
   customer: SavedCustomer
@@ -27,6 +28,14 @@ export function CustomerCard({ customer, onEdit, onDelete }: CustomerCardProps) 
             {/* <time> gives the exact moment to assistive tech and tools; the text is the friendly form. */}
             <time dateTime={customer.lastUsedAt}>used {formatDistanceToNow(lastUsed, { addSuffix: true })}</time>
           </p>
+          {customer.pinMovedByRiderAt ? (
+            // Row 99: a rider stood at the door and moved the pin there (spec 0016). The restaurant sees
+            // it, and setting a different point itself clears it.
+            <p className="text-sm text-muted-foreground" data-testid="pin-moved-by-rider">
+              Pin moved by a rider on{' '}
+              <time dateTime={customer.pinMovedByRiderAt}>{formatDateTime(customer.pinMovedByRiderAt)}</time>
+            </p>
+          ) : null}
         </div>
         <div className="flex shrink-0 gap-2">
           <Button
