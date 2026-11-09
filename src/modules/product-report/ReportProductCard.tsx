@@ -32,6 +32,9 @@ export function ReportProductCard({ deliveryId, orderItems }: Props) {
     )
   }
 
+  // The server refuses a report with neither item nor note; this says so before sending.
+  const canSend = item !== SOMETHING_ELSE || note.trim() !== ''
+
   const send = async () => {
     setSending(true)
     setError('')
@@ -65,9 +68,10 @@ export function ReportProductCard({ deliveryId, orderItems }: Props) {
         ))}
       </div>
       <div className="flex flex-wrap gap-2">
-        {orderItems.map((orderItem) => (
+        {/* The index keeps two lines with the same name apart. */}
+        {orderItems.map((orderItem, index) => (
           <Button
-            key={orderItem.name}
+            key={`${orderItem.name}-${index}`}
             type="button"
             size="sm"
             variant={item === orderItem.name ? 'default' : 'outline'}
@@ -97,7 +101,7 @@ export function ReportProductCard({ deliveryId, orderItems }: Props) {
           {error}
         </p>
       ) : null}
-      <Button type="button" size="sm" disabled={sending} onClick={send}>
+      <Button type="button" size="sm" disabled={sending || !canSend} onClick={send}>
         Send report
       </Button>
     </div>
