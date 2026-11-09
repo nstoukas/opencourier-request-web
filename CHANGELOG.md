@@ -37,6 +37,12 @@ has the full reasoning and verification notes.
 On 2 November rows 29, 32, 31 and 28 were merged in. The GA rows (29 and 32) have the entries
 below; rows 31 and 28 are recorded in the workspace's scope and walkthroughs.
 
+### Busy mode and pause (scope row 34, spec 0029): `a8d8b33` to `ac15a88`
+Built on the branch `feat/busy-pause` and merged on 9 November, with the backend and adminweb halves.
+- **A strip on New Delivery and My Orders.** Busy +5 to +30, Pause for 15 minutes to 2 hours, Stop busy and Resume.
+- **While paused or disabled** the form asks for no price and says why, in the server's words. While busy, it says how many minutes the order gains.
+- 636 tests pass; put backs by hand. Reviewed by Fable and agy.
+
 ### Ready times the restaurant keeps true (scope row 21, spec 0023): `0ca9c07` to `e2cb60e`
 Built on the branch `feat/ready-signals` and merged on 9 November, with the backend, adminweb and courier app halves.
 - **The order form.** "Ready in" starts on the restaurant's usual prep time.
