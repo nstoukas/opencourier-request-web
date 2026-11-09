@@ -88,6 +88,121 @@ describe('WaitRecordCard (spec 0030, AC-8)', () => {
     expect(screen.getByRole('button', { name: '30 days' })).toHaveClass('border-input')
   })
 
+  it('shows figures only while the answer days equals the chosen period (hides figures when data.days !== days)', () => {
+    // When the API response days (7) does not match the chosen period (default 30),
+    // the figures must not be displayed under the mismatched period button.
+    mockUseWaitRecordQuery.mockReturnValue({
+      data: {
+        ...sampleWaitRecord,
+        days: 7,
+      },
+      error: undefined,
+      isLoading: false,
+      refetch: jest.fn(),
+    })
+
+    render(<WaitRecordCard />)
+
+    // The card header and period buttons are rendered
+    expect(screen.getByText('Your record')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '30 days' })).toBeInTheDocument()
+
+    // Figures must NOT be rendered because data.days (7) !== chosen period (30)
+    expect(screen.queryByText('Riders waited past ready')).not.toBeInTheDocument()
+    expect(screen.queryByText('4.2 min on average')).not.toBeInTheDocument()
+    expect(screen.queryByText('Orders that ran late')).not.toBeInTheDocument()
+    expect(screen.queryByText('Real prep time')).not.toBeInTheDocument()
+  })
+
+  it('keeps old figures hidden after switching to a new period until the matching answer lands', () => {
+    const record30Days: WaitRecord = {
+      days: 30,
+      orderCount: 42,
+      waitSamples: 38,
+      averageWaitMinutes: 4.2,
+      lateShare: 0.15,
+      prepSamples: 40,
+      medianPrepMinutes: 18,
+      usualPrepMinutes: 15,
+    }
+
+    const record7Days: WaitRecord = {
+      days: 7,
+      orderCount: 14,
+      waitSamples: 12,
+      averageWaitMinutes: 2.1,
+      lateShare: 0.07,
+      prepSamples: 14,
+      medianPrepMinutes: 12,
+      usualPrepMinutes: 15,
+    }
+
+    // Step 1: 30 days is chosen by default and its answer is loaded
+    let currentData: WaitRecord | undefined = record30Days
+    mockUseWaitRecordQuery.mockImplementation(() => ({
+      data: currentData,
+      error: undefined,
+      isLoading: false,
+      refetch: jest.fn(),
+    }))
+
+    const { rerender } = render(<WaitRecordCard />)
+
+    // 30-day figures match the API response
+    expect(screen.getByText('Riders waited past ready')).toBeInTheDocument()
+    expect(screen.getByText('4.2 min on average')).toBeInTheDocument()
+    expect(screen.getByText('15%')).toBeInTheDocument()
+    expect(screen.getByText('18 min')).toBeInTheDocument()
+
+    // Step 2: User clicks "7 days". While the new request is in flight,
+    // usePolledFetch keeps the cached previous data (days: 30).
+    fireEvent.click(screen.getByRole('button', { name: '7 days' }))
+
+    // The old 30-day figures must stay hidden under the new "7 days" button
+    expect(screen.queryByText('Riders waited past ready')).not.toBeInTheDocument()
+    expect(screen.queryByText('4.2 min on average')).not.toBeInTheDocument()
+    expect(screen.queryByText('15%')).not.toBeInTheDocument()
+    expect(screen.queryByText('18 min')).not.toBeInTheDocument()
+
+    // Step 3: The new 7-day data lands from the backend
+    currentData = record7Days
+    rerender(<WaitRecordCard />)
+
+    // The new 7-day figures are now shown and match the 7-day API response
+    expect(screen.getByText('Riders waited past ready')).toBeInTheDocument()
+    expect(screen.getByText('2.1 min on average')).toBeInTheDocument()
+    expect(screen.getByText('7%')).toBeInTheDocument()
+    expect(screen.getByText('12 min')).toBeInTheDocument()
+  })
+
+  it('keeps old figures hidden and shows error if query fails after switching period', () => {
+    let queryState: { data?: WaitRecord; error?: Error; isLoading: boolean; refetch: () => void } = {
+      data: sampleWaitRecord, // 30-day record
+      error: undefined,
+      isLoading: false,
+      refetch: jest.fn(),
+    }
+    mockUseWaitRecordQuery.mockImplementation(() => queryState)
+
+    const { rerender } = render(<WaitRecordCard />)
+    expect(screen.getByText('4.2 min on average')).toBeInTheDocument()
+
+    // User switches to 90 days; query fails with error, keeping stale 30-day data in cache
+    queryState = {
+      data: sampleWaitRecord, // still has days: 30
+      error: new Error('Failed to fetch wait record'),
+      isLoading: false,
+      refetch: jest.fn(),
+    }
+    fireEvent.click(screen.getByRole('button', { name: '90 days' }))
+    rerender(<WaitRecordCard />)
+
+    expect(screen.getByText('Your record could not be loaded.')).toBeInTheDocument()
+    // Stale 30-day figures must not be displayed alongside the error
+    expect(screen.queryByText('Riders waited past ready')).not.toBeInTheDocument()
+    expect(screen.queryByText('4.2 min on average')).not.toBeInTheDocument()
+  })
+
   it('renders all three performance metrics when data is returned by the API', () => {
     mockUseWaitRecordQuery.mockReturnValue({
       data: sampleWaitRecord,
