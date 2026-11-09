@@ -11,6 +11,7 @@ import {
   PartnerDeliveryPaginatedDto,
   PartnerAvailability,
   PartnerProfileDto,
+  WaitRecord,
 } from '../modules/manual-request/types'
 import { EnumDeliveryEventType } from '../shared-types'
 import { notifyPartnerUnauthorized } from './partnerSessionEvents'
@@ -334,6 +335,16 @@ export async function resumePartner(): Promise<PartnerAvailability> {
 export function usePartnerAvailabilityQuery() {
   const { data, refetch } = usePolledFetch(fetchPartnerProfile, { enabled: true })
   return { availability: data?.availability, refetch }
+}
+
+// Spec 0030 (AC-8): the restaurant's own record over a period.
+export async function fetchWaitRecord(days: number): Promise<WaitRecord> {
+  return manualRequestFetch<WaitRecord>(`/partner/wait-record?days=${days}`)
+}
+
+export function useWaitRecordQuery(days: number) {
+  const load = useCallback(() => fetchWaitRecord(days), [days])
+  return usePolledFetch(load, { enabled: true })
 }
 
 export function usePartnerProfileQuery() {

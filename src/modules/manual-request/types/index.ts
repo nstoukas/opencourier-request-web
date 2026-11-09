@@ -300,6 +300,18 @@ export interface PartnerAvailability {
   notAcceptingReason: string | null
 }
 
+// Spec 0030 (AC-6): the restaurant's own record, naming no rider.
+export interface WaitRecord {
+  days: number
+  orderCount: number
+  waitSamples: number
+  averageWaitMinutes: number | null
+  lateShare: number | null
+  prepSamples: number
+  medianPrepMinutes: number | null
+  usualPrepMinutes: number
+}
+
 export interface PartnerProfileDto {
   name: string
   phoneNumber: string | null

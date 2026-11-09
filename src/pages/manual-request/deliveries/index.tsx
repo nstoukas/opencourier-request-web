@@ -1,5 +1,6 @@
 import { ReadyControls } from '../../../modules/ready/ReadyControls'
 import { AvailabilityStrip } from '../../../modules/availability/AvailabilityStrip'
+import { WaitRecordCard } from '../../../modules/availability/WaitRecordCard'
 import { useState } from 'react'
 import Head from 'next/head'
 import Link from 'next/link'
@@ -255,6 +256,8 @@ export default function DeliveriesPage() {
           }
         />
         <AvailabilityStrip availability={availabilityQuery.availability} onChanged={availabilityQuery.refetch} />
+        {/* The restaurant's own record (spec 0030). */}
+        <WaitRecordCard />
 
         {/* A poll that fails keeps the list on screen and says so; only a first load that fails shows the error alone. */}
         {error && data ? (
