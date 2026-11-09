@@ -1,4 +1,5 @@
 import { ReadyControls } from '../../../modules/ready/ReadyControls'
+import { ReportProductCard } from '../../../modules/product-report/ReportProductCard'
 import { useState } from 'react'
 import Head from 'next/head'
 import Link from 'next/link'
@@ -83,6 +84,9 @@ function PartnerDeliveryDetails({ data, onChanged }: { data: PartnerDeliveryDto;
           ]}
         />
       </section>
+
+      {/* Spec 0032: once it is delivered, the restaurant can report a wrong or missing product. */}
+      {data.status === 'DROPPED_OFF' ? <ReportProductCard deliveryId={data.id} orderItems={orderItems} /> : null}
 
       <Separator />
 

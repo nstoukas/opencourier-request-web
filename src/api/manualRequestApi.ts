@@ -307,6 +307,17 @@ export async function markDeliveryFoodReady(deliveryId: string): Promise<Partner
   return manualRequestFetch<PartnerDeliveryDto>(`/deliveries/${deliveryId}/food-ready`, { method: 'POST' })
 }
 
+// Spec 0032: a wrong or missing product on a delivered order.
+export async function reportDeliveryProduct(
+  deliveryId: string,
+  body: { kind: 'WRONG_ITEM' | 'MISSING_ITEM'; itemName?: string; note?: string },
+): Promise<{ id: string }> {
+  return manualRequestFetch<{ id: string }>(`/deliveries/${deliveryId}/product-reports`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
 export async function fetchPartnerProfile(): Promise<PartnerProfileDto> {
   return manualRequestFetch<PartnerProfileDto>('/partner/profile')
 }
