@@ -37,6 +37,12 @@ has the full reasoning and verification notes.
 On 2 November rows 29, 32, 31 and 28 were merged in. The GA rows (29 and 32) have the entries
 below; rows 31 and 28 are recorded in the workspace's scope and walkthroughs.
 
+### Ready times the restaurant keeps true (scope row 21, spec 0023): `0ca9c07` to `e2cb60e`
+Built on the branch `feat/ready-signals` and merged on 9 November, with the backend, adminweb and courier app halves.
+- **The order form.** "Ready in" starts on the restaurant's usual prep time.
+- **My Orders and the order page.** The ready line with +5, +10, +15 and Food ready until pickup.
+- The edit dialog no longer moves the ready time. 596 tests pass; put backs by hand. Reviewed by Fable and agy.
+
 ### Optional item lines, each markable as a drink or a side (scope row 103, spec 0028): `ec009aa` to `232985b`
 Built on the branch `feat/item-kinds` and merged on 3 November, with the backend and courier app halves.
 - **The form.** A collapsed "Add items (optional)" between Size and Order total: a name, a quantity stepper,
