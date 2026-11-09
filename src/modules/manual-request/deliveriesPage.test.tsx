@@ -11,6 +11,7 @@ import {
   useUpdateManualRequestDeliveryMutation,
   useCancelManualRequestDeliveryMutation,
   usePartnerAvailabilityQuery,
+  useWaitRecordQuery,
 } from '../../api/manualRequestApi'
 
 // Mock next/head
@@ -38,6 +39,7 @@ jest.mock('../../api/manualRequestApi', () => ({
   useUpdateManualRequestDeliveryMutation: jest.fn(),
   useCancelManualRequestDeliveryMutation: jest.fn(),
   usePartnerAvailabilityQuery: jest.fn(),
+  useWaitRecordQuery: jest.fn(),
 }))
 
 describe('DeliveriesPage (/manual-request/deliveries/index.tsx)', () => {
@@ -49,6 +51,7 @@ describe('DeliveriesPage (/manual-request/deliveries/index.tsx)', () => {
     ;(useUpdateManualRequestDeliveryMutation as jest.Mock).mockReturnValue([jest.fn(), { isLoading: false }])
     ;(useCancelManualRequestDeliveryMutation as jest.Mock).mockReturnValue([mockCancel, { isLoading: false }])
     ;(usePartnerAvailabilityQuery as jest.Mock).mockReturnValue({ availability: undefined, refetch: jest.fn() })
+    ;(useWaitRecordQuery as jest.Mock).mockReturnValue({ data: undefined, error: undefined, isLoading: false, refetch: jest.fn() })
   })
 
   it('renders "Loading deliveries..." on initial load when data is not yet loaded', () => {
@@ -172,6 +175,41 @@ describe('DeliveriesPage (/manual-request/deliveries/index.tsx)', () => {
     // Spec 0017 AC-5: No sign-in link branch
     expect(screen.queryByText(/Please sign in/i)).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /sign in/i })).not.toBeInTheDocument()
+  })
+
+  it('renders WaitRecordCard ("Your record") on My Orders (spec 0030, AC-8)', () => {
+    ;(useListManualRequestDeliveriesQuery as jest.Mock).mockReturnValue({
+      data: {
+        data: [],
+        pagination: { currentPage: 1, totalPages: 1 },
+      },
+      isLoading: false,
+      error: undefined,
+      refetch: mockRefetch,
+    })
+    ;(useWaitRecordQuery as jest.Mock).mockReturnValue({
+      data: {
+        days: 30,
+        orderCount: 15,
+        waitSamples: 14,
+        averageWaitMinutes: 3.5,
+        lateShare: 0.1,
+        prepSamples: 15,
+        medianPrepMinutes: 16,
+        usualPrepMinutes: 15,
+      },
+      error: undefined,
+      isLoading: false,
+      refetch: jest.fn(),
+    })
+
+    render(<DeliveriesPage />)
+
+    expect(screen.getByTestId('wait-record')).toBeInTheDocument()
+    expect(screen.getByText('Your record')).toBeInTheDocument()
+    expect(screen.getByText('3.5 min on average')).toBeInTheDocument()
+    expect(screen.getByText('10%')).toBeInTheDocument()
+    expect(screen.getByText('16 min')).toBeInTheDocument()
   })
 
   it('a failed poll keeps the list on screen and shows "Could not refresh the list just now..." (spec 0017, AC-4)', () => {

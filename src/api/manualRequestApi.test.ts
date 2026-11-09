@@ -5,6 +5,8 @@ import {
   fetchPartnerSession,
   fetchPartnerDelivery,
   fetchPartnerProfile,
+  fetchWaitRecord,
+  useWaitRecordQuery,
   delayDeliveryReady,
   markDeliveryFoodReady,
   setPartnerBusy,
@@ -24,7 +26,7 @@ import {
   DispatchState,
 } from './manualRequestApi'
 import { onPartnerUnauthorized } from './partnerSessionEvents'
-import { ManualRequestDeliveryInput } from '../modules/manual-request/types'
+import { ManualRequestDeliveryInput, WaitRecord } from '../modules/manual-request/types'
 
 describe('manualRequestApi helper functions', () => {
   const originalFetch = global.fetch
@@ -429,6 +431,70 @@ describe('manualRequestApi helper functions', () => {
 
       expect(result.current.availability).toEqual(answeredAvailability)
       expect(typeof result.current.refetch).toBe('function')
+    })
+  })
+
+  describe('fetchWaitRecord and useWaitRecordQuery (spec 0030, AC-8)', () => {
+    it('calls proxy wait-record endpoint with days query parameter and returns WaitRecord', async () => {
+      const mockRecord: WaitRecord = {
+        days: 30,
+        orderCount: 20,
+        waitSamples: 18,
+        averageWaitMinutes: 3.5,
+        lateShare: 0.1,
+        prepSamples: 19,
+        medianPrepMinutes: 15,
+        usualPrepMinutes: 15,
+      }
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        text: jest.fn().mockResolvedValue(JSON.stringify({ result: mockRecord })),
+      } as any)
+
+      const result = await fetchWaitRecord(30)
+
+      expect(global.fetch).toHaveBeenCalledWith('/api/partner-proxy/partner/wait-record?days=30', {
+        credentials: 'same-origin',
+        signal: expect.any(Object),
+        headers: { 'Content-Type': 'application/json' },
+      })
+      expect(result).toEqual(mockRecord)
+    })
+
+    it('propagates errors when fetchWaitRecord encounters non-ok response', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: false,
+        status: 400,
+        json: jest.fn().mockResolvedValue({ message: 'Invalid days parameter' }),
+      } as any)
+
+      await expect(fetchWaitRecord(15)).rejects.toThrow('Invalid days parameter')
+    })
+
+    it('useWaitRecordQuery fetches wait record with polled fetch', async () => {
+      const mockRecord: WaitRecord = {
+        days: 7,
+        orderCount: 5,
+        waitSamples: 5,
+        averageWaitMinutes: 2.0,
+        lateShare: 0,
+        prepSamples: 5,
+        medianPrepMinutes: 12,
+        usualPrepMinutes: 15,
+      }
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        text: jest.fn().mockResolvedValue(JSON.stringify({ result: mockRecord })),
+      } as any)
+
+      const { result } = renderHook(() => useWaitRecordQuery(7))
+
+      await act(async () => {
+        await Promise.resolve()
+      })
+
+      expect(result.current.data).toEqual(mockRecord)
+      expect(global.fetch).toHaveBeenCalledWith('/api/partner-proxy/partner/wait-record?days=7', expect.any(Object))
     })
   })
 
