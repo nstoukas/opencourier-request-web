@@ -9,6 +9,7 @@ import {
   useWaitRecordQuery,
   delayDeliveryReady,
   markDeliveryFoodReady,
+  reportDeliveryProduct,
   setPartnerBusy,
   clearPartnerBusy,
   pausePartner,
@@ -295,6 +296,90 @@ describe('manualRequestApi helper functions', () => {
       } as any)
 
       await expect(markDeliveryFoodReady('del-123')).rejects.toThrow('This order has ended.')
+    })
+  })
+
+  describe('product reports (spec 0032, AC-1, AC-3, AC-9)', () => {
+    it('POSTs to /deliveries/:id/product-reports with kind, item and note', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        text: jest.fn().mockResolvedValue(JSON.stringify({ result: { id: 'rep-456' } })),
+      } as any)
+
+      const result = await reportDeliveryProduct('del-123', {
+        kind: 'WRONG_ITEM',
+        itemName: 'Cheeseburger',
+        note: 'Wrong cheese was used',
+      })
+
+      expect(global.fetch).toHaveBeenCalledTimes(1)
+      const [url, init] = (global.fetch as jest.Mock).mock.calls[0]
+      expect(url).toBe('/api/partner-proxy/deliveries/del-123/product-reports')
+      expect(init.method).toBe('POST')
+      expect(init.credentials).toBe('same-origin')
+      expect(init.headers).toEqual({ 'Content-Type': 'application/json' })
+      expect(JSON.parse(init.body)).toEqual({
+        kind: 'WRONG_ITEM',
+        itemName: 'Cheeseburger',
+        note: 'Wrong cheese was used',
+      })
+      expect(result).toEqual({ id: 'rep-456' })
+    })
+
+    it('can submit a report with only kind and note (no itemName)', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        text: jest.fn().mockResolvedValue(JSON.stringify({ result: { id: 'rep-789' } })),
+      } as any)
+
+      const result = await reportDeliveryProduct('del-123', {
+        kind: 'MISSING_ITEM',
+        note: 'Paper napkins missing',
+      })
+
+      const [, init] = (global.fetch as jest.Mock).mock.calls[0]
+      expect(JSON.parse(init.body)).toEqual({
+        kind: 'MISSING_ITEM',
+        note: 'Paper napkins missing',
+      })
+      expect(result).toEqual({ id: 'rep-789' })
+    })
+
+    it('rejects with the server sentence on 409 refusal (e.g. order not delivered yet)', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: false,
+        status: 409,
+        statusText: 'Conflict',
+        json: jest.fn().mockResolvedValue({
+          error: true,
+          result: [{ message: 'You can report this once the order is delivered.', statusCode: 409 }],
+        }),
+      } as any)
+
+      await expect(
+        reportDeliveryProduct('del-123', {
+          kind: 'WRONG_ITEM',
+          itemName: 'Pizza',
+        }),
+      ).rejects.toThrow('You can report this once the order is delivered.')
+    })
+
+    it('rejects with the server sentence on 400 refusal (e.g. missing both item name and note)', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: false,
+        status: 400,
+        statusText: 'Bad Request',
+        json: jest.fn().mockResolvedValue({
+          error: true,
+          result: [{ message: 'A report needs an item name or a note.', statusCode: 400 }],
+        }),
+      } as any)
+
+      await expect(
+        reportDeliveryProduct('del-123', {
+          kind: 'WRONG_ITEM',
+        }),
+      ).rejects.toThrow('A report needs an item name or a note.')
     })
   })
 
