@@ -9,6 +9,7 @@ import {
   ManualRequestUpdateDeliveryInput,
   PartnerDeliveryDto,
   PartnerDeliveryPaginatedDto,
+  PartnerAvailability,
   PartnerProfileDto,
 } from '../modules/manual-request/types'
 import { EnumDeliveryEventType } from '../shared-types'
@@ -307,6 +308,32 @@ export async function markDeliveryFoodReady(deliveryId: string): Promise<Partner
 
 export async function fetchPartnerProfile(): Promise<PartnerProfileDto> {
   return manualRequestFetch<PartnerProfileDto>('/partner/profile')
+}
+
+// Spec 0029: the restaurant's own busy mode and pause. Each answers the new availability.
+export async function setPartnerBusy(extraMinutes: number): Promise<PartnerAvailability> {
+  return manualRequestFetch<PartnerAvailability>('/partner/availability/busy', {
+    method: 'POST',
+    body: JSON.stringify({ extraMinutes }),
+  })
+}
+export async function clearPartnerBusy(): Promise<PartnerAvailability> {
+  return manualRequestFetch<PartnerAvailability>('/partner/availability/busy', { method: 'DELETE' })
+}
+export async function pausePartner(minutes: number): Promise<PartnerAvailability> {
+  return manualRequestFetch<PartnerAvailability>('/partner/availability/pause', {
+    method: 'POST',
+    body: JSON.stringify({ minutes }),
+  })
+}
+export async function resumePartner(): Promise<PartnerAvailability> {
+  return manualRequestFetch<PartnerAvailability>('/partner/availability/pause', { method: 'DELETE' })
+}
+
+// Spec 0029 (AC-8): the availability, read again every 30 s while the tab is visible.
+export function usePartnerAvailabilityQuery() {
+  const { data, refetch } = usePolledFetch(fetchPartnerProfile, { enabled: true })
+  return { availability: data?.availability, refetch }
 }
 
 export function usePartnerProfileQuery() {

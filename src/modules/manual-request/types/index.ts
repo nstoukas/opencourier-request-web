@@ -290,11 +290,22 @@ export interface PartnerPickupAddressDto {
 
 /** GET /api/partner/v1/partner/profile. Read-only: there is no partner-side write endpoint,
  *  because only a system admin may change a restaurant's details. */
+// Spec 0029 (AC-7): busy mode, a pause and an admin's disable, read from the restaurant's profile.
+export interface PartnerAvailability {
+  busyExtraMinutes: number | null
+  pausedUntil: string | null
+  disabledAt: string | null
+  disabledReason: string | null
+  acceptingOrders: boolean
+  notAcceptingReason: string | null
+}
+
 export interface PartnerProfileDto {
   name: string
   phoneNumber: string | null
   // Spec 0023: the minutes the restaurant usually needs; the order form's Ready in starts on it.
   usualPrepMinutes?: number | null
   pickupAddress: PartnerPickupAddressDto | null
+  availability?: PartnerAvailability
 }
 

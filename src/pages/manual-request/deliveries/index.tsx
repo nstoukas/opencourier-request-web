@@ -1,4 +1,5 @@
 import { ReadyControls } from '../../../modules/ready/ReadyControls'
+import { AvailabilityStrip } from '../../../modules/availability/AvailabilityStrip'
 import { useState } from 'react'
 import Head from 'next/head'
 import Link from 'next/link'
@@ -20,6 +21,7 @@ import {
   Textarea,
 } from '../../../admin-web-components'
 import {
+  usePartnerAvailabilityQuery,
   fetchPartnerDelivery,
   useListManualRequestDeliveriesQuery,
   useUpdateManualRequestDeliveryMutation,
@@ -234,6 +236,8 @@ export default function DeliveriesPage() {
 
   const pagination = data?.pagination
   const deliveries = data?.data ?? []
+  // Busy mode and pause (spec 0029).
+  const availabilityQuery = usePartnerAvailabilityQuery()
 
   return (
     <>
@@ -250,6 +254,7 @@ export default function DeliveriesPage() {
               : "Only your restaurant's deliveries appear here."
           }
         />
+        <AvailabilityStrip availability={availabilityQuery.availability} onChanged={availabilityQuery.refetch} />
 
         {/* A poll that fails keeps the list on screen and says so; only a first load that fails shows the error alone. */}
         {error && data ? (

@@ -88,6 +88,7 @@ import {
 } from '../utils/orderItems'
 import { cn } from '../../../ui-shared-utils'
 import { BarPhase, PriceSendBar } from './PriceSendBar'
+import { PartnerAvailability } from '../types'
 import { useRequestPageNavigator } from '../../../hooks/useRequestPageNavigator'
 import {
   checkPartnerPickupUsable,
@@ -350,7 +351,9 @@ const SIZE_OPTIONS: ChoicePillOption[] = [
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function CreateDeliveryForm() {
+// `availability`: the restaurant's busy mode and pause, read by the page (spec 0029). While it is loading
+// the form behaves as before; the server refuses a paused order either way.
+export function CreateDeliveryForm({ availability }: { availability?: PartnerAvailability } = {}) {
   const { toast } = useToast()
   const navigator = useRequestPageNavigator()
 
@@ -1023,12 +1026,17 @@ export function CreateDeliveryForm() {
 
         <SaveCustomerTick checked={saveCustomer} onCheckedChange={setSaveCustomer} />
 
+        {/* Spec 0029 (AC-8): busy mode lengthens this order's ready time on the server. */}
+        {availability?.busyExtraMinutes ? (
+          <p className="text-sm text-muted-foreground">Busy mode adds {availability.busyExtraMinutes} min to this order</p>
+        ) : null}
+
         <PriceSendBar
           phase={phase}
           quote={priced?.quote ?? null}
           pricedAddress={priced?.values.dropoffAddress.formattedAddress || null}
           error={barError}
-          disabled={!pickupCheck.usable}
+          disabled={!pickupCheck.usable || availability?.acceptingOrders === false}
           onSend={handleSend}
           onHeightChange={setBarHeight}
         />
