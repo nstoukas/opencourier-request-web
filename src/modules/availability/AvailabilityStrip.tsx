@@ -14,7 +14,7 @@ const PAUSE_OPTIONS = [
 type Props = {
   availability: PartnerAvailability | undefined
   // Called after any change, so the page can read the availability again at once.
-  onChanged: () => void
+  onChanged: () => void | Promise<unknown>
 }
 
 // Spec 0029 (AC-8): busy mode and pause, on the order form page and on My Orders. The sentence why
@@ -33,8 +33,10 @@ export function AvailabilityStrip({ availability, onChanged }: Props) {
     } catch (err: any) {
       setError(err?.message || 'That could not be changed.')
     } finally {
+      // Wait for the fresh availability before the buttons come back, so a second tap meets the new
+      // state and does not record a second pause (Fable's review).
+      await onChanged()
       setSending(false)
-      onChanged()
     }
   }
 
