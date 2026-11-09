@@ -35,8 +35,11 @@ export function AvailabilityStrip({ availability, onChanged }: Props) {
     } finally {
       // Wait for the fresh availability before the buttons come back, so a second tap meets the new
       // state and does not record a second pause (Fable's review).
-      await onChanged()
-      setSending(false)
+      try {
+        await onChanged()
+      } finally {
+        setSending(false)
+      }
     }
   }
 

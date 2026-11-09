@@ -509,6 +509,12 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
       return
     }
 
+    // Spec 0029 (agy review): pressing Enter submits the form even with the button off, so say why here.
+    if (availability?.acceptingOrders === false) {
+      setBarError(availability.notAcceptingReason ?? 'This restaurant cannot place orders right now.')
+      return
+    }
+
     // No price for a pin nobody checked on the map (spec 0016, AC-5).
     if (!pinConfirmed) {
       setBarError(CONFIRM_PIN_MESSAGE)
@@ -1027,7 +1033,7 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
         <SaveCustomerTick checked={saveCustomer} onCheckedChange={setSaveCustomer} />
 
         {/* Spec 0029 (AC-8): busy mode lengthens this order's ready time on the server. */}
-        {availability?.busyExtraMinutes ? (
+        {availability?.busyExtraMinutes && availability.acceptingOrders ? (
           <p className="text-sm text-muted-foreground">Busy mode adds {availability.busyExtraMinutes} min to this order</p>
         ) : null}
 
