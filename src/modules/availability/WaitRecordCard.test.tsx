@@ -182,7 +182,7 @@ describe('WaitRecordCard (spec 0030, AC-8)', () => {
       isLoading: false,
       refetch: jest.fn(),
     }
-    mockUseWaitRecordQuery.mockImplementation(() => queryState)
+    mockUseWaitRecordQuery.mockImplementation(() => queryState as never)
 
     const { rerender } = render(<WaitRecordCard />)
     expect(screen.getByText('4.2 min on average')).toBeInTheDocument()
