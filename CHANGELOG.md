@@ -37,6 +37,11 @@ has the full reasoning and verification notes.
 On 2 November rows 29, 32, 31 and 28 were merged in. The GA rows (29 and 32) have the entries
 below; rows 31 and 28 are recorded in the workspace's scope and walkthroughs.
 
+### Report a product (scope row 15, spec 0032)
+Built on `feat/product-reports` and merged on 9 November, with the backend, adminweb and courier app halves.
+- A delivered order's page has Report a product: wrong or missing, the item or something else, and a note.
+- 683 tests pass; put backs by hand. Reviewed by Fable.
+
 ### Your record (scope row 25, spec 0030): `cfd0a5d` to `390ee2a`
 Built on `feat/wait-record` and merged on 9 November, with the backend and adminweb halves.
 - My Orders shows the restaurant's own record over 7, 30 or 90 days. The figures name no rider.
