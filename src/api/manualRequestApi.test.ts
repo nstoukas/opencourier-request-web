@@ -7,6 +7,11 @@ import {
   fetchPartnerProfile,
   delayDeliveryReady,
   markDeliveryFoodReady,
+  setPartnerBusy,
+  clearPartnerBusy,
+  pausePartner,
+  resumePartner,
+  usePartnerAvailabilityQuery,
   fetchDispatchState,
   useDispatchStateQuery,
   useConfirmManualRequestDeliveryMutation,
@@ -288,6 +293,142 @@ describe('manualRequestApi helper functions', () => {
       } as any)
 
       await expect(markDeliveryFoodReady('del-123')).rejects.toThrow('This order has ended.')
+    })
+  })
+
+  describe('restaurant availability (spec 0029, AC-1, AC-3, AC-8)', () => {
+    const answeredAvailability = {
+      busyExtraMinutes: 15,
+      pausedUntil: null,
+      disabledAt: null,
+      disabledReason: null,
+      acceptingOrders: true,
+      notAcceptingReason: null,
+    }
+
+    it('setPartnerBusy POSTs {extraMinutes} to /partner/availability/busy through partner proxy', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        text: jest.fn().mockResolvedValue(JSON.stringify({ result: answeredAvailability })),
+      } as any)
+
+      const result = await setPartnerBusy(15)
+
+      expect(global.fetch).toHaveBeenCalledTimes(1)
+      const [url, init] = (global.fetch as jest.Mock).mock.calls[0]
+      expect(url).toBe('/api/partner-proxy/partner/availability/busy')
+      expect(init.method).toBe('POST')
+      expect(init.credentials).toBe('same-origin')
+      expect(JSON.parse(init.body)).toEqual({ extraMinutes: 15 })
+      expect(init.body).toContain('"extraMinutes":15')
+      expect(result).toEqual(answeredAvailability)
+    })
+
+    it('clearPartnerBusy sends DELETE to /partner/availability/busy with no body', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        text: jest.fn().mockResolvedValue(
+          JSON.stringify({ result: { ...answeredAvailability, busyExtraMinutes: null } }),
+        ),
+      } as any)
+
+      const result = await clearPartnerBusy()
+
+      const [url, init] = (global.fetch as jest.Mock).mock.calls[0]
+      expect(url).toBe('/api/partner-proxy/partner/availability/busy')
+      expect(init.method).toBe('DELETE')
+      expect(init.credentials).toBe('same-origin')
+      expect(init.body).toBeUndefined()
+      expect(result.busyExtraMinutes).toBeNull()
+    })
+
+    it('pausePartner POSTs {minutes} to /partner/availability/pause through partner proxy', async () => {
+      const pausedResult = {
+        ...answeredAvailability,
+        pausedUntil: '2026-11-09T14:30:00.000Z',
+        acceptingOrders: false,
+        notAcceptingReason: 'Ordering is paused until 14:30.',
+      }
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        text: jest.fn().mockResolvedValue(JSON.stringify({ result: pausedResult })),
+      } as any)
+
+      const result = await pausePartner(30)
+
+      expect(global.fetch).toHaveBeenCalledTimes(1)
+      const [url, init] = (global.fetch as jest.Mock).mock.calls[0]
+      expect(url).toBe('/api/partner-proxy/partner/availability/pause')
+      expect(init.method).toBe('POST')
+      expect(init.credentials).toBe('same-origin')
+      expect(JSON.parse(init.body)).toEqual({ minutes: 30 })
+      expect(init.body).toContain('"minutes":30')
+      expect(result).toEqual(pausedResult)
+    })
+
+    it('resumePartner sends DELETE to /partner/availability/pause with no body', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        text: jest.fn().mockResolvedValue(JSON.stringify({ result: answeredAvailability })),
+      } as any)
+
+      const result = await resumePartner()
+
+      const [url, init] = (global.fetch as jest.Mock).mock.calls[0]
+      expect(url).toBe('/api/partner-proxy/partner/availability/pause')
+      expect(init.method).toBe('DELETE')
+      expect(init.credentials).toBe('same-origin')
+      expect(init.body).toBeUndefined()
+      expect(result).toEqual(answeredAvailability)
+    })
+
+    it('a 409 refusal rejects with the server\'s own sentence', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: false,
+        status: 409,
+        statusText: 'Conflict',
+        json: jest.fn().mockResolvedValue({
+          error: true,
+          result: [{ message: 'The co-op has disabled this restaurant: Inactive', statusCode: 409 }],
+        }),
+      } as any)
+
+      await expect(setPartnerBusy(10)).rejects.toThrow('The co-op has disabled this restaurant: Inactive')
+
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: false,
+        status: 409,
+        statusText: 'Conflict',
+        json: jest.fn().mockResolvedValue({
+          error: true,
+          result: [{ message: 'The co-op has disabled this restaurant: Inactive', statusCode: 409 }],
+        }),
+      } as any)
+
+      await expect(pausePartner(15)).rejects.toThrow('The co-op has disabled this restaurant: Inactive')
+    })
+
+    it('usePartnerAvailabilityQuery polls partner profile and returns availability and refetch', async () => {
+      const mockProfile = {
+        name: 'Nosh',
+        phoneNumber: null,
+        pickupAddress: null,
+        availability: answeredAvailability,
+      }
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: jest.fn().mockResolvedValue(JSON.stringify({ result: mockProfile })),
+      } as any)
+
+      const { result } = renderHook(() => usePartnerAvailabilityQuery())
+
+      await act(async () => {
+        await Promise.resolve()
+      })
+
+      expect(result.current.availability).toEqual(answeredAvailability)
+      expect(typeof result.current.refetch).toBe('function')
     })
   })
 

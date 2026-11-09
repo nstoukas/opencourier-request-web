@@ -10,6 +10,7 @@ import {
   useListManualRequestDeliveriesQuery,
   useUpdateManualRequestDeliveryMutation,
   useCancelManualRequestDeliveryMutation,
+  usePartnerAvailabilityQuery,
 } from '../../api/manualRequestApi'
 
 // Mock next/head
@@ -36,6 +37,7 @@ jest.mock('../../api/manualRequestApi', () => ({
   useListManualRequestDeliveriesQuery: jest.fn(),
   useUpdateManualRequestDeliveryMutation: jest.fn(),
   useCancelManualRequestDeliveryMutation: jest.fn(),
+  usePartnerAvailabilityQuery: jest.fn(),
 }))
 
 describe('DeliveriesPage (/manual-request/deliveries/index.tsx)', () => {
@@ -46,6 +48,7 @@ describe('DeliveriesPage (/manual-request/deliveries/index.tsx)', () => {
     jest.resetAllMocks()
     ;(useUpdateManualRequestDeliveryMutation as jest.Mock).mockReturnValue([jest.fn(), { isLoading: false }])
     ;(useCancelManualRequestDeliveryMutation as jest.Mock).mockReturnValue([mockCancel, { isLoading: false }])
+    ;(usePartnerAvailabilityQuery as jest.Mock).mockReturnValue({ availability: undefined, refetch: jest.fn() })
   })
 
   it('renders "Loading deliveries..." on initial load when data is not yet loaded', () => {

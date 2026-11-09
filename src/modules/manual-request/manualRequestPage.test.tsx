@@ -13,6 +13,11 @@ jest.mock('./components/DispatchBanner', () => ({
   DispatchBanner: () => <div data-testid="dispatch-banner">Mocked Dispatch Banner</div>,
 }))
 
+// Mock usePartnerAvailabilityQuery to prevent unhandled poll fetches in page wrapper tests
+jest.mock('../../api/manualRequestApi', () => ({
+  usePartnerAvailabilityQuery: jest.fn().mockReturnValue({ availability: undefined, refetch: jest.fn() }),
+}))
+
 // Mock next/head
 jest.mock('next/head', () => ({
   __esModule: true,
