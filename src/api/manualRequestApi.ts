@@ -344,7 +344,8 @@ export async function fetchWaitRecord(days: number): Promise<WaitRecord> {
 
 export function useWaitRecordQuery(days: number) {
   const load = useCallback(() => fetchWaitRecord(days), [days])
-  return usePolledFetch(load, { enabled: true })
+  // A record moves slowly, and the 90 day figure is the heaviest read here: every 5 minutes is plenty.
+  return usePolledFetch(load, { enabled: true, intervalMs: 300_000 })
 }
 
 export function usePartnerProfileQuery() {

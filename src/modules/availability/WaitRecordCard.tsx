@@ -32,7 +32,8 @@ export function WaitRecordCard() {
           ))}
         </div>
         {error ? <p className="text-destructive">Your record could not be loaded.</p> : null}
-        {data ? (
+        {/* Only the answer for this period, so the old figures never sit under the new button. */}
+        {data && data.days === days ? (
           <dl className="grid grid-cols-1 gap-2 sm:grid-cols-3">
             <div>
               <dt className="text-muted-foreground">Riders waited past ready</dt>
