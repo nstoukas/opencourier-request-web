@@ -311,4 +311,64 @@ describe('AvailabilityStrip (spec 0029, AC-8)', () => {
       expect(screen.getByRole('button', { name: min })).toBeEnabled()
     }
   })
+
+  it('re-enables buttons when onChanged rejects after setting busy mode', async () => {
+    ;(setPartnerBusy as jest.Mock).mockResolvedValue({
+      ...defaultAvailability,
+      busyExtraMinutes: 15,
+    })
+    mockOnChanged.mockRejectedValue(new Error('Network error on availability refetch'))
+
+    render(<AvailabilityStrip availability={defaultAvailability} onChanged={mockOnChanged} />)
+
+    const button = screen.getByRole('button', { name: '+15' })
+    const reactPropsKey = Object.keys(button).find((k) => k.startsWith('__reactProps$'))!
+    const onClick = (button as any)[reactPropsKey].onClick
+
+    await act(async () => {
+      try {
+        await onClick()
+      } catch (err: any) {
+        expect(err.message).toBe('Network error on availability refetch')
+      }
+    })
+
+    expect(mockOnChanged).toHaveBeenCalledTimes(1)
+    for (const min of ['+5', '+10', '+15', '+20', '+30']) {
+      expect(screen.getByRole('button', { name: min })).toBeEnabled()
+    }
+    for (const label of ['15 min', '30 min', '1 h', '2 h']) {
+      expect(screen.getByRole('button', { name: label })).toBeEnabled()
+    }
+  })
+
+  it('re-enables buttons when onChanged rejects after resume', async () => {
+    ;(resumePartner as jest.Mock).mockResolvedValue(defaultAvailability)
+    mockOnChanged.mockRejectedValue(new Error('Refetch failed'))
+
+    const availability: PartnerAvailability = {
+      ...defaultAvailability,
+      pausedUntil: '2026-11-09T14:30:00.000Z',
+      acceptingOrders: false,
+      notAcceptingReason: 'Ordering is paused until 14:30.',
+    }
+
+    render(<AvailabilityStrip availability={availability} onChanged={mockOnChanged} />)
+
+    const button = screen.getByRole('button', { name: 'Resume' })
+    const reactPropsKey = Object.keys(button).find((k) => k.startsWith('__reactProps$'))!
+    const onClick = (button as any)[reactPropsKey].onClick
+
+    await act(async () => {
+      try {
+        await onClick()
+      } catch (err: any) {
+        expect(err.message).toBe('Refetch failed')
+      }
+    })
+
+    expect(resumePartner).toHaveBeenCalledTimes(1)
+    expect(mockOnChanged).toHaveBeenCalledTimes(1)
+    expect(screen.getByRole('button', { name: 'Resume' })).toBeEnabled()
+  })
 })
