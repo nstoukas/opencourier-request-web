@@ -53,6 +53,12 @@ jest.mock('../../../api/manualRequestApi', () => {
   }
 })
 
+// Mock chatApi for PortalFrame tests
+jest.mock('../../../api/chatApi', () => ({
+  fetchChatMessages: jest.fn().mockResolvedValue([]),
+  sendChatMessage: jest.fn().mockResolvedValue({}),
+}))
+
 describe('PortalFrame gate and frame layout', () => {
   const refreshMock = jest.fn()
 
@@ -178,6 +184,46 @@ describe('PortalFrame gate and frame layout', () => {
     // Skip to content accessible jump link
     const skipLink = screen.getByRole('link', { name: 'Skip to content' })
     expect(skipLink).toHaveAttribute('href', '#main')
+  })
+
+  it('shows "Message Dispatch" button when signed in, clicking it opens conversation sheet; signed out screen does not show it (AC-14)', async () => {
+    // 1. Signed out: Message Dispatch button is not rendered
+    ;(usePartnerSession as jest.Mock).mockReturnValue({
+      isSignedIn: false,
+      email: null,
+      isLoading: false,
+      refresh: refreshMock,
+    })
+
+    const { rerender } = render(
+      <PortalFrame>
+        <div data-testid="page-content">Protected content</div>
+      </PortalFrame>
+    )
+
+    expect(screen.queryByRole('button', { name: /Message Dispatch/i })).not.toBeInTheDocument()
+
+    // 2. Signed in: Message Dispatch button is in header
+    ;(usePartnerSession as jest.Mock).mockReturnValue({
+      isSignedIn: true,
+      email: 'restaurant@volos.test',
+      isLoading: false,
+      refresh: refreshMock,
+    })
+
+    rerender(
+      <PortalFrame>
+        <div data-testid="page-content">Protected content</div>
+      </PortalFrame>
+    )
+
+    const dispatchBtn = screen.getByRole('button', { name: /Message Dispatch/i })
+    expect(dispatchBtn).toBeInTheDocument()
+
+    // Clicking it opens the side sheet with conversation title "Dispatch"
+    fireEvent.click(dispatchBtn)
+    expect(await screen.findByRole('heading', { level: 2, name: 'Dispatch' })).toBeInTheDocument()
+    expect(screen.getByText(/Write to the co-op's dispatch about an order or anything else/i)).toBeInTheDocument()
   })
 
   it('sets aria-current="page" and shading on My Orders when pathname is /manual-request/deliveries', () => {
