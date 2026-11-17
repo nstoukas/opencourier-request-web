@@ -216,7 +216,8 @@ function MessageItem({ message }: { message: ChatMessage }) {
         {message.body}
       </p>
       <span className="text-xs text-muted-foreground">
-        {mine ? time : `${message.senderName ?? 'Dispatch'} · ${time}`}
+        {/* AC-5: a restaurant sees dispatch as "Dispatch", never a person, whatever senderName says. */}
+        {mine ? time : `Dispatch · ${time}`}
         {order}
         {/* AC-6: "read" once any dispatcher opened the thread after it. */}
         {mine && message.readByDispatch ? ' · read' : ''}
