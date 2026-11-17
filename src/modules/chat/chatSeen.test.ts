@@ -1,6 +1,7 @@
 import type { ChatMessage } from '../../api/chatApi'
 import {
   CHAT_SEEN_KEY,
+  chatSeenKey,
   hasUnseen,
   markSeen,
   newestFromDispatch,
@@ -14,6 +15,29 @@ describe('chatSeen (spec 0034, AC-6, AC-14)', () => {
   beforeEach(() => {
     window.localStorage.clear()
     jest.restoreAllMocks()
+  })
+
+  describe('chatSeenKey', () => {
+    it('chatSeenKey("a@x.gr") differs from chatSeenKey("b@x.gr") and from CHAT_SEEN_KEY', () => {
+      const keyA = chatSeenKey('a@x.gr')
+      const keyB = chatSeenKey('b@x.gr')
+      expect(keyA).toBe('oc_chat_last_seen:a@x.gr')
+      expect(keyB).toBe('oc_chat_last_seen:b@x.gr')
+      expect(keyA).not.toBe(keyB)
+      expect(keyA).not.toBe(CHAT_SEEN_KEY)
+      expect(keyB).not.toBe(CHAT_SEEN_KEY)
+    })
+
+    it('normalizes email to lower case so casing differences share the same key', () => {
+      expect(chatSeenKey('Restaurant@Volos.gr')).toBe('oc_chat_last_seen:restaurant@volos.gr')
+      expect(chatSeenKey('Restaurant@Volos.gr')).toBe(chatSeenKey('restaurant@volos.gr'))
+    })
+
+    it('returns default CHAT_SEEN_KEY when email is null, undefined, or empty', () => {
+      expect(chatSeenKey(null)).toBe(CHAT_SEEN_KEY)
+      expect(chatSeenKey(undefined)).toBe(CHAT_SEEN_KEY)
+      expect(chatSeenKey('')).toBe(CHAT_SEEN_KEY)
+    })
   })
 
   describe('readChatSeen', () => {
@@ -44,6 +68,14 @@ describe('chatSeen (spec 0034, AC-6, AC-14)', () => {
       const valid: ChatSeen = { id: 'msg-disp-1', createdAt: '2026-11-17T12:00:00.000Z' }
       window.localStorage.setItem(CHAT_SEEN_KEY, JSON.stringify(valid))
       expect(readChatSeen()).toEqual(valid)
+    })
+
+    it('reads from the given custom key when provided', () => {
+      const customKey = chatSeenKey('nosh@volos.gr')
+      const valid: ChatSeen = { id: 'msg-custom-1', createdAt: '2026-11-17T12:00:00.000Z' }
+      window.localStorage.setItem(customKey, JSON.stringify(valid))
+      expect(readChatSeen(customKey)).toEqual(valid)
+      expect(readChatSeen(CHAT_SEEN_KEY)).toBeNull()
     })
 
     it('returns null if window.localStorage.getItem throws (e.g. private mode / storage blocked)', () => {
@@ -235,6 +267,23 @@ describe('chatSeen (spec 0034, AC-6, AC-14)', () => {
       const result = markSeen([msg], null)
       expect(result).toEqual({ id: 'disp-10', createdAt: '2026-11-17T12:30:00.000Z' })
       expect(JSON.parse(window.localStorage.getItem(CHAT_SEEN_KEY)!)).toEqual(result)
+    })
+
+    it('writes to the given custom key when provided', () => {
+      const customKey = chatSeenKey('nosh@volos.gr')
+      const msg: ChatMessage = {
+        id: 'disp-custom-1',
+        senderKind: 'DISPATCH',
+        senderName: 'Dispatch',
+        body: 'Custom message for Nosh',
+        deliveryId: null,
+        orderReference: null,
+        createdAt: '2026-11-17T12:35:00.000Z',
+      }
+      const result = markSeen([msg], null, customKey)
+      expect(result).toEqual({ id: 'disp-custom-1', createdAt: '2026-11-17T12:35:00.000Z' })
+      expect(JSON.parse(window.localStorage.getItem(customKey)!)).toEqual(result)
+      expect(window.localStorage.getItem(CHAT_SEEN_KEY)).toBeNull()
     })
 
     it('returns current and does not update storage if messages has no DISPATCH message', () => {

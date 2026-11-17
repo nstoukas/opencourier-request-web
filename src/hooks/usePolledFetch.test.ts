@@ -319,4 +319,43 @@ describe('usePolledFetch hook (spec 0017, AC-4)', () => {
     expect(result.current.data).toBe('page-2-data')
     expect(result.current.isLoading).toBe(false)
   })
+
+  it('changing only intervalMs keeps data (no reset to undefined, no loading), and changes the polling period', async () => {
+    const loadMock = jest
+      .fn()
+      .mockResolvedValueOnce('data-at-30s')
+      .mockResolvedValueOnce('data-at-5s')
+
+    const { result, rerender } = renderHook(
+      ({ interval }) => usePolledFetch(loadMock, { enabled: true, intervalMs: interval }),
+      { initialProps: { interval: 30_000 } }
+    )
+
+    // First load completes
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(result.current.data).toBe('data-at-30s')
+    expect(result.current.isLoading).toBe(false)
+    expect(loadMock).toHaveBeenCalledTimes(1)
+
+    // Changing only intervalMs (e.g. chat sheet opened from closed 30s to open 5s)
+    rerender({ interval: 5_000 })
+
+    // Data MUST NOT be reset to undefined, isLoading MUST NOT flip back to true
+    expect(result.current.data).toBe('data-at-30s')
+    expect(result.current.isLoading).toBe(false)
+
+    // Polling period is now 5s: after 5,000ms a new poll runs
+    await act(async () => {
+      jest.advanceTimersByTime(5_000)
+    })
+    expect(loadMock).toHaveBeenCalledTimes(2)
+
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(result.current.data).toBe('data-at-5s')
+    expect(result.current.isLoading).toBe(false)
+  })
 })

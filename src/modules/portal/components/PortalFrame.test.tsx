@@ -226,6 +226,45 @@ describe('PortalFrame gate and frame layout', () => {
     expect(screen.getByText(/Write to the co-op's dispatch about an order or anything else/i)).toBeInTheDocument()
   })
 
+  it('passes signed in partner email to MessageDispatch so read marks are saved per-restaurant', async () => {
+    const { fetchChatMessages } = require('../../../api/chatApi')
+    const dispMsg = {
+      id: 'disp-pf-1',
+      senderKind: 'DISPATCH',
+      senderName: 'Dispatch',
+      body: 'Welcome to dispatch chat',
+      deliveryId: null,
+      orderReference: null,
+      createdAt: '2026-11-17T12:00:00.000Z',
+    }
+    ;(fetchChatMessages as jest.Mock).mockResolvedValue([dispMsg])
+
+    ;(usePartnerSession as jest.Mock).mockReturnValue({
+      isSignedIn: true,
+      email: 'nosh@volos.gr',
+      isLoading: false,
+      refresh: refreshMock,
+    })
+
+    render(
+      <PortalFrame>
+        <div>Content</div>
+      </PortalFrame>
+    )
+
+    const dispatchBtn = await screen.findByRole('button', { name: /Message Dispatch/i })
+    fireEvent.click(dispatchBtn)
+
+    // Opening the sheet marks messages seen under this restaurant's specific storage key
+    await waitFor(() => {
+      const stored = window.localStorage.getItem('oc_chat_last_seen:nosh@volos.gr')
+      expect(stored).toBeTruthy()
+      expect(JSON.parse(stored!).id).toBe('disp-pf-1')
+    })
+    // The generic/unscoped CHAT_SEEN_KEY is not written
+    expect(window.localStorage.getItem('oc_chat_last_seen')).toBeNull()
+  })
+
   it('sets aria-current="page" and shading on My Orders when pathname is /manual-request/deliveries', () => {
     mockRouter.pathname = '/manual-request/deliveries'
     ;(usePartnerSession as jest.Mock).mockReturnValue({
