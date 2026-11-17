@@ -69,7 +69,7 @@ function PortalHeader({ email, onSignOut }: PortalHeaderProps) {
 
         <div className="ml-auto flex min-w-0 items-center gap-2">
           {/* The restaurant's chat with the co-op's dispatch (spec 0034, AC-14). */}
-          <MessageDispatch />
+          <MessageDispatch email={email} />
           {email ? (
             <span className="hidden max-w-[14rem] truncate text-sm text-muted-foreground md:inline" title={email}>
               {email}

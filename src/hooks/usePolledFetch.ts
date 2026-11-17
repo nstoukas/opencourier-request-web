@@ -56,6 +56,11 @@ export function usePolledFetch<T>(
     setData(undefined)
     setError(undefined)
     void run('first')
+  }, [run])
+
+  // A separate effect, so a new interval (the chat sheet opening, spec 0034) keeps the answer on
+  // screen and only changes how often it is asked again.
+  useEffect(() => {
     if (!enabled) return
     const timer = setInterval(() => {
       if (document.visibilityState === 'visible') void run('poll')

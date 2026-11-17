@@ -8,7 +8,7 @@ export type ChatSenderKind = 'DISPATCH' | 'COURIER' | 'PARTNER' | 'SYSTEM'
 export type ChatMessage = {
   id: string
   senderKind: ChatSenderKind
-  // "Dispatch" on dispatch's messages (AC-5), never a person's name.
+  // "Dispatch" on dispatch's messages (AC-5). The sheet does not read it: it writes "Dispatch" itself.
   senderName: string | null
   body: string
   deliveryId: string | null

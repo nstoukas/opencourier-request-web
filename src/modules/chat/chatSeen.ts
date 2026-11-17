@@ -4,11 +4,16 @@ import type { ChatMessage } from '../../api/chatApi'
 // newest dispatch message the restaurant had on screen. The server never learns it (AC-6).
 export const CHAT_SEEN_KEY = 'oc_chat_last_seen'
 
+// One mark per signed in restaurant, so two restaurants sharing a browser never hide each other's dot.
+export function chatSeenKey(email: string | null | undefined): string {
+  return email ? `${CHAT_SEEN_KEY}:${email.toLowerCase()}` : CHAT_SEEN_KEY
+}
+
 export type ChatSeen = { id: string; createdAt: string }
 
-export function readChatSeen(): ChatSeen | null {
+export function readChatSeen(key: string = CHAT_SEEN_KEY): ChatSeen | null {
   try {
-    const raw = window.localStorage.getItem(CHAT_SEEN_KEY)
+    const raw = window.localStorage.getItem(key)
     const parsed = raw ? (JSON.parse(raw) as Partial<ChatSeen>) : null
     return parsed && typeof parsed.id === 'string' && typeof parsed.createdAt === 'string'
       ? { id: parsed.id, createdAt: parsed.createdAt }
@@ -34,12 +39,16 @@ export function hasUnseen(messages: ChatMessage[] | undefined, seen: ChatSeen | 
 }
 
 // The sheet was open with these messages: all of dispatch's are seen. Returns what is stored now.
-export function markSeen(messages: ChatMessage[] | undefined, current: ChatSeen | null): ChatSeen | null {
+export function markSeen(
+  messages: ChatMessage[] | undefined,
+  current: ChatSeen | null,
+  key: string = CHAT_SEEN_KEY,
+): ChatSeen | null {
   const newest = newestFromDispatch(messages)
   if (!newest || (current && current.createdAt >= newest.createdAt)) return current
   const next = { id: newest.id, createdAt: newest.createdAt }
   try {
-    window.localStorage.setItem(CHAT_SEEN_KEY, JSON.stringify(next))
+    window.localStorage.setItem(key, JSON.stringify(next))
   } catch {
     // Not remembered: the dot comes back after a reload.
   }
