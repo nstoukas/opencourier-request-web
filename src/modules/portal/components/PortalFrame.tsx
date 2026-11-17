@@ -8,6 +8,7 @@ import { logoutPartner } from '../../../api/manualRequestApi'
 import { onPartnerUnauthorized } from '../../../api/partnerSessionEvents'
 import { usePartnerSession } from '../../../hooks/usePartnerSession'
 import { SignInScreen } from './SignInScreen'
+import { MessageDispatch } from '../../chat/MessageDispatch'
 
 // The three places a restaurant goes. `as const` keeps the strings exact instead of widening them to `string`.
 const NAV_LINKS = [
@@ -67,6 +68,8 @@ function PortalHeader({ email, onSignOut }: PortalHeaderProps) {
         </nav>
 
         <div className="ml-auto flex min-w-0 items-center gap-2">
+          {/* The restaurant's chat with the co-op's dispatch (spec 0034, AC-14). */}
+          <MessageDispatch />
           {email ? (
             <span className="hidden max-w-[14rem] truncate text-sm text-muted-foreground md:inline" title={email}>
               {email}
