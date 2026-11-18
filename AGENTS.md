@@ -60,4 +60,6 @@ Yarn 1.22, **not Corepack**: run `node node_modules/.bin/next dev -p 3090` and
   same rule as adminweb's `shortId` and the courier app's `orderCodeOf`. Change all three together, or the rider's code
   stops matching the restaurant's.
 
+- `usePolledFetch` resets its answer only when `load` or `enabled` change; a new `intervalMs` keeps the data on screen and only changes the period (Message Dispatch, spec 0034, polls every 5 s open and 30 s closed). Message Dispatch's seen mark is one localStorage key per signed in email (`chatSeenKey`).
+
 _Drafted by /audit from the repo, worth a quick human pass. Edit freely: once a line stops matching this draft, later runs treat it as curated and will flag rather than overwrite it._
