@@ -37,6 +37,13 @@ has the full reasoning and verification notes.
 On 2 November rows 29, 32, 31 and 28 were merged in. The GA rows (29 and 32) have the entries
 below; rows 31 and 28 are recorded in the workspace's scope and walkthroughs.
 
+### Message Dispatch (scope row 111, spec 0034)
+Built on `feat/chat` and merged on 18 November, with the backend, adminweb and courier app halves.
+- A Message Dispatch button in the signed in header opens a side sheet with the restaurant's one conversation with the co-op's dispatch, through the app's own proxy: the browser holds no credential.
+- It asks every 5 s while open and every 30 s while closed, only in a visible tab. A dot says dispatch wrote something new, worked out in this browser for each restaurant.
+- Dispatch shows as "Dispatch"; the restaurant's own messages say "read" once dispatch opened them. A message not sent stays, even with the sheet closed, with "Not sent, tap to retry" and the backend's reason when it was refused. Older messages show their date, and a tagged message its order code.
+- 735 tests pass; put backs by hand. Reviewed by Fable; every finding ruled and fixed. Decisions 111.4, 111.10, 111.14, 111.15.
+
 ### Report a product (scope row 15, spec 0032)
 Built on `feat/product-reports` and merged on 9 November, with the backend, adminweb and courier app halves.
 - A delivered order's page has Report a product: wrong or missing, the item or something else, and a note.
