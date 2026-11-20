@@ -206,6 +206,10 @@ function mapDeliveryInputForPartner(input: ManualRequestDeliveryInput) {
     // Spec 0016: their own fields; left out when empty (the backend stores none).
     ...(input.dropoffFloor?.trim() ? { dropoffFloor: input.dropoffFloor.trim() } : {}),
     ...(input.dropoffDoorbell?.trim() ? { dropoffDoorbell: input.dropoffDoorbell.trim() } : {}),
+    // Spec 0043 (AC-4): the box size the restaurant picked. This mapper copies fields one by one, so a
+    // field not named here never reaches the backend (review blocker: every order arrived as an
+    // assumed Medium). Left out when absent, so the backend's default size applies and is recorded.
+    ...(input.boxSize ? { boxSize: input.boxSize } : {}),
     deliverableAction: 'MEET_AT_DOOR',
     orderReference: input.orderReference || input.quoteId,
     orderTotalValue: input.orderTotalValue ?? 0,
