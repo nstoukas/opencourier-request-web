@@ -254,7 +254,8 @@ describe('CreateDeliveryForm box size (spec 0043, row 9, AC-4)', () => {
 
     await waitFor(() => expect(mockNavigator.goToManualRequestStatus).toHaveBeenCalledWith('del-box-test'))
 
-    // The order sent successfully. When the restaurant starts the next order, no size is chosen.
+    // The app never shows that form again after Send: the page moves to the order's status page.
+    // The next order is a fresh form, which must start with no size chosen.
     unmount()
     render(<CreateDeliveryForm />)
 
