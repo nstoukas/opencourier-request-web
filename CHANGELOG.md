@@ -37,6 +37,15 @@ has the full reasoning and verification notes.
 On 2 November rows 29, 32, 31 and 28 were merged in. The GA rows (29 and 32) have the entries
 below; rows 31 and 28 are recorded in the workspace's scope and walkthroughs.
 
+### Box size on the order form (scope row 9, spec 0043, GA)
+- The order form's size row is now "Box size": nothing is chosen when it opens, Get price
+  refuses with "Choose the box size" until the restaurant picks Small, Medium or Large, and a
+  line under the pills says what each means. The size goes to the backend as `boxSize` with
+  the delivery, never with the price request. `4ec676a`
+- Review blocker, fixed before merge: `mapDeliveryInputForPartner` rebuilds the partner body
+  field by field and dropped `boxSize`, so every order would have arrived as an assumed Medium.
+  Checked live by sending a Large order from the form. `0bdaaeb` (tests by agy `ce0085c`, `03b9552`)
+
 ### Message Dispatch (scope row 111, spec 0034)
 Built on `feat/chat` and merged on 18 November, with the backend, adminweb and courier app halves.
 - A Message Dispatch button in the signed in header opens a side sheet with the restaurant's one conversation with the co-op's dispatch, through the app's own proxy: the browser holds no credential.
