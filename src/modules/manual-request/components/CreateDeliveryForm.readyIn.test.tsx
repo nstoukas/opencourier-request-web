@@ -251,6 +251,7 @@ describe('CreateDeliveryForm Ready in (spec 0023, AC-2)', () => {
 
       // No pill is tapped: the usual time is what goes.
       fireEvent.click(screen.getByText('Eleni Ready').closest('[role="option"]')!)
+      fireEvent.click(screen.getByRole('radio', { name: 'Small' }))
       fireEvent.change(screen.getByLabelText(/Order total/i), { target: { value: '15' } })
       expect(checkedReadyInPills()).toEqual(['25 min'])
 

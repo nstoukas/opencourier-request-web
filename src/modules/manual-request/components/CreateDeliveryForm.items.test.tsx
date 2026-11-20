@@ -113,6 +113,7 @@ describe('CreateDeliveryForm item lines (spec 0028)', () => {
   function fillOrder() {
     fireEvent.click(screen.getByText('Eleni Markou').closest('[role="option"]')!)
     fireEvent.click(screen.getByRole('radio', { name: 'Now' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Small' }))
     fireEvent.change(screen.getByLabelText(/Order total/i), { target: { value: '15' } })
   }
 
@@ -315,6 +316,7 @@ describe('CreateDeliveryForm item lines (spec 0028)', () => {
       render(<CreateDeliveryForm />)
       fireEvent.click(screen.getByText('Eleni Markou').closest('[role="option"]')!)
       fireEvent.click(screen.getByRole('radio', { name: 'Now' }))
+      fireEvent.click(screen.getByRole('radio', { name: 'Small' }))
       // Order total left empty: refused too, but it sits after the items.
       addLine('')
 

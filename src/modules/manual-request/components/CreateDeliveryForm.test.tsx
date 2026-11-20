@@ -142,6 +142,7 @@ describe('CreateDeliveryForm (spec 0006 & spec 0016)', () => {
     expect(await screen.findByText('Pin confirmed')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('radio', { name: 'Now' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Small' }))
     fireEvent.change(screen.getByLabelText(/Order total/i), { target: { value: '15' } })
   }
 
@@ -355,8 +356,9 @@ describe('CreateDeliveryForm (spec 0006 & spec 0016)', () => {
       expect(screen.getByText('Iasonos 80, Volos')).toBeInTheDocument()
       expect(screen.getByText('Floor 4 · Doorbell Spanoulis')).toBeInTheDocument()
 
-      // Small is preselected (AC-7)
+      // Pick box size
       const smallPill = screen.getByRole('radio', { name: 'Small' })
+      fireEvent.click(smallPill)
       expect(smallPill).toHaveAttribute('data-state', 'checked')
 
       // 2. Tap Ready in "15 min" pill (AC-6)
@@ -466,6 +468,7 @@ describe('CreateDeliveryForm (spec 0006 & spec 0016)', () => {
       fireEvent.click(customerItem)
 
       fireEvent.click(screen.getByRole('radio', { name: 'Now' }))
+      fireEvent.click(screen.getByRole('radio', { name: 'Small' }))
       fireEvent.change(screen.getByLabelText(/Order total/i), { target: { value: '0,29' } })
 
       fireEvent.click(screen.getByRole('button', { name: 'Get price' }))
@@ -522,6 +525,7 @@ describe('CreateDeliveryForm (spec 0006 & spec 0016)', () => {
 
         fireEvent.click(screen.getByText('Vassilis Spanoulis').closest('[role="option"]')!)
         fireEvent.click(screen.getByRole('radio', { name: '20 min' }))
+        fireEvent.click(screen.getByRole('radio', { name: 'Small' }))
         fireEvent.change(screen.getByLabelText(/Order total/i), { target: { value: '15' } })
 
         await act(async () => {
@@ -770,6 +774,7 @@ describe('CreateDeliveryForm (spec 0006 & spec 0016)', () => {
       expect(await screen.findByRole('button', { name: 'Pin is on the entrance' })).toBeInTheDocument()
 
       fireEvent.click(screen.getByRole('radio', { name: 'Now' }))
+      fireEvent.click(screen.getByRole('radio', { name: 'Small' }))
       fireEvent.change(screen.getByLabelText(/Order total/i), { target: { value: '15' } })
 
       // Do NOT confirm pin, click Get price
@@ -1194,6 +1199,7 @@ describe('CreateDeliveryForm (spec 0006 & spec 0016)', () => {
       fireEvent.click(customerItem)
 
       fireEvent.click(screen.getByRole('radio', { name: 'Now' }))
+      fireEvent.click(screen.getByRole('radio', { name: 'Small' }))
       fireEvent.change(screen.getByLabelText(/Order total/i), { target: { value: '15' } })
 
       ;(geocodeCoordinatesFromAddress as jest.Mock).mockClear()
@@ -1246,6 +1252,7 @@ describe('CreateDeliveryForm (spec 0006 & spec 0016)', () => {
 
       fireEvent.click(screen.getByText('Vassilis Spanoulis').closest('[role="option"]')!)
       fireEvent.click(screen.getByRole('radio', { name: 'Now' }))
+      fireEvent.click(screen.getByRole('radio', { name: 'Small' }))
       fireEvent.change(screen.getByLabelText(/Order total/i), { target: { value: '15' } })
 
       fireEvent.click(screen.getByRole('button', { name: 'Get price' }))
@@ -1285,6 +1292,7 @@ describe('CreateDeliveryForm (spec 0006 & spec 0016)', () => {
 
         fireEvent.click(screen.getByText('Vassilis Spanoulis').closest('[role="option"]')!)
         fireEvent.click(screen.getByRole('radio', { name: 'Now' }))
+        fireEvent.click(screen.getByRole('radio', { name: 'Small' }))
         fireEvent.change(screen.getByLabelText(/Order total/i), { target: { value: '15' } })
 
         await act(async () => {
@@ -1322,6 +1330,7 @@ describe('CreateDeliveryForm (spec 0006 & spec 0016)', () => {
 
       fireEvent.click(screen.getByText('Vassilis Spanoulis').closest('[role="option"]')!)
       fireEvent.click(screen.getByRole('radio', { name: 'Now' }))
+      fireEvent.click(screen.getByRole('radio', { name: 'Small' }))
       fireEvent.change(screen.getByLabelText(/Order total/i), { target: { value: '15' } })
 
       fireEvent.click(screen.getByRole('button', { name: 'Get price' }))
@@ -1348,6 +1357,7 @@ describe('CreateDeliveryForm (spec 0006 & spec 0016)', () => {
 
       fireEvent.click(screen.getByText('Vassilis Spanoulis').closest('[role="option"]')!)
       fireEvent.click(screen.getByRole('radio', { name: 'Now' }))
+      fireEvent.click(screen.getByRole('radio', { name: 'Small' }))
       fireEvent.change(screen.getByLabelText(/Order total/i), { target: { value: '15' } })
 
       fireEvent.click(screen.getByRole('button', { name: 'Get price' }))
@@ -1386,6 +1396,7 @@ describe('CreateDeliveryForm (spec 0006 & spec 0016)', () => {
 
       fireEvent.click(screen.getByText('Vassilis Spanoulis').closest('[role="option"]')!)
       fireEvent.click(screen.getByRole('radio', { name: 'Now' }))
+      fireEvent.click(screen.getByRole('radio', { name: 'Small' }))
       fireEvent.change(screen.getByLabelText(/Order total/i), { target: { value: '15' } })
 
       fireEvent.click(screen.getByRole('button', { name: 'Get price' }))
@@ -1422,6 +1433,7 @@ describe('CreateDeliveryForm (spec 0006 & spec 0016)', () => {
 
       fireEvent.click(screen.getByText('Vassilis Spanoulis').closest('[role="option"]')!)
       fireEvent.click(screen.getByRole('radio', { name: 'Now' }))
+      fireEvent.click(screen.getByRole('radio', { name: 'Small' }))
       fireEvent.change(screen.getByLabelText(/Order total/i), { target: { value: '15' } })
 
       fireEvent.click(screen.getByRole('button', { name: 'Get price' }))
@@ -1465,6 +1477,7 @@ describe('CreateDeliveryForm (spec 0006 & spec 0016)', () => {
 
         fireEvent.click(screen.getByText('Vassilis Spanoulis').closest('[role="option"]')!)
         fireEvent.click(screen.getByRole('radio', { name: 'Now' }))
+        fireEvent.click(screen.getByRole('radio', { name: 'Small' }))
         fireEvent.change(screen.getByLabelText(/Order total/i), { target: { value: '15' } })
 
         await act(async () => {
@@ -1580,6 +1593,7 @@ describe('CreateDeliveryForm (spec 0006 & spec 0016)', () => {
 
       fireEvent.click(screen.getByText('Vassilis Spanoulis').closest('[role="option"]')!)
       fireEvent.click(screen.getByRole('radio', { name: 'Now' }))
+      fireEvent.click(screen.getByRole('radio', { name: 'Small' }))
       fireEvent.change(screen.getByLabelText(/Order total/i), { target: { value: '15' } })
 
       fireEvent.click(screen.getByRole('button', { name: 'Get price' }))
@@ -1617,6 +1631,7 @@ describe('CreateDeliveryForm (spec 0006 & spec 0016)', () => {
 
       fireEvent.click(screen.getByText('Vassilis Spanoulis').closest('[role="option"]')!)
       fireEvent.click(screen.getByRole('radio', { name: 'Now' }))
+      fireEvent.click(screen.getByRole('radio', { name: 'Small' }))
       const totalInput = screen.getByLabelText(/Order total/i)
       fireEvent.change(totalInput, { target: { value: '15' } })
 
@@ -1687,6 +1702,7 @@ describe('CreateDeliveryForm (spec 0006 & spec 0016)', () => {
 
         fireEvent.click(screen.getByText('Vassilis Spanoulis').closest('[role="option"]')!)
         fireEvent.click(screen.getByRole('radio', { name: 'Now' }))
+        fireEvent.click(screen.getByRole('radio', { name: 'Small' }))
         fireEvent.change(screen.getByLabelText(/Order total/i), { target: { value: '15' } })
 
         await act(async () => {
@@ -1733,6 +1749,7 @@ describe('CreateDeliveryForm (spec 0006 & spec 0016)', () => {
 
       fireEvent.click(screen.getByText('Vassilis Spanoulis').closest('[role="option"]')!)
       fireEvent.click(screen.getByRole('radio', { name: 'Now' }))
+      fireEvent.click(screen.getByRole('radio', { name: 'Small' }))
       const totalInput = screen.getByLabelText(/Order total/i)
       fireEvent.change(totalInput, { target: { value: '15' } })
 

@@ -85,6 +85,7 @@ const sampleCustomer = {
 function fillValidOrderForm() {
   const customerItem = screen.getByText('Vassilis Spanoulis').closest('[role="option"]')!
   fireEvent.click(customerItem)
+  fireEvent.click(screen.getByRole('radio', { name: 'Small' }))
   fireEvent.click(screen.getByRole('radio', { name: '15 min' }))
   fireEvent.change(screen.getByLabelText(/Order total/i), { target: { value: '12,50' } })
 }
