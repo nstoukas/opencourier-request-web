@@ -94,6 +94,8 @@ export interface ManualRequestOrderItemInput {
 
 export interface ManualRequestDeliveryInput extends ManualRequestQuoteInput {
   quoteId: string
+  // Spec 0043: the box size the restaurant picked; the backend maps it to box units.
+  boxSize?: ManualRequestPackageSize
   idempotencyKey?: string
   orderItems?: ManualRequestOrderItemInput[]
 }

@@ -113,6 +113,8 @@ const addressSchema = z.object({
 })
 
 const READY_IN_REQUIRED = 'Choose when the order is ready'
+// Spec 0043 (AC-4): the box size is the restaurant's choice every time; nothing is picked for it.
+export const BOX_SIZE_REQUIRED = 'Choose the box size'
 
 const formSchema = z.object({
   // Pickup
@@ -139,7 +141,9 @@ const formSchema = z.object({
   readyInMinutes: z
     .number({ required_error: READY_IN_REQUIRED, invalid_type_error: READY_IN_REQUIRED })
     .refine((value) => isReadyInMinutes(value), READY_IN_REQUIRED),
-  packageSize: z.nativeEnum(ManualRequestPackageSize, { errorMap: () => ({ message: 'Select a package size' }) }),
+  // Spec 0043 (AC-4): the box size, sent as boxSize. The co-op's settings turn it into box units, so a
+  // rider is never sent with a box that is already too full.
+  packageSize: z.nativeEnum(ManualRequestPackageSize, { errorMap: () => ({ message: BOX_SIZE_REQUIRED }) }),
   // Spec 0028: optional item lines, each named, with a quantity and an optional Drink or Side mark.
   items: z
     .array(
@@ -192,7 +196,8 @@ function buildDefaultValues(): CreateDeliveryFormValues {
     note: '',
     // No pill is chosen at the start: the restaurant must say when the order is ready (AC-6).
     readyInMinutes: undefined,
-    packageSize: ManualRequestPackageSize.SMALL,
+    // No size is chosen at the start (spec 0043, AC-4): a preset Small would send a big bag as small.
+    packageSize: undefined,
     items: [],
     orderTotal: '',
   }
@@ -347,6 +352,14 @@ const SIZE_OPTIONS: ChoicePillOption[] = [
   { value: ManualRequestPackageSize.SMALL, label: 'Small' },
   { value: ManualRequestPackageSize.MEDIUM, label: 'Medium' },
   { value: ManualRequestPackageSize.LARGE, label: 'Large' },
+]
+
+// Spec 0043 (AC-4, cross check 5): one line per size, fixed words (not co-op settings). Kept in one
+// list so the Greek interface (row 47) can turn them into translation keys in one place.
+export const BOX_SIZE_DESCRIPTIONS: { size: ManualRequestPackageSize; text: string }[] = [
+  { size: ManualRequestPackageSize.SMALL, text: 'Small: one meal or a coffee' },
+  { size: ManualRequestPackageSize.MEDIUM, text: 'Medium: a full bag' },
+  { size: ManualRequestPackageSize.LARGE, text: 'Large: fills the box' },
 ]
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -608,6 +621,9 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
     const payload: ManualRequestDeliveryInput = {
       ...orderPayload(order.values, order.pickupReadyAt, order.orderTotalValue),
       orderItems: orderItemsPayload(form.getValues('items'), order.values.packageSize),
+      // Spec 0043 (AC-4): on the delivery only, never the quote (cross check 4); a size change drops the
+      // price, so the priced snapshot always holds the size the restaurant last chose.
+      boxSize: order.values.packageSize,
       idempotencyKey: `${order.quote.id}-${Date.now()}`,
       quoteId: order.quote.id,
     }
@@ -966,12 +982,19 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
               <FormControl>
                 <ChoicePills
                   ref={field.ref}
-                  label="Size"
+                  label="Box size"
                   options={SIZE_OPTIONS}
                   value={field.value ?? ''}
                   onValueChange={field.onChange}
                 />
               </FormControl>
+              <FormDescription>
+                {BOX_SIZE_DESCRIPTIONS.map((line) => (
+                  <span key={line.size} className="block">
+                    {line.text}
+                  </span>
+                ))}
+              </FormDescription>
               <FormMessage />
             </FormItem>
           )}
