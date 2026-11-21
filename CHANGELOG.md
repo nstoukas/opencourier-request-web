@@ -37,6 +37,19 @@ has the full reasoning and verification notes.
 On 2 November rows 29, 32, 31 and 28 were merged in. The GA rows (29 and 32) have the entries
 below; rows 31 and 28 are recorded in the workspace's scope and walkthroughs.
 
+### Multi leg orders (scope row 10, spec 0046, GA)
+- The order form asks "How many boxes?" (1 to 4) and a size for each box. Above one box it asks a
+  price per box, shows the order total large with "2 deliveries × 3,56 € = 7,12 €" (a line per leg
+  when the prices differ), and sends the boxes as separate deliveries ("legs"), leg 1 first, sharing
+  the first quote's id as the order reference; the order total goes on leg 1 only. Each leg has its
+  own rider and its own full pay. `785548a`
+- A leg that could not be sent stops the sending with the backend's reason; the order page lists every
+  leg with its status and rider, says which was never sent, and offers its size, a fresh price and
+  Retry (not once the rest of the order was cancelled). Cancel all asks once who wanted it and cancels
+  each leg through the usual cancellation. The history shows an order's legs in one card. Food ready and
+  "+ minutes" apply to every open leg. Review fixes `0d13d59`; tests by a Fable subagent while agy was
+  out of quota (`6565f6f`, `19bcf3d`). Owes a cross family review once agy is back.
+
 ### Box size on the order form (scope row 9, spec 0043, GA)
 - The order form's size row is now "Box size": nothing is chosen when it opens, Get price
   refuses with "Choose the box size" until the restaurant picks Small, Medium or Large, and a
