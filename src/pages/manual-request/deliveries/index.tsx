@@ -31,6 +31,8 @@ import { PartnerDeliveryDto } from '../../../modules/manual-request/types'
 import { formatDateTime, formatMoney } from '../../../utils/format'
 import { PageHeader } from '../../../modules/portal/components/PortalFrame'
 import { CancelDeliveryDialog } from '../../../modules/cancel/CancelDeliveryDialog'
+import { OrderLegsCard } from '../../../modules/legs/OrderLegsCard'
+import { groupHistory } from '../../../modules/manual-request/utils/legs'
 
 // Statuses where cancel is no longer possible
 const TERMINAL_STATUSES = new Set(['DROPPED_OFF', 'CANCELED', 'FAILED'])
@@ -276,7 +278,12 @@ export default function DeliveriesPage() {
           <p className="text-sm text-muted-foreground">No orders yet.</p>
         ) : (
           <div className="space-y-3">
-            {deliveries.map((delivery) => {
+            {groupHistory(deliveries).map((item) => {
+              // Spec 0046 (AC-6): the legs of one order show together, in one card.
+              if (item.kind === 'order') {
+                return <OrderLegsCard key={item.key} order={item} onChanged={refetch} />
+              }
+              const delivery = item.delivery
               const isTerminal = TERMINAL_STATUSES.has(delivery.status)
               const isCancelingThis = cancelingId === delivery.id
 

@@ -98,6 +98,9 @@ export interface ManualRequestDeliveryInput extends ManualRequestQuoteInput {
   boxSize?: ManualRequestPackageSize
   idempotencyKey?: string
   orderItems?: ManualRequestOrderItemInput[]
+  // Spec 0046 (AC-2): "leg 1 of 2" of an order sent in more than one box. Both absent for one box.
+  legNumber?: number
+  legCount?: number
 }
 
 // ─── Partner API delivery types (nested structure returned by partner endpoints) ──
@@ -196,6 +199,16 @@ export interface PartnerDeliveryDto {
   externalId?: string | null
   requiresId?: boolean | null
   deliveryQuoteId?: string | null
+  // Spec 0046 (AC-6): "leg 1 of 2" of an order sent in more than one box; null (or absent, from an older
+  // server) for a single delivery.
+  legNumber?: number | null
+  legCount?: number | null
+}
+
+// Spec 0046 (AC-3, AC-6): GET /deliveries/:id/order-legs, the legs of one order and the ones never sent.
+export interface PartnerOrderLegsDto {
+  legs: PartnerDeliveryDto[]
+  missingLegNumbers: number[]
 }
 
 export interface PartnerPaginationDto {

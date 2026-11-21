@@ -7,6 +7,7 @@ import React, { useEffect, useRef } from 'react'
 import { Alert, AlertDescription, Button, Spinner } from '../../../admin-web-components'
 import { formatDistance, formatMoney, formatTime } from '../../../utils/format'
 import { ManualRequestQuoteDto } from '../types'
+import { legPriceLines } from '../utils/legs'
 
 // needs price → pricing → priced → sending; a priced order can also become expired.
 export type BarPhase = 'needs-price' | 'pricing' | 'priced' | 'expired' | 'sending'
@@ -23,6 +24,9 @@ interface PriceSendBarProps {
   phase: BarPhase
   // The price shown, with the drop off address it was made for.
   quote: ManualRequestQuoteDto | null
+  // Spec 0046 (AC-2): one quote per box when the order goes as legs; the total line is built from them.
+  // Optional, so a single box needs nothing new.
+  quotes?: ManualRequestQuoteDto[]
   pricedAddress: string | null
   // A failed price or send, in plain words.
   error: string | null
@@ -33,7 +37,16 @@ interface PriceSendBarProps {
   onHeightChange: (height: number) => void
 }
 
-export function PriceSendBar({ phase, quote, pricedAddress, error, disabled, onSend, onHeightChange }: PriceSendBarProps) {
+export function PriceSendBar({
+  phase,
+  quote,
+  quotes = [],
+  pricedAddress,
+  error,
+  disabled,
+  onSend,
+  onHeightChange,
+}: PriceSendBarProps) {
   const barRef = useRef<HTMLDivElement>(null)
 
   // ResizeObserver: tells us whenever the bar's size changes (a price or an error appears). Older test
@@ -68,7 +81,7 @@ export function PriceSendBar({ phase, quote, pricedAddress, error, disabled, onS
           {phase === 'expired' ? (
             <p className="text-base font-medium text-destructive">This price has expired</p>
           ) : showsPrice ? (
-            <PriceSummary quote={quote} pricedAddress={pricedAddress} />
+            <PriceSummary quote={quote} quotes={quotes} pricedAddress={pricedAddress} />
           ) : null}
         </div>
 
@@ -87,7 +100,17 @@ export function PriceSendBar({ phase, quote, pricedAddress, error, disabled, onS
   )
 }
 
-function PriceSummary({ quote, pricedAddress }: { quote: ManualRequestQuoteDto; pricedAddress: string | null }) {
+function PriceSummary({
+  quote,
+  quotes,
+  pricedAddress,
+}: {
+  quote: ManualRequestQuoteDto
+  quotes: ManualRequestQuoteDto[]
+  pricedAddress: string | null
+}) {
+  // Spec 0046 (AC-2, cross check 7): "2 deliveries × 3,80 € = 7,60 €", or a line per leg when prices differ.
+  const legLines = legPriceLines(quotes)
   const priceFrom = formatMoney(quote.quoteRangeFrom, quote.currency)
   const priceTo = formatMoney(quote.quoteRangeTo, quote.currency)
   const price = quote.quoteRangeFrom === quote.quoteRangeTo ? priceFrom : `${priceFrom} – ${priceTo}`
@@ -101,6 +124,15 @@ function PriceSummary({ quote, pricedAddress }: { quote: ManualRequestQuoteDto; 
           ETA {eta} · {formatDistance(quote.distance, quote.distanceUnit)}
         </span>
       </p>
+      {legLines.length > 0 ? (
+        <div data-testid="leg-total">
+          {legLines.map((line) => (
+            <p key={line} className="text-base font-medium tabular-nums">
+              {line}
+            </p>
+          ))}
+        </div>
+      ) : null}
       {/* The address the price was made for, so a wrong search match is caught before sending. */}
       {pricedAddress ? <p className="text-sm">To: {pricedAddress}</p> : null}
       {quote.expiresAt ? (

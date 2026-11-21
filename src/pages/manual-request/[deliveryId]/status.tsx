@@ -1,6 +1,8 @@
 import { ReadyControls } from '../../../modules/ready/ReadyControls'
 import { ReportProductCard } from '../../../modules/product-report/ReportProductCard'
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
+import { OrderLegsSection } from '../../../modules/legs/OrderLegsSection'
+import { legLabel } from '../../../modules/manual-request/utils/legs'
 import Head from 'next/head'
 import Link from 'next/link'
 import { useRouter } from 'next/router'
@@ -55,7 +57,16 @@ function courierLabel(d: PartnerDeliveryDto): string {
   return name || c.id || 'Assigned'
 }
 
-function PartnerDeliveryDetails({ data, onChanged }: { data: PartnerDeliveryDto; onChanged?: () => void }) {
+function PartnerDeliveryDetails({
+  data,
+  onChanged,
+  otherLegs = [],
+}: {
+  data: PartnerDeliveryDto
+  onChanged?: () => void
+  // Spec 0046 (cross check 9): the order's other legs, so Food ready and "+ minutes" apply to all of them.
+  otherLegs?: PartnerDeliveryDto[]
+}) {
   const tips = data.tips ?? 0
   const orderItems = data.orderItems ?? []
 
@@ -74,6 +85,11 @@ function PartnerDeliveryDetails({ data, onChanged }: { data: PartnerDeliveryDto;
           deliveryId={data.id}
           order={{ status: data.status, readyAt: data.readyAt, foodReadyAt: data.foodReadyAt }}
           onChanged={onChanged}
+          otherLegs={otherLegs.map((leg) => ({
+            id: leg.id,
+            readyAt: leg.readyAt,
+            legLabel: legLabel(leg.legNumber ?? 0, leg.legCount ?? 0),
+          }))}
         />
         <DetailList
           items={[
@@ -328,6 +344,15 @@ export default function ManualRequestStatusPage() {
   })
   // The cancel asks first, and asks who wanted it (spec 0015).
   const [cancelOpen, setCancelOpen] = useState(false)
+  // Spec 0046: the order's other legs, read by OrderLegsSection, and a counter that asks it to read again.
+  const [otherLegs, setOtherLegs] = useState<PartnerDeliveryDto[]>([])
+  const [legsVersion, setLegsVersion] = useState(0)
+  const handleLegs = useCallback(
+    (legs: PartnerDeliveryDto[]) => setOtherLegs(legs.filter((leg) => leg.id !== deliveryId)),
+    [deliveryId],
+  )
+  const partnerData = partnerMode ? (data as PartnerDeliveryDto | undefined) : undefined
+  const isLeg = Boolean(partnerData?.legCount)
   // The server's own sentence for a refusal (a 4xx, such as the 404 "This order is older than 30 days..."
   // for an old order, spec 0017), else a general line: a timeout's or the browser's own words, and a
   // 5xx's text, are not for restaurants. A 401 is handled by the frame, which checks the session.
@@ -397,13 +422,43 @@ export default function ManualRequestStatusPage() {
               </p>
             ) : null}
 
-            {data && partnerMode ? <PartnerDeliveryDetails data={data as PartnerDeliveryDto} onChanged={() => void refetch()} /> : null}
+            {/* Spec 0046 (AC-6): which leg this is, and the order's other legs. */}
+            {partnerData?.legNumber && partnerData.legCount ? (
+              <p className="text-base font-medium" data-testid="leg-label">
+                {legLabel(partnerData.legNumber, partnerData.legCount)}
+              </p>
+            ) : null}
+            {data && partnerMode ? (
+              <PartnerDeliveryDetails
+                data={data as PartnerDeliveryDto}
+                onChanged={() => void refetch()}
+                otherLegs={otherLegs.filter((leg) => !TERMINAL_STATUSES.has(leg.status))}
+              />
+            ) : null}
+            {isLeg && deliveryId ? (
+              <>
+                <Separator />
+                <OrderLegsSection
+                  deliveryId={deliveryId}
+                  version={legsVersion}
+                  onChanged={() => void refetch()}
+                  onLegs={handleLegs}
+                />
+              </>
+            ) : null}
             {data && !partnerMode ? <AdminDeliveryDetails data={data as ManualRequestDeliveryDto} /> : null}
 
             <Separator />
 
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" onClick={() => refetch()} disabled={isLoading}>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  void refetch()
+                  setLegsVersion((value) => value + 1)
+                }}
+                disabled={isLoading}
+              >
                 Refresh
               </Button>
               <Button
@@ -423,6 +478,7 @@ export default function ManualRequestStatusPage() {
                 onClose={() => setCancelOpen(false)}
                 onCancelled={() => {
                   setCancelOpen(false)
+                  setLegsVersion((value) => value + 1)
                   void refetch()
                 }}
               />

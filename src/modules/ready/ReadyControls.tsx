@@ -9,11 +9,16 @@ type Props = {
   order: ReadyFields
   // Called after a change went through, so the page can fetch its list again.
   onChanged?: () => void
+  // Spec 0046 (cross check 9): the other legs of a multi leg order. A tap applies to every one of them too,
+  // one call per leg, each with its own ready time. Absent for a single delivery.
+  otherLegs?: { id: string; readyAt: string | null; legLabel: string }[]
 }
+
+type ReadyAction = (deliveryId: string, readyAt: string | null) => Promise<ReadyFields>
 
 // Spec 0023 (AC-8): the ready time with "+5", "+10", "+15" and "Food ready". The answer of a tap is
 // shown at once, not at the next 30 s poll; a newer order from the page (a poll) replaces it.
-export function ReadyControls({ deliveryId, order, onChanged }: Props) {
+export function ReadyControls({ deliveryId, order, onChanged, otherLegs = [] }: Props) {
   const [shown, setShown] = useState<ReadyFields>(order)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
@@ -23,12 +28,23 @@ export function ReadyControls({ deliveryId, order, onChanged }: Props) {
     setShown(order)
   }, [order.status, order.readyAt, order.foodReadyAt])
 
-  const run = async (request: () => Promise<ReadyFields>) => {
+  const run = async (action: ReadyAction) => {
     setSending(true)
     setError('')
     try {
-      const updated = await request()
+      const updated = await action(deliveryId, shown.readyAt)
       setShown({ status: updated.status, readyAt: updated.readyAt, foodReadyAt: updated.foodReadyAt })
+      // Spec 0046: then each other leg, so the whole order moves together. A leg that refuses (already picked
+      // up, say) is named; the others still go.
+      const refused: string[] = []
+      for (const leg of otherLegs) {
+        try {
+          await action(leg.id, leg.readyAt)
+        } catch (legError: any) {
+          refused.push(`${leg.legLabel}: ${legError?.message || 'not changed'}`)
+        }
+      }
+      if (refused.length > 0) setError(refused.join(' · '))
       onChanged?.()
     } catch (err: any) {
       // The backend's own sentence ("The ready time just changed. Look again."), and a fresh copy at
@@ -59,12 +75,12 @@ export function ReadyControls({ deliveryId, order, onChanged }: Props) {
               variant="outline"
               size="sm"
               disabled={sending}
-              onClick={() => run(() => delayDeliveryReady(deliveryId, minutes, shown.readyAt))}
+              onClick={() => run((id, readyAt) => delayDeliveryReady(id, minutes, readyAt))}
             >
               +{minutes}
             </Button>
           ))}
-          <Button type="button" size="sm" disabled={sending} onClick={() => run(() => markDeliveryFoodReady(deliveryId))}>
+          <Button type="button" size="sm" disabled={sending} onClick={() => run((id) => markDeliveryFoodReady(id))}>
             Food ready
           </Button>
         </div>

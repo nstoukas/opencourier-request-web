@@ -88,6 +88,7 @@ import {
 } from '../utils/orderItems'
 import { cn } from '../../../ui-shared-utils'
 import { BarPhase, PriceSendBar } from './PriceSendBar'
+import { BOX_COUNTS, MAX_BOXES, legDeliveryInput, legLabel, orderReferenceForLegs } from '../utils/legs'
 import { PartnerAvailability } from '../types'
 import { useRequestPageNavigator } from '../../../hooks/useRequestPageNavigator'
 import {
@@ -144,6 +145,13 @@ const formSchema = z.object({
   // Spec 0043 (AC-4): the box size, sent as boxSize. The co-op's settings turn it into box units, so a
   // rider is never sent with a box that is already too full.
   packageSize: z.nativeEnum(ManualRequestPackageSize, { errorMap: () => ({ message: BOX_SIZE_REQUIRED }) }),
+  // Spec 0046 (AC-2): "How many boxes?", 1 to 4. Above 1 the order goes as that many deliveries ("legs"),
+  // each priced and paid in full; packageSize is box 1's size and moreBoxSizes holds boxes 2 onwards,
+  // kept at boxCount - 1 entries when the count changes.
+  boxCount: z.number().int().min(1).max(MAX_BOXES),
+  moreBoxSizes: z.array(
+    z.nativeEnum(ManualRequestPackageSize, { errorMap: () => ({ message: BOX_SIZE_REQUIRED }) }),
+  ),
   // Spec 0028: optional item lines, each named, with a quantity and an optional Drink or Side mark.
   items: z
     .array(
@@ -198,6 +206,9 @@ function buildDefaultValues(): CreateDeliveryFormValues {
     readyInMinutes: undefined,
     // No size is chosen at the start (spec 0043, AC-4): a preset Small would send a big bag as small.
     packageSize: undefined,
+    // One box, the usual order (spec 0046, AC-2).
+    boxCount: 1,
+    moreBoxSizes: [],
     items: [],
     orderTotal: '',
   }
@@ -214,7 +225,10 @@ interface PricedOrder {
   pickupReadyAt: string
   // The typed total in whole cents.
   orderTotalValue: number
+  // Box 1's quote; the only one for a single box.
   quote: ManualRequestQuoteDto
+  // Spec 0046 (AC-2): one quote per box, box 1's first. Each leg is priced on its own.
+  quotes: ManualRequestQuoteDto[]
 }
 
 // JSON text of a value with object keys in a fixed order, so two objects holding the same values
@@ -348,6 +362,9 @@ function readyInPills(usual: number | null | undefined): ChoicePillOption[] {
   }))
 }
 
+// Spec 0046 (AC-2): "How many boxes?", 1 to 4.
+const BOX_COUNT_OPTIONS: ChoicePillOption[] = BOX_COUNTS.map((count) => ({ value: String(count), label: String(count) }))
+
 const SIZE_OPTIONS: ChoicePillOption[] = [
   { value: ManualRequestPackageSize.SMALL, label: 'Small' },
   { value: ManualRequestPackageSize.MEDIUM, label: 'Medium' },
@@ -383,7 +400,9 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
   const changeRef = useRef<HTMLButtonElement>(null)
   // The fixed bar's height, and the refused field to focus once it is on the page.
   const [barHeight, setBarHeight] = useState(0)
-  const [fieldToFocus, setFieldToFocus] = useState<FocusableField | `items.${number}.name` | null>(null)
+  const [fieldToFocus, setFieldToFocus] = useState<
+    FocusableField | `items.${number}.name` | `moreBoxSizes.${number}` | null
+  >(null)
   const [saveCustomer, setSaveCustomer] = useState(false)
   // True from Send until the page changes, so the customer save after the order cannot be
   // raced by a second Send (which would create a second delivery).
@@ -437,7 +456,8 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
   // A price past its expiresAt, checked every 15 s while one is shown (and again at the Send tap).
   useEffect(() => {
     if (!priced?.quote.expiresAt) return
-    const check = () => setIsExpired(isQuoteExpired(priced.quote))
+    // Any leg's price past its time makes the whole order need new prices (spec 0046).
+    const check = () => setIsExpired(priced.quotes.some((quote) => isQuoteExpired(quote)))
     check()
     const timer = setInterval(check, 15_000)
     return () => clearInterval(timer)
@@ -501,6 +521,8 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
   }, [usualPrepMinutes, readyInChosen, form])
 
   const pickupCheck = checkPartnerPickupUsable(profile)
+  // Spec 0046: how many boxes, so the form shows a size per box.
+  const boxCount = form.watch('boxCount') ?? 1
 
   // Get price as a whole, address lookup included, counts as "a call runs" (AC-12): the button reads
   // "Getting price…" and is disabled until it ends, however it ends.
@@ -589,14 +611,20 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
         pickupLongitude: pickupCoordinates.longitude,
       }
 
-      const quote = await createQuote(orderPayload(pricedValues, pickupReadyAt, orderTotalValue))
+      // Spec 0046 (AC-2): one quote per box, all for the same addresses, asked together. The size is not
+      // on the quote (spec 0043, cross check 4), so the legs' quotes differ only if the price moved.
+      const quotePayload = orderPayload(pricedValues, pickupReadyAt, orderTotalValue)
+      const quotes = await Promise.all(
+        Array.from({ length: pricedValues.boxCount || 1 }, () => createQuote(quotePayload)),
+      )
+      const quote = quotes[0]
 
       // The restaurant changed something while the price was on its way: it is not for these values.
       if (pricedValuesKey(pricedValues) !== pricedValuesKey(form.getValues())) {
         setBarError('Something changed while the price was on its way. Get the price again.')
         return
       }
-      showPrice({ values: pricedValues, pickupReadyAt, orderTotalValue, quote })
+      showPrice({ values: pricedValues, pickupReadyAt, orderTotalValue, quote, quotes })
     } catch (err: any) {
       setBarError(plainErrorMessage(err, 'The price could not be worked out. Try again.'))
     }
@@ -605,7 +633,7 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
   const handleSend = async () => {
     const order = pricedRef.current
     if (!order) return
-    if (isQuoteExpired(order.quote)) {
+    if (order.quotes.some((quote) => isQuoteExpired(quote))) {
       setIsExpired(true)
       return
     }
@@ -630,9 +658,17 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
 
     setIsFinishing(true)
     let deliveryId: string
+    // Spec 0046 (AC-3): the first leg that could not be sent after leg 1 was, if any.
+    let legNotSent: number | null = null
     try {
-      const delivery = await confirmDelivery(payload)
-      deliveryId = delivery.id
+      if (order.quotes.length > 1) {
+        const sent = await sendLegs(order, payload)
+        deliveryId = sent.firstLegId
+        legNotSent = sent.legNotSent
+      } else {
+        const delivery = await confirmDelivery(payload)
+        deliveryId = delivery.id
+      }
     } catch (err: any) {
       setIsFinishing(false)
       // Refused because of the quote (expired or unknown): ask for a new price. Anything else keeps the price.
@@ -652,10 +688,19 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
       saveTicked: saveCustomer,
     })
 
-    toast({
-      title: 'Delivery created',
-      description: `Delivery ${deliveryId} is now being processed.`,
-    })
+    if (legNotSent !== null) {
+      // Spec 0046 (AC-3): leg 1 went, a later leg did not. The order page lists the legs, says which was never
+      // sent, and offers Retry for it and Cancel for the ones sent.
+      toast({
+        title: `${legLabel(legNotSent, order.quotes.length)} was not sent`,
+        description: 'Try again or cancel the legs already sent, on the order page.',
+      })
+    } else {
+      toast({
+        title: order.quotes.length > 1 ? `Order sent as ${order.quotes.length} deliveries` : 'Delivery created',
+        description: `Delivery ${deliveryId} is now being processed.`,
+      })
+    }
 
     // `as readonly string[]`: lets `includes` take any outcome, not only the three failure codes.
     const saveFailed = (CUSTOMER_SAVE_FAILURES as readonly string[]).includes(outcome)
@@ -664,6 +709,32 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
     } else {
       navigator.goToManualRequestStatus(deliveryId)
     }
+  }
+
+  // Spec 0046 (AC-2, AC-3): the legs, one after another, leg 1 first, sharing one reference. Leg 1 failing
+  // throws, as a single delivery does (nothing was sent). A later leg failing stops there: the legs already
+  // sent stay, and the order page shows the rest as never sent.
+  const sendLegs = async (order: PricedOrder, base: ManualRequestDeliveryInput) => {
+    const legCount = order.quotes.length
+    const sizes = [order.values.packageSize, ...order.values.moreBoxSizes]
+    const orderReference = orderReferenceForLegs(order.quotes[0].id)
+    const legInput = (index: number) =>
+      legDeliveryInput(base, {
+        legNumber: index + 1,
+        legCount,
+        quote: order.quotes[index],
+        boxSize: sizes[index],
+        orderReference,
+      })
+    const first = await confirmDelivery(legInput(0))
+    for (let index = 1; index < legCount; index++) {
+      try {
+        await confirmDelivery(legInput(index))
+      } catch {
+        return { firstLegId: first.id, legNotSent: index + 1 }
+      }
+    }
+    return { firstLegId: first.id, legNotSent: null }
   }
 
   const handleDiscard = () => {
@@ -765,7 +836,9 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
   const handleInvalid = () => {
     // The item lines sit between Size and Order total (spec 0028).
     const itemNames = form.getValues('items').map((_line, index) => `items.${index}.name` as const)
-    const inOrder = [...FIELDS_IN_PAGE_ORDER.slice(0, 8), ...itemNames, ...FIELDS_IN_PAGE_ORDER.slice(8)]
+    // Spec 0046: the sizes of boxes 2 onwards come right after box 1's size.
+    const boxSizeNames = form.getValues('moreBoxSizes').map((_size, index) => `moreBoxSizes.${index}` as const)
+    const inOrder = [...FIELDS_IN_PAGE_ORDER.slice(0, 8), ...boxSizeNames, ...itemNames, ...FIELDS_IN_PAGE_ORDER.slice(8)]
     const first = inOrder.find((name) => form.getFieldState(name).error)
     if (!first) return
     // An item line is never one of the picked customer's fields.
@@ -974,6 +1047,39 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
           )}
         />
 
+        {/* Spec 0046 (AC-2): an order too big for one box goes as one delivery per box, each priced and
+            paid in full, each to a different rider. */}
+        <FormField
+          control={form.control}
+          name="boxCount"
+          render={({ field }) => (
+            <FormItem>
+              <FormControl>
+                <ChoicePills
+                  ref={field.ref}
+                  label="How many boxes?"
+                  options={BOX_COUNT_OPTIONS}
+                  value={String(field.value ?? 1)}
+                  onValueChange={(value) => {
+                    const count = Number(value)
+                    field.onChange(count)
+                    // Boxes 2 onwards keep the sizes already picked; a new box starts with none.
+                    const kept = form.getValues('moreBoxSizes').slice(0, count - 1)
+                    const padded = [...kept, ...Array(Math.max(0, count - 1 - kept.length)).fill(undefined)]
+                    form.setValue('moreBoxSizes', padded as ManualRequestPackageSize[], { shouldDirty: true })
+                  }}
+                />
+              </FormControl>
+              {boxCount > 1 ? (
+                <FormDescription>
+                  Each box goes as its own delivery with its own rider, and each is charged a delivery price.
+                </FormDescription>
+              ) : null}
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
         <FormField
           control={form.control}
           name="packageSize"
@@ -982,7 +1088,7 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
               <FormControl>
                 <ChoicePills
                   ref={field.ref}
-                  label="Box size"
+                  label={boxCount > 1 ? 'Box 1 size' : 'Box size'}
                   options={SIZE_OPTIONS}
                   value={field.value ?? ''}
                   onValueChange={field.onChange}
@@ -999,6 +1105,29 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
             </FormItem>
           )}
         />
+
+        {/* Spec 0046 (AC-2): a size for each further box. */}
+        {Array.from({ length: Math.max(0, boxCount - 1) }, (_unused, index) => (
+          <FormField
+            key={`box-${index + 2}`}
+            control={form.control}
+            name={`moreBoxSizes.${index}`}
+            render={({ field }) => (
+              <FormItem>
+                <FormControl>
+                  <ChoicePills
+                    ref={field.ref}
+                    label={`Box ${index + 2} size`}
+                    options={SIZE_OPTIONS}
+                    value={field.value ?? ''}
+                    onValueChange={field.onChange}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        ))}
 
         {/* Spec 0028: optional items, a drink or a side marked in one tap. */}
         <OrderItemsSection form={form} />
@@ -1063,6 +1192,7 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
         <PriceSendBar
           phase={phase}
           quote={priced?.quote ?? null}
+          quotes={priced?.quotes ?? []}
           pricedAddress={priced?.values.dropoffAddress.formattedAddress || null}
           error={barError}
           disabled={!pickupCheck.usable || availability?.acceptingOrders === false}

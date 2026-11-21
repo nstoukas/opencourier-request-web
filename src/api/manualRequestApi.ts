@@ -8,6 +8,7 @@ import {
   ManualRequestQuoteInput,
   ManualRequestUpdateDeliveryInput,
   PartnerDeliveryDto,
+  PartnerOrderLegsDto,
   PartnerDeliveryPaginatedDto,
   PartnerAvailability,
   PartnerProfileDto,
@@ -210,6 +211,9 @@ function mapDeliveryInputForPartner(input: ManualRequestDeliveryInput) {
     // field not named here never reaches the backend (review blocker: every order arrived as an
     // assumed Medium). Left out when absent, so the backend's default size applies and is recorded.
     ...(input.boxSize ? { boxSize: input.boxSize } : {}),
+    // Spec 0046 (AC-2): the leg labels, named here like every field (see boxSize above). Left out for a
+    // single delivery.
+    ...(input.legNumber && input.legCount ? { legNumber: input.legNumber, legCount: input.legCount } : {}),
     deliverableAction: 'MEET_AT_DOOR',
     orderReference: input.orderReference || input.quoteId,
     orderTotalValue: input.orderTotalValue ?? 0,
@@ -223,37 +227,51 @@ function mapDeliveryInputForPartner(input: ManualRequestDeliveryInput) {
   }
 }
 
-export function useCreateManualRequestQuoteMutation() {
-  return useStandaloneMutation<ManualRequestQuoteInput, ManualRequestQuoteDto>((input) => {
-    const apiMode = getManualRequestApiMode()
-    const path = apiMode === 'partner' ? '/delivery-quotes' : '/quote'
-    const ready = withRootLocationFormattedAddresses(input)
-    const body = apiMode === 'partner' ? mapQuoteInputForPartner(ready) : ready
+// A price for one delivery. Plain functions as well as the hooks below, so a page can ask for one per leg
+// of a multi leg order (spec 0046) without a hook per call.
+export function requestQuote(input: ManualRequestQuoteInput): Promise<ManualRequestQuoteDto> {
+  const apiMode = getManualRequestApiMode()
+  const path = apiMode === 'partner' ? '/delivery-quotes' : '/quote'
+  const ready = withRootLocationFormattedAddresses(input)
+  const body = apiMode === 'partner' ? mapQuoteInputForPartner(ready) : ready
 
-    return manualRequestFetch(path, {
-      method: 'POST',
-      body: JSON.stringify(body),
-    })
+  return manualRequestFetch(path, {
+    method: 'POST',
+    body: JSON.stringify(body),
   })
 }
 
-export function useConfirmManualRequestDeliveryMutation() {
-  return useStandaloneMutation<ManualRequestDeliveryInput, ManualRequestDeliveryDto>((input) => {
-    const apiMode = getManualRequestApiMode()
-    const path = apiMode === 'partner' ? '/deliveries' : '/delivery'
-    const ready = withRootLocationFormattedAddresses(input)
-    const body = apiMode === 'partner' ? mapDeliveryInputForPartner(ready) : ready
+export function createDelivery(input: ManualRequestDeliveryInput): Promise<ManualRequestDeliveryDto> {
+  const apiMode = getManualRequestApiMode()
+  const path = apiMode === 'partner' ? '/deliveries' : '/delivery'
+  const ready = withRootLocationFormattedAddresses(input)
+  const body = apiMode === 'partner' ? mapDeliveryInputForPartner(ready) : ready
 
-    return manualRequestFetch(path, {
-      method: 'POST',
-      body: JSON.stringify(body),
-    })
+  return manualRequestFetch(path, {
+    method: 'POST',
+    body: JSON.stringify(body),
   })
+}
+
+export function useCreateManualRequestQuoteMutation() {
+  return useStandaloneMutation<ManualRequestQuoteInput, ManualRequestQuoteDto>(requestQuote)
+}
+
+export function useConfirmManualRequestDeliveryMutation() {
+  return useStandaloneMutation<ManualRequestDeliveryInput, ManualRequestDeliveryDto>(createDelivery)
 }
 
 // Who asked for a cancellation (spec 0015): the restaurant itself, or its customer through it. A
 // restaurant's own cancellation after a rider accepted is charged to it; the rider is paid either way.
 export type PartnerCancelledBy = 'RESTAURANT' | 'CUSTOMER'
+
+// The cancel of one delivery, as a plain function too, for "Cancel all legs" (spec 0046, AC-5).
+export function cancelDelivery(deliveryId: string, cancelledBy: PartnerCancelledBy): Promise<ManualRequestDeliveryDto> {
+  return manualRequestFetch(`/deliveries/${deliveryId}/cancel`, {
+    method: 'POST',
+    body: JSON.stringify({ cancelledBy }),
+  })
+}
 
 export function useCancelManualRequestDeliveryMutation() {
   return useStandaloneMutation<{ deliveryId: string; cancelledBy: PartnerCancelledBy }, ManualRequestDeliveryDto>(
@@ -286,6 +304,11 @@ export function useSubmitManualRequestEventMutation() {
       })
     },
   )
+}
+
+// Spec 0046 (AC-3, AC-6): the legs of the order this delivery is a leg of, and any never sent.
+export async function fetchOrderLegs(deliveryId: string): Promise<PartnerOrderLegsDto> {
+  return manualRequestFetch<PartnerOrderLegsDto>(`/deliveries/${deliveryId}/order-legs`)
 }
 
 export async function fetchPartnerDelivery(deliveryId: string): Promise<PartnerDeliveryDto> {
