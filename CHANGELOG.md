@@ -45,6 +45,11 @@ below; rows 31 and 28 are recorded in the workspace's scope and walkthroughs.
   The wording lives in one function, `splitOutcomeLine`. The charge a split brings shows on the
   admin statement, not here. `6393b56`, review fixes `ef59186`; tests by a Fable subagent while agy
   was out of quota, `64ce36f`, `4232e37`. Owes a cross family review once agy is back.
+- What a split costs the restaurant (operator, decision 11.10): one line under the split line says
+  each extra box a rider takes is charged at its rider's pay (and the split wait when the co-op pays
+  waits) on the co-op's statement, the customer paying nothing more; a leg the split made says why it
+  has no cost, and once ended states the rule (nothing charged if no rider had accepted it).
+  `splitChargeNote`. `881c6a7`, review fixes `5aca1a8`; tests by a Fable subagent, `ca70d0b`.
 
 ### Multi leg orders (scope row 10, spec 0046, GA)
 - The order form asks "How many boxes?" (1 to 4) and a size for each box. Above one box it asks a

@@ -70,8 +70,9 @@ Yarn 1.22, **not Corepack**: run `node node_modules/.bin/next dev -p 3090` and
   another, leg 1 first (a later failure leaves the sent legs, and the order page's `OrderLegsSection` offers Retry from
   `GET /deliveries/:id/order-legs`). `legNumber` and `legCount` are named in `mapDeliveryInputForPartner`. `ReadyControls`
   takes `otherLegs` so a ready tap applies to every leg; a page showing a leg reads the legs again after any tap.
-- Split at pickup (spec 0047): what the backend's `splitOutcome` means to the restaurant is worded only by `splitOutcomeLine`
-  (`src/modules/legs/splitOutcome.ts`): SPLIT as "Split at pickup, now in N deliveries", LEFT as the didn't fit sentence. Charges
-  are not shown here (the admin statement shows them).
+- Split at pickup (spec 0047): what the backend's `splitOutcome` means to the restaurant is worded only in
+  `src/modules/legs/splitOutcome.ts`: `splitOutcomeLine` (SPLIT as "Split at pickup, now in N deliveries", LEFT as the didn't fit
+  sentence) and `splitChargeNote` (what the split costs, never an amount; decision 11.10). A leg the split made has no cost
+  (null until its first offer, then 0); every sentence must stay true if its charge is later taken back (cross check 5).
 
 _Drafted by /audit from the repo, worth a quick human pass. Edit freely: once a line stops matching this draft, later runs treat it as curated and will flag rather than overwrite it._
