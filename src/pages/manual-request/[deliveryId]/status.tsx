@@ -3,7 +3,7 @@ import { ReportProductCard } from '../../../modules/product-report/ReportProduct
 import { useCallback, useState } from 'react'
 import { OrderLegsSection } from '../../../modules/legs/OrderLegsSection'
 import { legLabel } from '../../../modules/manual-request/utils/legs'
-import { splitOutcomeLine } from '../../../modules/legs/splitOutcome'
+import { splitChargeNote, splitOutcomeLine } from '../../../modules/legs/splitOutcome'
 import Head from 'next/head'
 import Link from 'next/link'
 import { useRouter } from 'next/router'
@@ -355,6 +355,8 @@ export default function ManualRequestStatusPage() {
   const partnerData = partnerMode ? (data as PartnerDeliveryDto | undefined) : undefined
   // Spec 0047: split at pickup, or left because it didn't fit one box.
   const splitLine = partnerData ? splitOutcomeLine(partnerData) : null
+  // Decision 11.10: what the split costs the restaurant, and why a leg the split made reads cost 0.
+  const splitNote = partnerData ? splitChargeNote(partnerData) : null
   const isLeg = Boolean(partnerData?.legCount)
   // The server's own sentence for a refusal (a 4xx, such as the 404 "This order is older than 30 days..."
   // for an old order, spec 0017), else a general line: a timeout's or the browser's own words, and a
@@ -435,6 +437,11 @@ export default function ManualRequestStatusPage() {
             {splitLine ? (
               <p className="text-sm font-medium" data-testid="split-outcome">
                 {splitLine}
+              </p>
+            ) : null}
+            {splitNote ? (
+              <p className="text-xs text-muted-foreground" data-testid="split-charge-note">
+                {splitNote}
               </p>
             ) : null}
             {data && partnerMode ? (

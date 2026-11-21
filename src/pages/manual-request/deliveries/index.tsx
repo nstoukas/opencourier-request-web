@@ -33,7 +33,7 @@ import { PageHeader } from '../../../modules/portal/components/PortalFrame'
 import { CancelDeliveryDialog } from '../../../modules/cancel/CancelDeliveryDialog'
 import { OrderLegsCard } from '../../../modules/legs/OrderLegsCard'
 import { groupHistory } from '../../../modules/manual-request/utils/legs'
-import { splitOutcomeLine } from '../../../modules/legs/splitOutcome'
+import { splitChargeNote, splitOutcomeLine } from '../../../modules/legs/splitOutcome'
 
 // Statuses where cancel is no longer possible
 const TERMINAL_STATUSES = new Set(['DROPPED_OFF', 'CANCELED', 'FAILED'])
@@ -303,10 +303,19 @@ export default function DeliveriesPage() {
                         {/* Spec 0047 (AC-8): left at the restaurant because it didn't fit one box. */}
                         {(() => {
                           const line = splitOutcomeLine(delivery)
+                          const note = splitChargeNote(delivery)
                           return line ? (
-                            <p className="text-sm font-medium" data-testid="split-outcome">
-                              {line}
-                            </p>
+                            <>
+                              <p className="text-sm font-medium" data-testid="split-outcome">
+                                {line}
+                              </p>
+                              {/* Decision 11.10: what the split costs the restaurant, and why a cost reads 0. */}
+                              {note ? (
+                                <p className="text-xs text-muted-foreground" data-testid="split-charge-note">
+                                  {note}
+                                </p>
+                              ) : null}
+                            </>
                           ) : null
                         })()}
                       </div>

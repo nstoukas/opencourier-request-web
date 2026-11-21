@@ -5,7 +5,7 @@ import { HistoryItem, absentLegNumbers, legLabel, legsToCancel } from '../manual
 import { formatDateTime, formatMoney } from '../../utils/format'
 import { ReadyControls } from '../ready/ReadyControls'
 import { CancelOrderLegsDialog } from './CancelOrderLegsDialog'
-import { LEFT_UNSPLIT_TEXT, splitOutcomeLine } from './splitOutcome'
+import { LEFT_UNSPLIT_TEXT, SPLIT_CHARGE_NOTE, splitOutcomeLine } from './splitOutcome'
 
 const ENDED = new Set(['DROPPED_OFF', 'CANCELED', 'FAILED'])
 
@@ -38,9 +38,15 @@ export function OrderLegsCard({
       <CardHeader className="pb-2">
         <CardTitle className="text-base">Order in {order.legCount} deliveries</CardTitle>
         {splitLine ? (
-          <p className="text-sm font-medium" data-testid="split-outcome">
-            {splitLine}
-          </p>
+          <>
+            <p className="text-sm font-medium" data-testid="split-outcome">
+              {splitLine}
+            </p>
+            {/* Decision 11.10: what the split costs the restaurant (the order's cost below leaves it out). */}
+            <p className="text-xs text-muted-foreground" data-testid="split-charge-note">
+              {SPLIT_CHARGE_NOTE}
+            </p>
+          </>
         ) : null}
         {first.dropoff ? (
           <p className="text-sm">
