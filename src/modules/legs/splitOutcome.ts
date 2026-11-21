@@ -20,25 +20,27 @@ export function splitOutcomeLine(delivery: Pick<PartnerDeliveryDto, 'splitOutcom
 }
 
 // Operator, 2026-11-21 (decision 11.10): the restaurant is told what a split costs it, and why a leg the
-// split made shows a cost of 0. The charge itself is on the co-op's statement (spec 0036), not here.
+// split made shows no cost. The charges themselves are on the co-op's statement (spec 0036), not here.
+// Each sentence must stay true whatever happened next: a new leg's charge is taken back if it ends before
+// any rider accepted it (spec 0047, cross check 5), and the split wait is charged only when the co-op pays
+// waits (cross check 1).
 export const SPLIT_CHARGE_NOTE =
-  "Each extra box's rider pay is charged to you on the co-op's statement. The customer pays nothing more."
+  "Each extra box a rider takes is charged to you at its rider's pay, and the rider's wait while dispatch decided when the co-op pays waits, on the co-op's statement. The customer pays nothing more."
 export const SPLIT_LEG_COST_NOTE =
-  "Cost 0 for the customer: this delivery was made by the split. Its rider's pay is charged to you on the co-op's statement."
-
-// The backend takes a leg's charge back when it ends before any rider accepted it (spec 0047, cross check
-// 5). This page cannot tell whether one did (a rider taken off later leaves no rider on the leg either), so an
-// ended leg states the rule rather than guess.
+  "No cost to the customer: this delivery was made by the split. Once a rider takes it, its rider's pay is charged to you on the co-op's statement."
+// This page cannot tell whether a rider ever accepted an ended leg (one taken off later leaves no rider on
+// it either), so the ended leg states the rule rather than guess.
 export const SPLIT_LEG_ENDED_NOTE =
-  'Cost 0 for the customer: this delivery was made by the split. It ended; if no rider had accepted it, nothing is charged for it.'
+  'No cost to the customer: this delivery was made by the split. It ended; if no rider had accepted it, nothing is charged for it.'
 
 const ENDED = new Set(['CANCELED', 'FAILED'])
 
-// A leg the split made carries a quote with customer price 0 (the kept leg keeps its own price).
+// A leg the split made has no customer cost: null until its first offer (the backend writes the amounts
+// then), 0 after (its quote's price is 0). The kept leg always has its own cost, since a rider holds it.
 export function splitChargeNote(
   delivery: Pick<PartnerDeliveryDto, 'splitOutcome' | 'totalCost' | 'status'>
 ): string | null {
   if (delivery.splitOutcome !== 'SPLIT') return null
-  if (delivery.totalCost !== 0) return SPLIT_CHARGE_NOTE
+  if (delivery.totalCost) return SPLIT_CHARGE_NOTE
   return ENDED.has(delivery.status) ? SPLIT_LEG_ENDED_NOTE : SPLIT_LEG_COST_NOTE
 }
