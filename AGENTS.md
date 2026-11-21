@@ -62,4 +62,8 @@ Yarn 1.22, **not Corepack**: run `node node_modules/.bin/next dev -p 3090` and
 
 - `usePolledFetch` resets its answer only when `load` or `enabled` change; a new `intervalMs` keeps the data on screen and only changes the period (Message Dispatch, spec 0034, polls every 5 s open and 30 s closed). Message Dispatch's seen mark is one localStorage key per signed in email (`chatSeenKey`).
 
+- `mapDeliveryInputForPartner` (`src/api/manualRequestApi.ts`) builds the partner API body field by field: a new field the form
+  sends must be named there too, or it never reaches the backend and every test that mocks the hook stays green (row 9's
+  `boxSize` was dropped this way; `manualRequestApi.boxSize.test.ts` checks the body). The box size goes with the delivery only.
+
 _Drafted by /audit from the repo, worth a quick human pass. Edit freely: once a line stops matching this draft, later runs treat it as curated and will flag rather than overwrite it._
