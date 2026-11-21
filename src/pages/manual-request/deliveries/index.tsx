@@ -301,11 +301,14 @@ export default function DeliveriesPage() {
                           <p className="text-sm font-medium">{delivery.orderReference}</p>
                         ) : null}
                         {/* Spec 0047 (AC-8): left at the restaurant because it didn't fit one box. */}
-                        {splitOutcomeLine(delivery) ? (
-                          <p className="text-sm font-medium" data-testid="split-outcome">
-                            {splitOutcomeLine(delivery)}
-                          </p>
-                        ) : null}
+                        {(() => {
+                          const line = splitOutcomeLine(delivery)
+                          return line ? (
+                            <p className="text-sm font-medium" data-testid="split-outcome">
+                              {line}
+                            </p>
+                          ) : null
+                        })()}
                       </div>
                       <StatusBadge status={delivery.status} />
                     </div>

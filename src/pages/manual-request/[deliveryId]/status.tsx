@@ -353,6 +353,8 @@ export default function ManualRequestStatusPage() {
     [deliveryId],
   )
   const partnerData = partnerMode ? (data as PartnerDeliveryDto | undefined) : undefined
+  // Spec 0047: split at pickup, or left because it didn't fit one box.
+  const splitLine = partnerData ? splitOutcomeLine(partnerData) : null
   const isLeg = Boolean(partnerData?.legCount)
   // The server's own sentence for a refusal (a 4xx, such as the 404 "This order is older than 30 days..."
   // for an old order, spec 0017), else a general line: a timeout's or the browser's own words, and a
@@ -430,9 +432,9 @@ export default function ManualRequestStatusPage() {
               </p>
             ) : null}
             {/* Spec 0047 (AC-8, AC-10): split by dispatch at pickup, or left because it didn't fit one box. */}
-            {partnerData && splitOutcomeLine(partnerData) ? (
+            {splitLine ? (
               <p className="text-sm font-medium" data-testid="split-outcome">
-                {splitOutcomeLine(partnerData)}
+                {splitLine}
               </p>
             ) : null}
             {data && partnerMode ? (

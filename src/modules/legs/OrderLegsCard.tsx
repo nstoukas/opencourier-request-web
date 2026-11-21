@@ -5,7 +5,7 @@ import { HistoryItem, absentLegNumbers, legLabel, legsToCancel } from '../manual
 import { formatDateTime, formatMoney } from '../../utils/format'
 import { ReadyControls } from '../ready/ReadyControls'
 import { CancelOrderLegsDialog } from './CancelOrderLegsDialog'
-import { splitOutcomeLine } from './splitOutcome'
+import { LEFT_UNSPLIT_TEXT, splitOutcomeLine } from './splitOutcome'
 
 const ENDED = new Set(['DROPPED_OFF', 'CANCELED', 'FAILED'])
 
@@ -57,6 +57,12 @@ export function OrderLegsCard({
               <Link href={`/manual-request/${leg.id}/status`} className="underline">
                 View status
               </Link>
+              {/* Row 11 review: a leg the rider left because it didn't fit one box says so on its own line. */}
+              {leg.splitOutcome === 'LEFT' ? (
+                <span className="basis-full text-muted-foreground" data-testid="split-outcome-left">
+                  {LEFT_UNSPLIT_TEXT}
+                </span>
+              ) : null}
             </li>
           ))}
           {missing.map((legNumber) => (
