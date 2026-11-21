@@ -4,12 +4,12 @@ import { LEFT_UNSPLIT_TEXT, splitOutcomeLine } from './splitOutcome'
 
 describe('splitOutcomeLine (spec 0047, AC-8, AC-10)', () => {
   describe('an order split by dispatch (AC-10)', () => {
-    it('says "Split into 2 at pickup" for an order that is now 2 deliveries', () => {
-      expect(splitOutcomeLine({ splitOutcome: 'SPLIT', legCount: 2 })).toBe('Split into 2 at pickup')
+    it('says "Split at pickup, now in 2 deliveries" for an order that is now 2 deliveries', () => {
+      expect(splitOutcomeLine({ splitOutcome: 'SPLIT', legCount: 2 })).toBe('Split at pickup, now in 2 deliveries')
     })
 
     it.each([3, 4])('the number is the legCount the server sent: %i', (legCount) => {
-      expect(splitOutcomeLine({ splitOutcome: 'SPLIT', legCount })).toBe(`Split into ${legCount} at pickup`)
+      expect(splitOutcomeLine({ splitOutcome: 'SPLIT', legCount })).toBe(`Split at pickup, now in ${legCount} deliveries`)
     })
 
     it('says nothing rather than a sentence with no number when the count is missing', () => {
@@ -17,8 +17,14 @@ describe('splitOutcomeLine (spec 0047, AC-8, AC-10)', () => {
       expect(splitOutcomeLine({ splitOutcome: 'SPLIT', legCount: undefined } as any)).toBeNull()
     })
 
-    it('never says "Split into 1"', () => {
+    it('never says "now in 1 deliveries"', () => {
       expect(splitOutcomeLine({ splitOutcome: 'SPLIT', legCount: 1 })).toBeNull()
+    })
+
+    // Row 11 review (decision 11.8): "Split into 3" was untrue for an order sent as 2 with one leg split
+    // again, so the sentence no longer claims the split itself made N.
+    it('no longer says "Split into N"', () => {
+      expect(splitOutcomeLine({ splitOutcome: 'SPLIT', legCount: 3 })).not.toMatch(/Split into/)
     })
   })
 

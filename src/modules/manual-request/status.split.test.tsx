@@ -59,7 +59,7 @@ describe('the order page after a split at pickup (spec 0047, AC-8, AC-10)', () =
     ;(fetchOrderLegs as jest.Mock).mockResolvedValue({ legs: [], missingLegNumbers: [] })
   })
 
-  it('AC-10: the kept leg says "Split into 2 at pickup" under "Leg 1 of 2"', async () => {
+  it('AC-10: the kept leg says "Split at pickup, now in 2 deliveries" under "Leg 1 of 2"', async () => {
     ;(fetchOrderLegs as jest.Mock).mockResolvedValue({
       legs: [legFixture('del-1', 1, { splitOutcome: 'SPLIT' }), legFixture('del-2', 2, { splitOutcome: 'SPLIT' })],
       missingLegNumbers: [],
@@ -67,7 +67,7 @@ describe('the order page after a split at pickup (spec 0047, AC-8, AC-10)', () =
     showPage(legFixture('del-1', 1, { status: 'PICKED_UP', splitOutcome: 'SPLIT' }))
 
     expect(screen.getByTestId('leg-label')).toHaveTextContent('Leg 1 of 2')
-    expect(screen.getByTestId('split-outcome')).toHaveTextContent('Split into 2 at pickup')
+    expect(screen.getByTestId('split-outcome')).toHaveTextContent('Split at pickup, now in 2 deliveries')
     await screen.findByTestId('order-legs')
   })
 
@@ -83,7 +83,7 @@ describe('the order page after a split at pickup (spec 0047, AC-8, AC-10)', () =
     showPage(legFixture('del-1', 2, { legCount: 3, splitOutcome: 'SPLIT', totalCost: 0 }))
 
     expect(screen.getByTestId('leg-label')).toHaveTextContent('Leg 2 of 3')
-    expect(screen.getByTestId('split-outcome')).toHaveTextContent('Split into 3 at pickup')
+    expect(screen.getByTestId('split-outcome')).toHaveTextContent('Split at pickup, now in 3 deliveries')
     await screen.findByTestId('order-legs')
   })
 

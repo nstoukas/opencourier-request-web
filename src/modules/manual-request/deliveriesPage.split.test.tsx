@@ -81,7 +81,7 @@ describe('My Orders after a split at pickup (spec 0047, AC-8, AC-10)', () => {
     expect(screen.getAllByText(LEFT_SENTENCE)).toHaveLength(1)
   })
 
-  it('AC-10: an order split in two is one card that says "Split into 2 at pickup"', () => {
+  it('AC-10: an order split in two is one card that says "Split at pickup, now in 2 deliveries"', () => {
     showList([
       legFixture('del-new', 2, { splitOutcome: 'SPLIT', totalCost: 0 }),
       legFixture('del-kept', 1, { status: 'PICKED_UP', splitOutcome: 'SPLIT' }),
@@ -89,7 +89,21 @@ describe('My Orders after a split at pickup (spec 0047, AC-8, AC-10)', () => {
 
     const cards = screen.getAllByTestId('order-legs-card')
     expect(cards).toHaveLength(1)
-    expect(within(cards[0]).getByTestId('split-outcome')).toHaveTextContent('Split into 2 at pickup')
+    expect(within(cards[0]).getByTestId('split-outcome')).toHaveTextContent('Split at pickup, now in 2 deliveries')
+  })
+
+  // Row 11 review: a left leg inside a legs order used to show nothing on the history card.
+  it('a leg the rider left inside a legs order says so on the order card', () => {
+    showList([
+      legFixture('del-leg-1', 1, { status: 'DROPPED_OFF' }),
+      legFixture('del-leg-2', 2, { status: 'CANCELED', splitOutcome: 'LEFT' }),
+    ])
+
+    const card = within(screen.getByTestId('order-legs-card'))
+    expect(card.getAllByTestId('split-outcome-left')).toHaveLength(1)
+    expect(card.getByTestId('split-outcome-left')).toHaveTextContent(
+      "Cancelled: didn't fit one box, send it again with the right sizes"
+    )
   })
 
   it('an order dispatch refused to split, and one never flagged, say nothing', () => {

@@ -21,14 +21,14 @@ function renderOrder(legs: PartnerDeliveryDto[]) {
 }
 
 describe('OrderLegsCard after a split at pickup (spec 0047, AC-10)', () => {
-  it('says "Split into 2 at pickup" when dispatch split the order in two', () => {
+  it('says "Split at pickup, now in 2 deliveries" when dispatch split the order in two', () => {
     renderOrder([
       legFixture('del-kept', 1, { status: 'PICKED_UP', splitOutcome: 'SPLIT' }),
       legFixture('del-new', 2, { splitOutcome: 'SPLIT', totalCost: 0 }),
     ])
 
     const card = within(screen.getByTestId('order-legs-card'))
-    expect(card.getByTestId('split-outcome')).toHaveTextContent('Split into 2 at pickup')
+    expect(card.getByTestId('split-outcome')).toHaveTextContent('Split at pickup, now in 2 deliveries')
     // Once for the whole order, not once per leg.
     expect(card.getAllByTestId('split-outcome')).toHaveLength(1)
   })
@@ -40,13 +40,82 @@ describe('OrderLegsCard after a split at pickup (spec 0047, AC-10)', () => {
       legFixture('del-3', 3, { legCount: 3, splitOutcome: 'SPLIT' }),
     ])
 
-    expect(screen.getByTestId('split-outcome')).toHaveTextContent('Split into 3 at pickup')
+    expect(screen.getByTestId('split-outcome')).toHaveTextContent('Split at pickup, now in 3 deliveries')
   })
 
   it('still says it when only one of its legs carries the mark (the other is on another page of the list)', () => {
     renderOrder([legFixture('del-kept', 1, { splitOutcome: 'SPLIT' }), legFixture('del-other', 2, { splitOutcome: null })])
 
-    expect(screen.getByTestId('split-outcome')).toHaveTextContent('Split into 2 at pickup')
+    expect(screen.getByTestId('split-outcome')).toHaveTextContent('Split at pickup, now in 2 deliveries')
+  })
+
+  // Row 11 review: an order sent as 2 deliveries whose leg 2 was split again is now 3. The sentence must be
+  // true for it: split at pickup, and now in 3 deliveries (not "split into 3").
+  it('an order sent as 2 with one leg split again reads "Split at pickup, now in 3 deliveries"', () => {
+    renderOrder([
+      legFixture('del-1', 1, { legCount: 3, splitOutcome: null }),
+      legFixture('del-2', 2, { legCount: 3, splitOutcome: 'SPLIT' }),
+      legFixture('del-3', 3, { legCount: 3, splitOutcome: 'SPLIT' }),
+    ])
+
+    expect(screen.getByTestId('split-outcome').textContent).toBe('Split at pickup, now in 3 deliveries')
+    expect(screen.queryByText(/Split into/)).not.toBeInTheDocument()
+  })
+
+  describe('a leg the rider left because it did not fit one box (row 11 review)', () => {
+    const LEFT_SENTENCE = "Cancelled: didn't fit one box, send it again with the right sizes"
+
+    it('says the left sentence on that leg\'s own line', () => {
+      renderOrder([
+        legFixture('del-1', 1, { status: 'DROPPED_OFF' }),
+        legFixture('del-2', 2, { status: 'CANCELED', splitOutcome: 'LEFT' }),
+      ])
+
+      const rows = within(screen.getByTestId('order-legs-card')).getAllByRole('listitem')
+      // Leg 2's row carries the sentence; leg 1's does not.
+      expect(within(rows[1]).getByTestId('split-outcome-left')).toHaveTextContent(LEFT_SENTENCE)
+      expect(rows[1]).toHaveTextContent('Leg 2 of 2')
+      expect(within(rows[0]).queryByTestId('split-outcome-left')).not.toBeInTheDocument()
+      expect(screen.getAllByText(LEFT_SENTENCE)).toHaveLength(1)
+    })
+
+    it('says it once per left leg when two legs were left', () => {
+      renderOrder([
+        legFixture('del-1', 1, { status: 'CANCELED', splitOutcome: 'LEFT' }),
+        legFixture('del-2', 2, { status: 'CANCELED', splitOutcome: 'LEFT' }),
+      ])
+
+      expect(screen.getAllByTestId('split-outcome-left')).toHaveLength(2)
+    })
+
+    it('does not call the whole order split because one leg was left', () => {
+      renderOrder([legFixture('del-1', 1), legFixture('del-2', 2, { status: 'CANCELED', splitOutcome: 'LEFT' })])
+
+      expect(screen.queryByTestId('split-outcome')).not.toBeInTheDocument()
+      expect(screen.queryByText(/Split at pickup/)).not.toBeInTheDocument()
+    })
+
+    it('a split leg, a cancelled leg with no outcome and an ordinary leg show no left line', () => {
+      renderOrder([
+        legFixture('del-1', 1, { legCount: 3, splitOutcome: 'SPLIT' }),
+        legFixture('del-2', 2, { legCount: 3, status: 'CANCELED', splitOutcome: null }),
+        legFixture('del-3', 3, { legCount: 3 }),
+      ])
+
+      expect(screen.queryByTestId('split-outcome-left')).not.toBeInTheDocument()
+    })
+
+    it('an order with one leg split and another left says both, each in its place', () => {
+      renderOrder([
+        legFixture('del-1', 1, { legCount: 3, splitOutcome: 'SPLIT' }),
+        legFixture('del-2', 2, { legCount: 3, splitOutcome: 'SPLIT' }),
+        legFixture('del-3', 3, { legCount: 3, status: 'CANCELED', splitOutcome: 'LEFT' }),
+      ])
+
+      expect(screen.getByTestId('split-outcome')).toHaveTextContent('Split at pickup, now in 3 deliveries')
+      const rows = within(screen.getByTestId('order-legs-card')).getAllByRole('listitem')
+      expect(within(rows[2]).getByTestId('split-outcome-left')).toHaveTextContent(LEFT_SENTENCE)
+    })
   })
 
   it('says nothing for an order the restaurant sent as legs itself', () => {
