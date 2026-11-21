@@ -90,6 +90,30 @@ describe('CancelOrderLegsDialog (spec 0046, AC-5)', () => {
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
+  // Row 10 review: onDone makes the page read the legs again, and the cancelled ones drop out of the list
+  // the dialog is given. The title must still say what was asked.
+  it('keeps the count it opened with after the page hands it fewer legs', async () => {
+    const { rerender } = render(<CancelOrderLegsDialog legs={legs} onClose={onClose} onDone={onDone} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel all legs' }))
+    await screen.findByTestId('cancel-results')
+
+    rerender(<CancelOrderLegsDialog legs={[]} onClose={onClose} onDone={onDone} />)
+
+    expect(screen.getByRole('heading', { name: 'Cancel all 2 legs of this order?' })).toBeInTheDocument()
+    expect(within(screen.getByTestId('cancel-results')).getAllByRole('listitem')).toHaveLength(2)
+  })
+
+  it('cancels the legs it opened with, even if the page changes its list before Confirm', async () => {
+    const { rerender } = render(<CancelOrderLegsDialog legs={legs} onClose={onClose} onDone={onDone} />)
+
+    rerender(<CancelOrderLegsDialog legs={[legs[0]]} onClose={onClose} onDone={onDone} />)
+    expect(screen.getByRole('heading', { name: 'Cancel all 2 legs of this order?' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel all legs' }))
+
+    await waitFor(() => expect(onDone).toHaveBeenCalledTimes(1))
+    expect((cancelDelivery as jest.Mock).mock.calls.map((call) => call[0])).toEqual(['del-1', 'del-2'])
+  })
+
   it('"Keep them" cancels nothing', () => {
     render(<CancelOrderLegsDialog legs={legs} onClose={onClose} onDone={onDone} />)
 

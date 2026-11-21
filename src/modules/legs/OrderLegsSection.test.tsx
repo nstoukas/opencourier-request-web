@@ -238,6 +238,61 @@ describe('OrderLegsSection (spec 0046)', () => {
     })
   })
 
+  // Row 10 review: an order whose sent legs were all cancelled or failed is over; a missing leg is not sent
+  // after it. A delivered leg still counts: the customer is waiting for the rest.
+  describe('Retry only while the order is still alive', () => {
+    it.each([
+      ['CANCELED', 'cancelled'],
+      ['FAILED', 'failed'],
+    ])('no Retry once the only sent leg is %s: it says the rest of the order was cancelled', async (status) => {
+      const section = await show({ legs: [legFixture('del-1', 1, { status })], missingLegNumbers: [2] })
+
+      expect(screen.queryByTestId('missing-leg-2')).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /Retry/ })).not.toBeInTheDocument()
+      expect(
+        within(section).getByText('Leg 2 of 2 was never sent, and the rest of the order was cancelled.'),
+      ).toBeInTheDocument()
+    })
+
+    it('several legs never sent after every sent leg ended read in the plural', async () => {
+      const section = await show({
+        legs: [legFixture('del-1', 1, { status: 'CANCELED', legCount: 4 }), legFixture('del-2', 2, { status: 'FAILED', legCount: 4 })],
+        missingLegNumbers: [3, 4],
+      })
+
+      expect(screen.queryByRole('button', { name: /Retry/ })).not.toBeInTheDocument()
+      expect(
+        within(section).getByText('Leg 3 of 4, Leg 4 of 4 were never sent, and the rest of the order was cancelled.'),
+      ).toBeInTheDocument()
+    })
+
+    it('Retry IS shown when the sent leg was delivered (the customer still waits for the rest)', async () => {
+      await show({ legs: [legFixture('del-1', 1, { status: 'DROPPED_OFF' })], missingLegNumbers: [2] })
+
+      expect(within(screen.getByTestId('missing-leg-2')).getByRole('button', { name: 'Retry: get a price' })).toBeInTheDocument()
+      expect(screen.queryByText(/the rest of the order was cancelled/)).not.toBeInTheDocument()
+    })
+
+    it('Retry IS shown when one sent leg was cancelled but another is still open', async () => {
+      await show({
+        legs: [legFixture('del-1', 1, { status: 'CANCELED', legCount: 3 }), legFixture('del-2', 2, { legCount: 3 })],
+        missingLegNumbers: [3],
+      })
+
+      expect(within(screen.getByTestId('missing-leg-3')).getByRole('button', { name: 'Retry: get a price' })).toBeInTheDocument()
+      expect(screen.queryByText(/the rest of the order was cancelled/)).not.toBeInTheDocument()
+    })
+
+    it('a cancelled order with every leg sent says nothing about a leg never sent', async () => {
+      await show({
+        legs: [legFixture('del-1', 1, { status: 'CANCELED' }), legFixture('del-2', 2, { status: 'CANCELED' })],
+        missingLegNumbers: [],
+      })
+
+      expect(screen.queryByText(/never sent/)).not.toBeInTheDocument()
+    })
+  })
+
   describe('AC-5, cross check 8: Cancel all', () => {
     it('cancels each leg not yet ended and skips the ended ones', async () => {
       const section = await show({

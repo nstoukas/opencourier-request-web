@@ -69,17 +69,22 @@ describe('OrderLegsCard (spec 0046, AC-6)', () => {
     expect(screen.getByText(/Cost:/).textContent?.replace(/ /g, ' ')).toBe('Cost: 7,48 €')
   })
 
-  it('cross check 4: fewer legs than legCount says "Leg 2 of 2 was never sent" and points to the order page', () => {
+  // Row 10 review: the list is a page, so the card cannot know a leg was never sent; it says the leg is not
+  // in this list and points to the order page, which knows.
+  it('cross check 4: fewer legs than legCount says "Leg 2 of 2 is not in this list" and points to the order page', () => {
     renderOrder([legFixture('del-1', 1)])
 
-    const line = screen.getByText(/Leg 2 of 2 was never sent/)
+    const line = screen.getByText(/Leg 2 of 2 is not in this list\./)
     expect(line).toBeInTheDocument()
-    expect(within(line).getByRole('link')).toHaveAttribute('href', '/manual-request/del-1/status')
+    const link = within(line).getByRole('link', { name: 'Open the order' })
+    expect(link).toHaveAttribute('href', '/manual-request/del-1/status')
+    expect(screen.queryByText(/was never sent/)).not.toBeInTheDocument()
   })
 
-  it('a complete order says nothing about a leg never sent', () => {
+  it('a complete order says nothing about a leg not in the list', () => {
     renderOrder([legFixture('del-1', 1), legFixture('del-2', 2)])
 
+    expect(screen.queryByText(/is not in this list/)).not.toBeInTheDocument()
     expect(screen.queryByText(/was never sent/)).not.toBeInTheDocument()
   })
 

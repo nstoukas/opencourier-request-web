@@ -93,10 +93,12 @@ describe('My Orders with a multi leg order (spec 0046, AC-6)', () => {
     expect(screen.queryByText('del-leg-2')).not.toBeInTheDocument()
   })
 
-  it('cross check 4: an order with fewer legs than its count says which leg was never sent', () => {
+  it('cross check 4: an order with fewer legs than its count says which leg is not in this list', () => {
     showList([legFixture('del-leg-1', 1)])
 
-    expect(within(screen.getByTestId('order-legs-card')).getByText(/Leg 2 of 2 was never sent/)).toBeInTheDocument()
+    const card = within(screen.getByTestId('order-legs-card'))
+    expect(card.getByText(/Leg 2 of 2 is not in this list\./)).toBeInTheDocument()
+    expect(card.getByRole('link', { name: 'Open the order' })).toHaveAttribute('href', '/manual-request/del-leg-1/status')
   })
 
   it('cross check 9: Food ready on the order\'s card marks every leg and refreshes the list', async () => {

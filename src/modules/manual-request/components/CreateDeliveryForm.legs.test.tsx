@@ -248,6 +248,8 @@ describe('CreateDeliveryForm: multi leg orders (spec 0046)', () => {
       await twoBoxesPriced()
 
       expect(plain(screen.getByTestId('leg-total').textContent)).toBe('2 deliveries × 3,80 € = 7,60 €')
+      // Row 10 review: the big figure is what the customer pays, the legs' total.
+      expect(plain(document.querySelector('.text-2xl')?.textContent)).toBe('7,60 €')
       expect(screen.getByRole('button', { name: 'Send order' })).toBeInTheDocument()
       expect(mockConfirmDelivery).not.toHaveBeenCalled()
     })
@@ -410,6 +412,34 @@ describe('CreateDeliveryForm: multi leg orders (spec 0046)', () => {
       expect(said.description).toMatch(/Try again or cancel/)
       // Never the success sentence for an order that is not whole.
       expect(JSON.stringify(mockToast.mock.calls)).not.toContain('Order sent as')
+    })
+
+    // Row 10 review: the backend's own reason, so the restaurant knows why before it retries.
+    it('the toast carries the backend\'s reason for the leg, then what to do', async () => {
+      mockConfirmDelivery.mockImplementation(async (input: any) => {
+        if (input.legNumber === 2) throw new Error('No couriers are currently available')
+        return { id: `del-leg-${input.legNumber}`, status: 'CREATED' }
+      })
+      await twoBoxesPriced()
+      await send()
+
+      await waitFor(() => expect(mockToast).toHaveBeenCalledTimes(1))
+      expect(mockToast.mock.calls[0][0]).toEqual({
+        title: 'Leg 2 of 2 was not sent',
+        description: 'No couriers are currently available Try again or cancel the legs already sent, on the order page.',
+      })
+    })
+
+    it('a failure with no readable reason ("Request failed (HTTP 500)") shows only what to do', async () => {
+      mockConfirmDelivery.mockImplementation(async (input: any) => {
+        if (input.legNumber === 2) throw new Error('Request failed (HTTP 500)')
+        return { id: `del-leg-${input.legNumber}`, status: 'CREATED' }
+      })
+      await twoBoxesPriced()
+      await send()
+
+      await waitFor(() => expect(mockToast).toHaveBeenCalledTimes(1))
+      expect(mockToast.mock.calls[0][0].description).toBe('Try again or cancel the legs already sent, on the order page.')
     })
 
     it('the last leg failing is told the same way', async () => {

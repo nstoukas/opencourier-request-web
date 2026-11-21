@@ -48,6 +48,45 @@ describe('PriceSendBar on a multi leg order (spec 0046, AC-2)', () => {
     expect(lines).toEqual(['Leg 1 of 2: 3,56 €', 'Leg 2 of 2: 3,92 €', 'Total 7,48 €'])
   })
 
+  // Row 10 review (decision 10.4 changed): the big figure is what the customer pays.
+  describe('the big price', () => {
+    const bigPrice = () => plain(document.querySelector('.text-2xl')?.textContent)
+
+    it('for two legs is the legs\' total', () => {
+      const quotes = [quote('q1', 380), quote('q2', 380)]
+      render(<PriceSendBar {...props} quote={quotes[0]} quotes={quotes} />)
+
+      expect(bigPrice()).toBe('7,60 €')
+    })
+
+    it('for legs priced differently is still their sum', () => {
+      const quotes = [quote('q1', 356), quote('q2', 392), quote('q3', 400)]
+      render(<PriceSendBar {...props} quote={quotes[0]} quotes={quotes} />)
+
+      expect(bigPrice()).toBe('11,48 €')
+    })
+
+    it('for one box is that delivery\'s own price', () => {
+      const only = quote('q1', 380)
+      render(<PriceSendBar {...props} quote={only} quotes={[only]} />)
+
+      expect(bigPrice()).toBe('3,80 €')
+    })
+
+    it('for a caller that passes no quotes is the single price, as before', () => {
+      render(<PriceSendBar {...props} quote={quote('q1', 380)} />)
+
+      expect(bigPrice()).toBe('3,80 €')
+    })
+
+    it('a single delivery priced as a range still shows the range', () => {
+      const ranged = { ...quote('q1', 350), quoteRangeTo: 450 }
+      render(<PriceSendBar {...props} quote={ranged} quotes={[ranged]} />)
+
+      expect(bigPrice()).toBe('3,50 € – 4,50 €')
+    })
+  })
+
   it('one box shows no total line', () => {
     const only = quote('q1', 380)
     render(<PriceSendBar {...props} quote={only} quotes={[only]} />)

@@ -4,6 +4,7 @@ import '@testing-library/jest-dom'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import DeliveryStatusPage from '../../pages/manual-request/[deliveryId]/status'
 import {
+  delayDeliveryReady,
   fetchOrderLegs,
   markDeliveryFoodReady,
   useGetManualRequestDeliveryQuery,
@@ -105,6 +106,40 @@ describe('the order page of a leg (spec 0046)', () => {
 
     await waitFor(() => expect(refetch).toHaveBeenCalled())
     expect((markDeliveryFoodReady as jest.Mock).mock.calls.map((call) => call[0])).toEqual(['del-leg-1', 'del-leg-2'])
+  })
+
+  // Row 10 review: the other legs' ready times moved too, so the next tap must send their new times.
+  it('a ready tap reads the legs again, and the next tap sends each other leg its new ready time', async () => {
+    const NEW_READY = '2026-11-21T10:30:00.000Z'
+    ;(fetchOrderLegs as jest.Mock).mockResolvedValue({
+      legs: [legFixture('del-leg-1', 1), legFixture('del-leg-2', 2, { readyAt: '2026-11-21T10:20:00.000Z' })],
+      missingLegNumbers: [],
+    })
+    ;(delayDeliveryReady as jest.Mock).mockImplementation(async (id: string) => ({
+      id,
+      status: 'ASSIGNING_COURIER',
+      readyAt: NEW_READY,
+      foodReadyAt: null,
+    }))
+    showPage(legFixture('del-leg-1', 1))
+    await screen.findByTestId('order-legs')
+    expect(fetchOrderLegs).toHaveBeenCalledTimes(1)
+    // What the server holds after the first tap.
+    ;(fetchOrderLegs as jest.Mock).mockResolvedValue({
+      legs: [legFixture('del-leg-1', 1, { readyAt: NEW_READY }), legFixture('del-leg-2', 2, { readyAt: NEW_READY })],
+      missingLegNumbers: [],
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: '+10' }))
+
+    await waitFor(() => expect(fetchOrderLegs).toHaveBeenCalledTimes(2))
+    expect((delayDeliveryReady as jest.Mock).mock.calls[1]).toEqual(['del-leg-2', 10, '2026-11-21T10:20:00.000Z'])
+
+    await waitFor(() => expect(screen.getByRole('button', { name: '+5' })).toBeEnabled())
+    fireEvent.click(screen.getByRole('button', { name: '+5' }))
+
+    await waitFor(() => expect(delayDeliveryReady).toHaveBeenCalledTimes(4))
+    expect((delayDeliveryReady as jest.Mock).mock.calls[3]).toEqual(['del-leg-2', 5, NEW_READY])
   })
 
   it('a single delivery has no leg label, reads no legs, and Food ready is one call', async () => {

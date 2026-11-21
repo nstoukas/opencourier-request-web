@@ -79,6 +79,40 @@ describe('ReadyControls on a multi leg order (spec 0046, cross check 9)', () => 
     expect(onChanged).toHaveBeenCalledTimes(1)
   })
 
+  // Row 10 review: the first leg refusing used to stop the whole tap, leaving the other legs unmarked.
+  it('when this delivery itself refuses, every other leg is still tried', async () => {
+    ;(markDeliveryFoodReady as jest.Mock).mockImplementation(async (id: string) => {
+      if (id === 'del-1') throw new Error('The ready time just changed. Look again.')
+      return { id, status: 'ACCEPTED', readyAt: READY_ONE, foodReadyAt: '2026-11-03T12:30:00.000Z' }
+    })
+    const onChanged = jest.fn()
+    render(<ReadyControls deliveryId="del-1" order={order} otherLegs={otherLegs} onChanged={onChanged} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Food ready' }))
+
+    await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1))
+    expect((markDeliveryFoodReady as jest.Mock).mock.calls.map((call) => call[0])).toEqual(['del-1', 'del-2', 'del-3'])
+    expect(await screen.findByText(/The ready time just changed\. Look again\./)).toBeInTheDocument()
+    // The buttons come back, so the restaurant can look again and tap again.
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Food ready' })).toBeEnabled())
+  })
+
+  it('when this delivery and another leg both refuse, both reasons are shown', async () => {
+    ;(delayDeliveryReady as jest.Mock).mockImplementation(async (id: string) => {
+      if (id === 'del-1') throw new Error('The ready time just changed. Look again.')
+      if (id === 'del-3') throw new Error('This order was already picked up.')
+      return { id, status: 'ACCEPTED', readyAt: '2026-11-03T12:42:00.000Z', foodReadyAt: null }
+    })
+    render(<ReadyControls deliveryId="del-1" order={order} otherLegs={otherLegs} />)
+
+    fireEvent.click(screen.getByRole('button', { name: '+10' }))
+
+    const shown = await screen.findByText(/The ready time just changed\. Look again\./)
+    expect(shown).toHaveTextContent('Leg 3 of 3: This order was already picked up.')
+    expect(shown).not.toHaveTextContent('Leg 2 of 3')
+    expect((delayDeliveryReady as jest.Mock).mock.calls.map((call) => call[0])).toEqual(['del-1', 'del-2', 'del-3'])
+  })
+
   it('a single delivery (no other legs) makes exactly one call, as before', async () => {
     const onChanged = jest.fn()
     render(<ReadyControls deliveryId="del-1" order={order} onChanged={onChanged} />)
