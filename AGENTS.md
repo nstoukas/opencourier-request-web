@@ -66,4 +66,9 @@ Yarn 1.22, **not Corepack**: run `node node_modules/.bin/next dev -p 3090` and
   sends must be named there too, or it never reaches the backend and every test that mocks the hook stays green (row 9's
   `boxSize` was dropped this way; `manualRequestApi.boxSize.test.ts` checks the body). The box size goes with the delivery only.
 
+- Multi leg orders (spec 0046): the leg rules are in `src/modules/manual-request/utils/legs.ts`; the form sends the legs one after
+  another, leg 1 first (a later failure leaves the sent legs, and the order page's `OrderLegsSection` offers Retry from
+  `GET /deliveries/:id/order-legs`). `legNumber` and `legCount` are named in `mapDeliveryInputForPartner`. `ReadyControls`
+  takes `otherLegs` so a ready tap applies to every leg; a page showing a leg reads the legs again after any tap.
+
 _Drafted by /audit from the repo, worth a quick human pass. Edit freely: once a line stops matching this draft, later runs treat it as curated and will flag rather than overwrite it._
