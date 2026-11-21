@@ -431,7 +431,12 @@ export default function ManualRequestStatusPage() {
             {data && partnerMode ? (
               <PartnerDeliveryDetails
                 data={data as PartnerDeliveryDto}
-                onChanged={() => void refetch()}
+                onChanged={() => {
+                  void refetch()
+                  // Row 10 review: the other legs' ready times moved too; read them again, or the next tap
+                  // sends their old time and is refused.
+                  setLegsVersion((value) => value + 1)
+                }}
                 otherLegs={otherLegs.filter((leg) => !TERMINAL_STATUSES.has(leg.status))}
               />
             ) : null}

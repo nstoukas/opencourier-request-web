@@ -65,6 +65,9 @@ export function OrderLegsSection({ deliveryId, version, onChanged, onLegs }: Pro
 
   const legCount = order.legs[0].legCount ?? order.legs.length
   const toCancel = legsToCancel(order.legs)
+  // Row 10 review: an order whose sent legs were all cancelled or failed is over; a missing leg is not sent
+  // after it. A delivered leg still counts as live: the customer is waiting for the rest.
+  const orderEnded = order.legs.every((leg) => leg.status === 'CANCELED' || leg.status === 'FAILED')
   const refresh = () => {
     void load()
     onChanged()
@@ -92,7 +95,13 @@ export function OrderLegsSection({ deliveryId, version, onChanged, onLegs }: Pro
         ))}
       </ul>
 
-      {order.missingLegNumbers.map((legNumber) => (
+      {orderEnded && order.missingLegNumbers.length > 0 ? (
+        <p className="text-sm text-muted-foreground">
+          {order.missingLegNumbers.map((number) => legLabel(number, legCount)).join(', ')}{' '}
+          {order.missingLegNumbers.length === 1 ? 'was' : 'were'} never sent, and the rest of the order was cancelled.
+        </p>
+      ) : null}
+      {(orderEnded ? [] : order.missingLegNumbers).map((legNumber) => (
         <MissingLeg
           key={legNumber}
           legNumber={legNumber}

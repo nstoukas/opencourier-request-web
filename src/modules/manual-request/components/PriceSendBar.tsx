@@ -111,6 +111,8 @@ function PriceSummary({
 }) {
   // Spec 0046 (AC-2, cross check 7): "2 deliveries × 3,80 € = 7,60 €", or a line per leg when prices differ.
   const legLines = legPriceLines(quotes)
+  // Row 10 review: for legs the big figure is what the customer pays, the sum of the legs (decision 10.4 changed).
+  const legsTotal = quotes.length > 1 ? quotes.reduce((sum, leg) => sum + leg.quoteRangeFrom, 0) : null
   const priceFrom = formatMoney(quote.quoteRangeFrom, quote.currency)
   const priceTo = formatMoney(quote.quoteRangeTo, quote.currency)
   const price = quote.quoteRangeFrom === quote.quoteRangeTo ? priceFrom : `${priceFrom} – ${priceTo}`
@@ -119,7 +121,7 @@ function PriceSummary({
   return (
     <div className="space-y-0.5 break-words">
       <p className="flex flex-wrap items-baseline gap-x-3">
-        <span className="text-2xl font-bold tabular-nums">{price}</span>
+        <span className="text-2xl font-bold tabular-nums">{legsTotal !== null ? formatMoney(legsTotal, quote.currency) : price}</span>
         <span className="text-sm text-muted-foreground">
           ETA {eta} · {formatDistance(quote.distance, quote.distanceUnit)}
         </span>

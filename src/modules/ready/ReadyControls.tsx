@@ -31,29 +31,28 @@ export function ReadyControls({ deliveryId, order, onChanged, otherLegs = [] }: 
   const run = async (action: ReadyAction) => {
     setSending(true)
     setError('')
+    // The backend's own sentence ("The ready time just changed. Look again.") when this delivery refuses.
+    let ownError = ''
     try {
       const updated = await action(deliveryId, shown.readyAt)
       setShown({ status: updated.status, readyAt: updated.readyAt, foodReadyAt: updated.foodReadyAt })
-      // Spec 0046: then each other leg, so the whole order moves together. A leg that refuses (already picked
-      // up, say) is named; the others still go.
-      const refused: string[] = []
-      for (const leg of otherLegs) {
-        try {
-          await action(leg.id, leg.readyAt)
-        } catch (legError: any) {
-          refused.push(`${leg.legLabel}: ${legError?.message || 'not changed'}`)
-        }
-      }
-      if (refused.length > 0) setError(refused.join(' · '))
-      onChanged?.()
     } catch (err: any) {
-      // The backend's own sentence ("The ready time just changed. Look again."), and a fresh copy at
-      // once, so "look again" shows the current time rather than waiting for the next poll.
-      setError(err?.message || 'The ready time could not be changed.')
-      onChanged?.()
-    } finally {
-      setSending(false)
+      ownError = err?.message || 'The ready time could not be changed.'
     }
+    // Spec 0046: then each other leg, so the whole order moves together, even when the first refused (row 10
+    // review). A leg that refuses (already picked up, say) is named; the others still go.
+    const refused: string[] = []
+    for (const leg of otherLegs) {
+      try {
+        await action(leg.id, leg.readyAt)
+      } catch (legError: any) {
+        refused.push(`${leg.legLabel}: ${legError?.message || 'not changed'}`)
+      }
+    }
+    setError([ownError, ...refused].filter(Boolean).join(' · '))
+    // A fresh copy at once, so "look again" shows the current time rather than waiting for the next poll.
+    onChanged?.()
+    setSending(false)
   }
 
   const view = readyView(shown)

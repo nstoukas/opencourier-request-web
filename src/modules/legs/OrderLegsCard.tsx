@@ -10,8 +10,9 @@ const ENDED = new Set(['DROPPED_OFF', 'CANCELED', 'FAILED'])
 
 /**
  * Spec 0046 (AC-6): one order sent as legs, as one card in the order history. Each leg with its status and a
- * link to its page; a leg this page does not hold says so and points to the order page, where Retry is
- * (cross check 4); the ready buttons apply to every open leg (cross check 9); Cancel all cancels each leg.
+ * link to its page; a leg this page does not hold says so and points to the order page, which knows whether
+ * it was never sent (it may only be on another page of the list) and offers Retry there (cross check 4);
+ * the ready buttons apply to every open leg (cross check 9); Cancel all cancels each leg.
  */
 export function OrderLegsCard({
   order,
@@ -49,10 +50,10 @@ export function OrderLegsCard({
             </li>
           ))}
           {missing.map((legNumber) => (
-            <li key={`missing-${legNumber}`} className="text-sm text-destructive">
-              {legLabel(legNumber, order.legCount)} was never sent.{' '}
+            <li key={`missing-${legNumber}`} className="text-sm text-muted-foreground">
+              {legLabel(legNumber, order.legCount)} is not in this list.{' '}
               <Link href={`/manual-request/${first.id}/status`} className="underline">
-                Open the order to try again
+                Open the order
               </Link>
             </li>
           ))}

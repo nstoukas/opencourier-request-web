@@ -660,11 +660,13 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
     let deliveryId: string
     // Spec 0046 (AC-3): the first leg that could not be sent after leg 1 was, if any.
     let legNotSent: number | null = null
+    let legNotSentReason = ''
     try {
       if (order.quotes.length > 1) {
         const sent = await sendLegs(order, payload)
         deliveryId = sent.firstLegId
         legNotSent = sent.legNotSent
+        legNotSentReason = sent.reason
       } else {
         const delivery = await confirmDelivery(payload)
         deliveryId = delivery.id
@@ -693,7 +695,9 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
       // sent, and offers Retry for it and Cancel for the ones sent.
       toast({
         title: `${legLabel(legNotSent, order.quotes.length)} was not sent`,
-        description: 'Try again or cancel the legs already sent, on the order page.',
+        description: [legNotSentReason, 'Try again or cancel the legs already sent, on the order page.']
+          .filter(Boolean)
+          .join(' '),
       })
     } else {
       toast({
@@ -730,11 +734,12 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
     for (let index = 1; index < legCount; index++) {
       try {
         await confirmDelivery(legInput(index))
-      } catch {
-        return { firstLegId: first.id, legNotSent: index + 1 }
+      } catch (legError: any) {
+        // Row 10 review: the backend's reason, so the restaurant knows why before it retries.
+        return { firstLegId: first.id, legNotSent: index + 1, reason: plainErrorMessage(legError, '') }
       }
     }
-    return { firstLegId: first.id, legNotSent: null }
+    return { firstLegId: first.id, legNotSent: null, reason: '' }
   }
 
   const handleDiscard = () => {

@@ -34,13 +34,15 @@ type Props = {
  */
 export function CancelOrderLegsDialog({ legs, onClose, onDone }: Props) {
   const [cancelledBy, setCancelledBy] = useState<PartnerCancelledBy>('RESTAURANT')
+  // The legs as the dialog opened: the page reads the legs again after the cancels (row 10 review).
+  const [openedWith] = useState(legs)
   const [running, setRunning] = useState(false)
   const [results, setResults] = useState<{ label: string; ok: boolean; message: string }[] | null>(null)
 
   const confirm = async () => {
     setRunning(true)
     const answers: { label: string; ok: boolean; message: string }[] = []
-    for (const leg of legs) {
+    for (const leg of openedWith) {
       const label = legLabel(leg.legNumber ?? 0, leg.legCount ?? 0)
       try {
         await cancelDelivery(leg.id, cancelledBy)
@@ -58,7 +60,7 @@ export function CancelOrderLegsDialog({ legs, onClose, onDone }: Props) {
     <AlertDialog open onOpenChange={(open) => !open && !running && onClose()}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Cancel all {legs.length} legs of this order?</AlertDialogTitle>
+          <AlertDialogTitle>Cancel all {openedWith.length} legs of this order?</AlertDialogTitle>
           <AlertDialogDescription>
             Each leg is cancelled on its own. A rider who already accepted a leg is still paid for it. A
             cancellation you make after a rider accepted is charged to you for that leg; one your customer asked
