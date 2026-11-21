@@ -12,6 +12,7 @@ import {
   useWaitRecordQuery,
 } from '../../api/manualRequestApi'
 import { legFixture } from '../legs/legFixtures'
+import { SPLIT_CHARGE_NOTE, SPLIT_LEG_COST_NOTE, SPLIT_LEG_ENDED_NOTE } from '../legs/splitOutcome'
 
 jest.mock('next/head', () => ({
   __esModule: true,
@@ -117,5 +118,121 @@ describe('My Orders after a split at pickup (spec 0047, AC-8, AC-10)', () => {
 
     expect(screen.getByTestId('order-legs-card')).toBeInTheDocument()
     expect(screen.queryByTestId('split-outcome')).not.toBeInTheDocument()
+  })
+
+  // Decision 11.10 (operator, 2026-11-21): the history says what a split costs the restaurant, and why a
+  // delivery the split made shows no cost (spec 0047 cross check 5 for one that ended).
+  describe('what the split costs the restaurant (decision 11.10)', () => {
+    // The sentences are worded once, in splitOutcome.ts (its own test pins them); a page must show that one.
+    const CHARGE_NOTE = SPLIT_CHARGE_NOTE
+    const COST_0_NOTE = SPLIT_LEG_COST_NOTE
+    const ENDED_NOTE = SPLIT_LEG_ENDED_NOTE
+
+    // A split delivery the list shows as a row of its own, not inside an order card: the list only makes a
+    // card when a delivery carries its order's reference, so this one has none.
+    const splitRow = (id: string, overrides: Parameters<typeof legFixture>[2] = {}) =>
+      legFixture(id, 2, { legCount: 2, orderReference: null, splitOutcome: 'SPLIT', ...overrides })
+
+    it('the order card of a split order says the charge note once, under the split line', () => {
+      showList([
+        legFixture('del-new', 2, { splitOutcome: 'SPLIT', totalCost: 0 }),
+        legFixture('del-kept', 1, { status: 'PICKED_UP', splitOutcome: 'SPLIT' }),
+      ])
+
+      const card = within(screen.getByTestId('order-legs-card'))
+      const note = card.getByTestId('split-charge-note')
+      expect(note.textContent).toBe(CHARGE_NOTE)
+      expect(card.getByTestId('split-outcome').nextElementSibling).toBe(note)
+      expect(screen.getAllByTestId('split-charge-note')).toHaveLength(1)
+    })
+
+    it('a single row that kept its own price says the charge note under its split line', () => {
+      showList([splitRow('del-row-kept-001', { status: 'PICKED_UP', totalCost: 356 })])
+
+      expect(screen.queryByTestId('order-legs-card')).not.toBeInTheDocument()
+      const note = screen.getByTestId('split-charge-note')
+      expect(note.textContent).toBe(CHARGE_NOTE)
+      expect(screen.getByTestId('split-outcome').nextElementSibling).toBe(note)
+    })
+
+    it('a single row the split made (cost 0, still open) says why it shows no cost', () => {
+      showList([splitRow('del-row-new-0001', { status: 'ASSIGNING_COURIER', totalCost: 0 })])
+
+      const note = screen.getByTestId('split-charge-note')
+      expect(note.textContent).toBe(COST_0_NOTE)
+      expect(screen.getByTestId('split-outcome').nextElementSibling).toBe(note)
+    })
+
+    it.each(['CANCELED', 'FAILED'])(
+      'a single row the split made that ended (%s) states the rule and never claims a charge',
+      (status) => {
+        showList([splitRow('del-row-ended-01', { status, totalCost: 0 })])
+
+        const note = screen.getByTestId('split-charge-note')
+        expect(note.textContent).toBe(ENDED_NOTE)
+        expect(screen.queryByText(/is charged to you/)).not.toBeInTheDocument()
+      }
+    )
+
+    // Before its first offer the backend has written no amounts yet: the cost is null, not 0.
+    it('a single row the split made, not offered yet (cost null), says the leg note, not the kept leg\'s', () => {
+      showList([splitRow('del-row-null-0001', { status: 'ASSIGNING_COURIER', totalCost: null })])
+
+      const note = screen.getByTestId('split-charge-note')
+      expect(note.textContent).toBe(COST_0_NOTE)
+      expect(screen.getByTestId('split-outcome').nextElementSibling).toBe(note)
+    })
+
+    it.each(['CANCELED', 'FAILED'])(
+      'a single row the split made that ended before any offer (cost null, %s) never claims a charge',
+      (status) => {
+        showList([splitRow('del-row-null-0002', { status, totalCost: null })])
+
+        expect(screen.getByTestId('split-charge-note').textContent).toBe(ENDED_NOTE)
+        expect(screen.queryByText(/is charged to you/)).not.toBeInTheDocument()
+      }
+    )
+
+    it('each row gets its own note, and the ordinary row beside them gets none', () => {
+      showList([
+        splitRow('del-row-kept-001', { status: 'PICKED_UP', totalCost: 356 }),
+        splitRow('del-row-new-0001', { status: 'ASSIGNING_COURIER', totalCost: 0 }),
+        single('del-ordinary-003', { status: 'ACCEPTED' }),
+      ])
+
+      const notes = screen.getAllByTestId('split-charge-note').map((note) => note.textContent)
+      expect(notes).toEqual([CHARGE_NOTE, COST_0_NOTE])
+    })
+
+    it('ordinary orders, cancelled or not, and one whose cost is 0 say nothing about a charge', () => {
+      showList([
+        single('del-ordinary-001', { status: 'ACCEPTED' }),
+        single('del-cancelled-02', { status: 'CANCELED', splitOutcome: null }),
+        single('del-free-0000003', { status: 'ACCEPTED', totalCost: 0 }),
+      ])
+
+      expect(screen.queryByTestId('split-charge-note')).not.toBeInTheDocument()
+      expect(screen.queryByText(/charged to you/)).not.toBeInTheDocument()
+    })
+
+    it('an order the rider left has its sentence and no charge note', () => {
+      showList([single('del-left-000001', { status: 'CANCELED', splitOutcome: 'LEFT' })])
+
+      expect(screen.getByTestId('split-outcome')).toBeInTheDocument()
+      expect(screen.queryByTestId('split-charge-note')).not.toBeInTheDocument()
+      expect(screen.queryByText(/charged to you/)).not.toBeInTheDocument()
+    })
+
+    it('an order the restaurant sent as legs itself, and one with a left leg, have no charge note', () => {
+      showList([
+        legFixture('del-leg-1', 1),
+        legFixture('del-leg-2', 2),
+        legFixture('del-b-1', 1, { orderReference: 'quote-second', status: 'DROPPED_OFF' }),
+        legFixture('del-b-2', 2, { orderReference: 'quote-second', status: 'CANCELED', splitOutcome: 'LEFT' }),
+      ])
+
+      expect(screen.getAllByTestId('order-legs-card')).toHaveLength(2)
+      expect(screen.queryByTestId('split-charge-note')).not.toBeInTheDocument()
+    })
   })
 })

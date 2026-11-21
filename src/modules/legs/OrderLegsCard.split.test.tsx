@@ -6,6 +6,7 @@ import { OrderLegsCard } from './OrderLegsCard'
 import { groupHistory } from '../manual-request/utils/legs'
 import { PartnerDeliveryDto } from '../manual-request/types'
 import { legFixture } from './legFixtures'
+import { SPLIT_CHARGE_NOTE } from './splitOutcome'
 
 jest.mock('../../api/manualRequestApi', () => ({
   cancelDelivery: jest.fn(),
@@ -142,5 +143,70 @@ describe('OrderLegsCard after a split at pickup (spec 0047, AC-10)', () => {
     ])
 
     expect(screen.getByText(/Cost:/).textContent?.replace(/ /g, ' ')).toBe('Cost: 3,56 €')
+  })
+
+  // Decision 11.10 (operator, 2026-11-21): the card says a split brings a charge. Cross check 11: the charge
+  // itself stays on the co-op's statement, so the card shows the sentence and no amount.
+  describe('what the split costs the restaurant (decision 11.10)', () => {
+    // Worded once, in splitOutcome.ts (its own test pins the sentence).
+    const CHARGE_NOTE = SPLIT_CHARGE_NOTE
+
+    it('says the charge note once, right under the split line', () => {
+      renderOrder([
+        legFixture('del-kept', 1, { status: 'PICKED_UP', splitOutcome: 'SPLIT' }),
+        legFixture('del-new', 2, { splitOutcome: 'SPLIT', totalCost: 0 }),
+      ])
+
+      const card = within(screen.getByTestId('order-legs-card'))
+      expect(card.getAllByTestId('split-charge-note')).toHaveLength(1)
+      const note = card.getByTestId('split-charge-note')
+      expect(note.textContent).toBe(CHARGE_NOTE)
+      // "Under the split line": the note is the very next thing after it.
+      expect(card.getByTestId('split-outcome').nextElementSibling).toBe(note)
+    })
+
+    it('says it for an order sent as 2 with one leg split again', () => {
+      renderOrder([
+        legFixture('del-1', 1, { legCount: 3, splitOutcome: null }),
+        legFixture('del-2', 2, { legCount: 3, splitOutcome: 'SPLIT' }),
+        legFixture('del-3', 3, { legCount: 3, splitOutcome: 'SPLIT', totalCost: 0 }),
+      ])
+
+      expect(screen.getByTestId('split-charge-note').textContent).toBe(CHARGE_NOTE)
+    })
+
+    it('says it when the new leg has no cost yet (null, before its first offer)', () => {
+      renderOrder([
+        legFixture('del-kept', 1, { status: 'PICKED_UP', splitOutcome: 'SPLIT' }),
+        legFixture('del-new', 2, { splitOutcome: 'SPLIT', totalCost: null }),
+      ])
+
+      expect(screen.getAllByTestId('split-charge-note')).toHaveLength(1)
+      expect(screen.getByTestId('split-charge-note').textContent).toBe(CHARGE_NOTE)
+    })
+
+    it('says nothing for an order the restaurant sent as legs itself', () => {
+      renderOrder([legFixture('del-1', 1), legFixture('del-2', 2)])
+
+      expect(screen.queryByTestId('split-charge-note')).not.toBeInTheDocument()
+      expect(screen.queryByText(/charged to you/)).not.toBeInTheDocument()
+    })
+
+    it('says nothing for an answer from an older server (no splitOutcome field)', () => {
+      const first = legFixture('del-1', 1)
+      const second = legFixture('del-2', 2)
+      delete first.splitOutcome
+      delete second.splitOutcome
+      renderOrder([first, second])
+
+      expect(screen.queryByTestId('split-charge-note')).not.toBeInTheDocument()
+    })
+
+    it('says nothing when a leg was left: a left order was not split, so there is no charge to explain', () => {
+      renderOrder([legFixture('del-1', 1), legFixture('del-2', 2, { status: 'CANCELED', splitOutcome: 'LEFT' })])
+
+      expect(screen.queryByTestId('split-charge-note')).not.toBeInTheDocument()
+      expect(screen.queryByText(/charged to you/)).not.toBeInTheDocument()
+    })
   })
 })

@@ -7,6 +7,7 @@ import DeliveryStatusPage from '../../pages/manual-request/[deliveryId]/status'
 import { fetchOrderLegs, useCancelManualRequestDeliveryMutation, useGetManualRequestDeliveryQuery } from '../../api/manualRequestApi'
 import { getManualRequestApiMode } from '../../utils/manualRequestAuth'
 import { legFixture } from '../legs/legFixtures'
+import { SPLIT_CHARGE_NOTE, SPLIT_LEG_COST_NOTE, SPLIT_LEG_ENDED_NOTE } from '../legs/splitOutcome'
 
 const mockRouter = { query: { deliveryId: 'del-1' } as Record<string, any> }
 jest.mock('next/router', () => ({
@@ -118,5 +119,123 @@ describe('the order page after a split at pickup (spec 0047, AC-8, AC-10)', () =
     expect(screen.getByTestId('leg-label')).toHaveTextContent('Leg 1 of 2')
     expect(screen.queryByTestId('split-outcome')).not.toBeInTheDocument()
     await screen.findByTestId('order-legs')
+  })
+
+  // Decision 11.10 (operator, 2026-11-21): the order page says what a split costs the restaurant, and why
+  // a delivery the split made shows no cost (null before its first offer, 0 after). Spec 0047 cross check 5: the charge is taken back when that
+  // delivery ends with no rider ever accepting it, so an ended one states the rule and claims no charge.
+  describe('what the split costs the restaurant (decision 11.10)', () => {
+    // The sentences are worded once, in splitOutcome.ts (its own test pins them); a page must show that one.
+    const CHARGE_NOTE = SPLIT_CHARGE_NOTE
+    const COST_0_NOTE = SPLIT_LEG_COST_NOTE
+    const ENDED_NOTE = SPLIT_LEG_ENDED_NOTE
+
+    // The page asks for the order's other legs; these tests only read the lines above them.
+    const twoLegs = () =>
+      (fetchOrderLegs as jest.Mock).mockResolvedValue({
+        legs: [legFixture('del-1', 1, { splitOutcome: 'SPLIT' }), legFixture('del-2', 2, { splitOutcome: 'SPLIT' })],
+        missingLegNumbers: [],
+      })
+
+    it('the kept leg (its own price) says the charge note, right under the split line', async () => {
+      twoLegs()
+      showPage(legFixture('del-1', 1, { status: 'PICKED_UP', splitOutcome: 'SPLIT', totalCost: 356 }))
+
+      const note = screen.getByTestId('split-charge-note')
+      expect(note.textContent).toBe(CHARGE_NOTE)
+      expect(screen.getByTestId('split-outcome').nextElementSibling).toBe(note)
+      expect(screen.getAllByTestId('split-charge-note')).toHaveLength(1)
+      await screen.findByTestId('order-legs')
+    })
+
+    it('the leg the split made (cost 0, still open) says why it shows no cost and that its rider is paid by the restaurant', async () => {
+      twoLegs()
+      showPage(legFixture('del-1', 2, { status: 'ASSIGNING_COURIER', splitOutcome: 'SPLIT', totalCost: 0 }))
+
+      const note = screen.getByTestId('split-charge-note')
+      expect(note.textContent).toBe(COST_0_NOTE)
+      expect(screen.getByTestId('split-outcome').nextElementSibling).toBe(note)
+      await screen.findByTestId('order-legs')
+    })
+
+    it('a delivered leg the split made still says the cost 0 note', async () => {
+      twoLegs()
+      showPage(legFixture('del-1', 2, { status: 'DROPPED_OFF', splitOutcome: 'SPLIT', totalCost: 0 }))
+
+      expect(screen.getByTestId('split-charge-note').textContent).toBe(COST_0_NOTE)
+      await screen.findByTestId('order-legs')
+    })
+
+    it.each(['CANCELED', 'FAILED'])(
+      'a leg the split made that ended (%s) states the rule and never claims a charge',
+      async (status) => {
+        twoLegs()
+        showPage(legFixture('del-1', 2, { status, splitOutcome: 'SPLIT', totalCost: 0 }))
+
+        const note = screen.getByTestId('split-charge-note')
+        expect(note.textContent).toBe(ENDED_NOTE)
+        expect(note).not.toHaveTextContent(/is charged to you/)
+        expect(screen.queryByText(/is charged to you/)).not.toBeInTheDocument()
+        expect(screen.getByTestId('split-outcome').nextElementSibling).toBe(note)
+        await screen.findByTestId('order-legs')
+      }
+    )
+
+    // Before its first offer the backend has written no amounts yet: the cost is null, not 0.
+    it('the leg the split made, not offered yet (cost null), says the same leg note, not the kept leg\'s', async () => {
+      twoLegs()
+      showPage(legFixture('del-1', 2, { status: 'ASSIGNING_COURIER', splitOutcome: 'SPLIT', totalCost: null }))
+
+      const note = screen.getByTestId('split-charge-note')
+      expect(note.textContent).toBe(COST_0_NOTE)
+      expect(note.textContent).not.toBe(CHARGE_NOTE)
+      expect(screen.getByTestId('split-outcome').nextElementSibling).toBe(note)
+      await screen.findByTestId('order-legs')
+    })
+
+    it.each(['CANCELED', 'FAILED'])(
+      'a leg the split made that ended before any offer (cost null, %s) states the rule and never claims a charge',
+      async (status) => {
+        twoLegs()
+        showPage(legFixture('del-1', 2, { status, splitOutcome: 'SPLIT', totalCost: null }))
+
+        const note = screen.getByTestId('split-charge-note')
+        expect(note.textContent).toBe(ENDED_NOTE)
+        expect(screen.queryByText(/is charged to you/)).not.toBeInTheDocument()
+        await screen.findByTestId('order-legs')
+      }
+    )
+
+    it('an ordinary order says nothing about a charge', () => {
+      showPage(single({ status: 'PICKED_UP', splitOutcome: null }))
+
+      expect(screen.queryByTestId('split-charge-note')).not.toBeInTheDocument()
+      expect(screen.queryByText(/charged to you/)).not.toBeInTheDocument()
+    })
+
+    it.each([0, null])('an order dispatch refused to split whose cost is %p gets no note', (totalCost) => {
+      showPage(single({ status: 'PICKED_UP', splitOutcome: null, totalCost }))
+
+      expect(screen.queryByTestId('split-charge-note')).not.toBeInTheDocument()
+    })
+
+    it('an order the rider left has its sentence and no charge note', () => {
+      showPage(single({ status: 'CANCELED', splitOutcome: 'LEFT' }))
+
+      expect(screen.getByTestId('split-outcome')).toBeInTheDocument()
+      expect(screen.queryByTestId('split-charge-note')).not.toBeInTheDocument()
+      expect(screen.queryByText(/charged to you/)).not.toBeInTheDocument()
+    })
+
+    it('an order the restaurant sent as legs itself has no charge note', async () => {
+      ;(fetchOrderLegs as jest.Mock).mockResolvedValue({
+        legs: [legFixture('del-1', 1), legFixture('del-2', 2)],
+        missingLegNumbers: [],
+      })
+      showPage(legFixture('del-1', 1))
+
+      expect(screen.queryByTestId('split-charge-note')).not.toBeInTheDocument()
+      await screen.findByTestId('order-legs')
+    })
   })
 })
