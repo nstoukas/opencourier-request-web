@@ -37,6 +37,15 @@ has the full reasoning and verification notes.
 On 2 November rows 29, 32, 31 and 28 were merged in. The GA rows (29 and 32) have the entries
 below; rows 31 and 28 are recorded in the workspace's scope and walkthroughs.
 
+### Split at pickup (scope row 11, spec 0047, GA)
+- A rider who finds an order does not fit one box asks dispatch to split it at the restaurant. The
+  order then says "Split at pickup, now in 2 deliveries" (on its page under "Leg 1 of 2", on the
+  history's order card), and an order the rider had to leave unsplit says "Cancelled: didn't fit one
+  box, send it again with the right sizes", on its own row and on its leg's line in an order card.
+  The wording lives in one function, `splitOutcomeLine`. The charge a split brings shows on the
+  admin statement, not here. `6393b56`, review fixes `ef59186`; tests by a Fable subagent while agy
+  was out of quota, `64ce36f`, `4232e37`. Owes a cross family review once agy is back.
+
 ### Multi leg orders (scope row 10, spec 0046, GA)
 - The order form asks "How many boxes?" (1 to 4) and a size for each box. Above one box it asks a
   price per box, shows the order total large with "2 deliveries × 3,56 € = 7,12 €" (a line per leg
