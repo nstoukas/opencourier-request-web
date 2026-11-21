@@ -5,6 +5,7 @@ import { HistoryItem, absentLegNumbers, legLabel, legsToCancel } from '../manual
 import { formatDateTime, formatMoney } from '../../utils/format'
 import { ReadyControls } from '../ready/ReadyControls'
 import { CancelOrderLegsDialog } from './CancelOrderLegsDialog'
+import { splitOutcomeLine } from './splitOutcome'
 
 const ENDED = new Set(['DROPPED_OFF', 'CANCELED', 'FAILED'])
 
@@ -27,11 +28,20 @@ export function OrderLegsCard({
   const toCancel = legsToCancel(order.legs)
   const total = order.legs.reduce((sum, leg) => sum + (leg.totalCost ?? 0), 0)
   const missing = absentLegNumbers(order.legCount, order.legs)
+  // Spec 0047 (AC-10): an order a rider found too big for one box, split by dispatch at pickup.
+  const splitLine = order.legs.some((leg) => leg.splitOutcome === 'SPLIT')
+    ? splitOutcomeLine({ splitOutcome: 'SPLIT', legCount: order.legCount })
+    : null
 
   return (
     <Card data-testid="order-legs-card">
       <CardHeader className="pb-2">
         <CardTitle className="text-base">Order in {order.legCount} deliveries</CardTitle>
+        {splitLine ? (
+          <p className="text-sm font-medium" data-testid="split-outcome">
+            {splitLine}
+          </p>
+        ) : null}
         {first.dropoff ? (
           <p className="text-sm">
             {first.dropoff.dropoffName} · <span className="text-muted-foreground">{first.dropoff.formattedAddress ?? first.dropoff.city ?? '—'}</span>

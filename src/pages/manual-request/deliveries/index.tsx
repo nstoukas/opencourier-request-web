@@ -33,6 +33,7 @@ import { PageHeader } from '../../../modules/portal/components/PortalFrame'
 import { CancelDeliveryDialog } from '../../../modules/cancel/CancelDeliveryDialog'
 import { OrderLegsCard } from '../../../modules/legs/OrderLegsCard'
 import { groupHistory } from '../../../modules/manual-request/utils/legs'
+import { splitOutcomeLine } from '../../../modules/legs/splitOutcome'
 
 // Statuses where cancel is no longer possible
 const TERMINAL_STATUSES = new Set(['DROPPED_OFF', 'CANCELED', 'FAILED'])
@@ -298,6 +299,12 @@ export default function DeliveriesPage() {
                         </CardTitle>
                         {delivery.orderReference ? (
                           <p className="text-sm font-medium">{delivery.orderReference}</p>
+                        ) : null}
+                        {/* Spec 0047 (AC-8): left at the restaurant because it didn't fit one box. */}
+                        {splitOutcomeLine(delivery) ? (
+                          <p className="text-sm font-medium" data-testid="split-outcome">
+                            {splitOutcomeLine(delivery)}
+                          </p>
                         ) : null}
                       </div>
                       <StatusBadge status={delivery.status} />

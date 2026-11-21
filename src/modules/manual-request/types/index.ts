@@ -203,6 +203,11 @@ export interface PartnerDeliveryDto {
   // server) for a single delivery.
   legNumber?: number | null
   legCount?: number | null
+  // Spec 0047 (AC-8, AC-10): SPLIT when a rider found the order did not fit one box and dispatch split it
+  // at pickup (this leg is one of the pieces); LEFT when the rider left it unsplit after the time limit
+  // (the order was cancelled for the restaurant to send again). Null or absent otherwise, or from an
+  // older server.
+  splitOutcome?: 'SPLIT' | 'LEFT' | null
 }
 
 // Spec 0046 (AC-3, AC-6): GET /deliveries/:id/order-legs, the legs of one order and the ones never sent.

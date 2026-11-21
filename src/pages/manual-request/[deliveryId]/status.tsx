@@ -3,6 +3,7 @@ import { ReportProductCard } from '../../../modules/product-report/ReportProduct
 import { useCallback, useState } from 'react'
 import { OrderLegsSection } from '../../../modules/legs/OrderLegsSection'
 import { legLabel } from '../../../modules/manual-request/utils/legs'
+import { splitOutcomeLine } from '../../../modules/legs/splitOutcome'
 import Head from 'next/head'
 import Link from 'next/link'
 import { useRouter } from 'next/router'
@@ -426,6 +427,12 @@ export default function ManualRequestStatusPage() {
             {partnerData?.legNumber && partnerData.legCount ? (
               <p className="text-base font-medium" data-testid="leg-label">
                 {legLabel(partnerData.legNumber, partnerData.legCount)}
+              </p>
+            ) : null}
+            {/* Spec 0047 (AC-8, AC-10): split by dispatch at pickup, or left because it didn't fit one box. */}
+            {partnerData && splitOutcomeLine(partnerData) ? (
+              <p className="text-sm font-medium" data-testid="split-outcome">
+                {splitOutcomeLine(partnerData)}
               </p>
             ) : null}
             {data && partnerMode ? (
