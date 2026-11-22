@@ -3,7 +3,9 @@
 import React from 'react'
 import '@testing-library/jest-dom'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { I18nextProvider } from 'react-i18next'
 import { AvailabilityStrip } from './AvailabilityStrip'
+import { createI18n } from '../../i18n/createI18n'
 import {
   setPartnerBusy,
   clearPartnerBusy,
@@ -370,5 +372,93 @@ describe('AvailabilityStrip (spec 0029, AC-8)', () => {
     expect(resumePartner).toHaveBeenCalledTimes(1)
     expect(mockOnChanged).toHaveBeenCalledTimes(1)
     expect(screen.getByRole('button', { name: 'Resume' })).toBeEnabled()
+  })
+
+  it('renders coded not-accepting reason in Greek when notAcceptingCode is present (row 124)', () => {
+    const i18nEl = createI18n('el')
+    const availability: PartnerAvailability = {
+      ...defaultAvailability,
+      pausedUntil: '2026-11-23T19:30:00.000Z',
+      acceptingOrders: false,
+      notAcceptingReason: 'Ordering is paused until 21:30.',
+      notAcceptingCode: 'PARTNER_PAUSED',
+      notAcceptingParams: { until: '2026-11-23T19:30:00.000Z' },
+    }
+
+    render(
+      <I18nextProvider i18n={i18nEl}>
+        <AvailabilityStrip availability={availability} onChanged={mockOnChanged} />
+      </I18nextProvider>,
+    )
+
+    const statusAlert = screen.getByRole('status')
+    expect(statusAlert).toHaveTextContent('Οι παραγγελίες είναι σε παύση')
+    expect(statusAlert).toHaveTextContent('Οι παραγγελίες έχουν παυθεί έως τις 21:30.')
+  })
+
+  it('renders coded not-accepting reason in English when notAcceptingCode is present (row 124)', () => {
+    const i18nEn = createI18n('en')
+    const availability: PartnerAvailability = {
+      ...defaultAvailability,
+      pausedUntil: '2026-11-23T19:30:00.000Z',
+      acceptingOrders: false,
+      notAcceptingReason: 'Ordering is paused until 21:30.',
+      notAcceptingCode: 'PARTNER_PAUSED',
+      notAcceptingParams: { until: '2026-11-23T19:30:00.000Z' },
+    }
+
+    render(
+      <I18nextProvider i18n={i18nEn}>
+        <AvailabilityStrip availability={availability} onChanged={mockOnChanged} />
+      </I18nextProvider>,
+    )
+
+    const statusAlert = screen.getByRole('status')
+    expect(statusAlert).toHaveTextContent('Ordering is paused')
+    expect(statusAlert).toHaveTextContent('Ordering is paused until 21:30.')
+  })
+
+  it('falls back to notAcceptingReason when notAcceptingCode is unknown (row 124)', () => {
+    const i18nEl = createI18n('el')
+    const availability: PartnerAvailability = {
+      ...defaultAvailability,
+      acceptingOrders: false,
+      notAcceptingReason: 'English refusal from newer backend.',
+      notAcceptingCode: 'UNKNOWN_FUTURE_REASON',
+      notAcceptingParams: {},
+    }
+
+    render(
+      <I18nextProvider i18n={i18nEl}>
+        <AvailabilityStrip availability={availability} onChanged={mockOnChanged} />
+      </I18nextProvider>,
+    )
+
+    const statusAlert = screen.getByRole('status')
+    expect(statusAlert).toHaveTextContent('English refusal from newer backend.')
+  })
+
+  it('renders action refusal error by code in the reader’s language via serverMessage (row 124)', async () => {
+    const i18nEl = createI18n('el')
+    const refusalError = {
+      statusCode: 400,
+      code: 'PARTNER_PAUSED',
+      message: 'Ordering is paused until 21:30.',
+      params: { until: '2026-11-23T19:30:00.000Z' },
+    }
+    ;(setPartnerBusy as jest.Mock).mockRejectedValue(refusalError)
+
+    render(
+      <I18nextProvider i18n={i18nEl}>
+        <AvailabilityStrip availability={defaultAvailability} onChanged={mockOnChanged} />
+      </I18nextProvider>,
+    )
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '+10' }))
+    })
+
+    const alert = screen.getByRole('alert')
+    expect(alert).toHaveTextContent('Οι παραγγελίες έχουν παυθεί έως τις 21:30.')
   })
 })
