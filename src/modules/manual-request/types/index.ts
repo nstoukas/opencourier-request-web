@@ -35,12 +35,12 @@ export function buildManualRequestFormattedAddress(
   } else {
     line1 = house
   }
-  // Greek order, the way Greek post writes an address: the street and number, then the postcode before the
-  // town ("Iasonos 12, 38221 Volos"), then a region if one was typed. The country is left out for Greece,
-  // the only country the co-op serves, and kept for any other (row 47, decision 47.8).
-  const postcodeTown = [a.zipCode?.trim(), a.city?.trim()].filter(Boolean).join(' ')
-  const country = (a.countryCode ?? '').trim().toUpperCase()
-  return [line1, postcodeTown, a.state?.trim(), country === 'GR' ? '' : country].filter(Boolean).join(', ')
+  // Not in the Greek order the order page shows (decision 47.8): this text is SENT and stored as the
+  // delivery's and the saved customer's formattedAddress, which geocoding, riders, admin and the customer
+  // search read, so it stays exactly as before row 47 (row 47 review, ruling 6).
+  const cityState = [a.city?.trim(), a.state?.trim()].filter(Boolean).join(', ')
+  const zipCountry = [a.zipCode?.trim(), a.countryCode?.trim()].filter(Boolean).join(' ')
+  return [line1, cityState, zipCountry].filter(Boolean).join(', ')
 }
 
 export interface ManualRequestQuoteInput {

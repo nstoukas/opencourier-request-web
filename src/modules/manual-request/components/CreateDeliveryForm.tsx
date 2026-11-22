@@ -13,6 +13,7 @@ import { z } from 'zod'
 import { useTranslation } from 'react-i18next'
 // TFunction is the type of i18next's `t`, so the plain functions below can take it as a parameter.
 import type { TFunction } from 'i18next'
+import { isMessageKey, keyMessage, showMessage, textMessage, type ShownMessage } from '../../../i18n/shownMessage'
 import {
   Alert,
   AlertDescription,
@@ -339,15 +340,18 @@ function resolveSubmittedFormattedAddress(
 // A failed call's message in plain words: the backend's own sentence (through serverMessage, where its
 // error codes will be translated, spec 0054 AC-6), never a status code. A failure with no status (a
 // timeout, a dropped connection) has only the browser's or our own English words for developers, so the
-// caller's sentence shows instead (decision 47.6).
-function plainErrorMessage(err: any, fallback: string, t: TFunction) {
+// caller's sentence shows instead (decision 47.6). Returns a message for state, not words: the caller's
+// sentence stays a key, so it follows a switch of language (row 47 review, finding 3). With no caller's
+// sentence (null), a failure with nothing to say gives null.
+function plainErrorMessage(err: any, fallbackKey: string | null): ShownMessage | null {
+  const fallback = fallbackKey ? keyMessage(fallbackKey) : null
   const statusCode = err?.statusCode ?? err?.status
   if (statusCode === 401) {
-    return t('form.sessionExpired')
+    return keyMessage('form.sessionExpired')
   }
   if (statusCode === undefined) return fallback
   const message = serverMessage(err)
-  return message && !/^Request failed \(HTTP \d+\)$/.test(message) ? message : fallback
+  return message && !/^Request failed \(HTTP \d+\)$/.test(message) ? textMessage(message) : fallback
 }
 
 // ─── Small pieces ─────────────────────────────────────────────────────────────
@@ -420,7 +424,8 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
   const [priced, setPriced] = useState<PricedOrder | null>(null)
   const [isExpired, setIsExpired] = useState(false)
   // A failed price or send, shown in the bar above the button.
-  const [barError, setBarError] = useState<string | null>(null)
+  // A key or the server's words, translated where the bar shows it (src/i18n/shownMessage.ts).
+  const [barError, setBarError] = useState<ShownMessage | null>(null)
   // Saved customers (spec 0005): the customer picked for this order, if any, and the save tick.
   const [linkedCustomer, setLinkedCustomer] = useState<SavedCustomer | null>(null)
   // The picked customer's fields opened with Edit (spec 0006, AC-11).
@@ -570,19 +575,23 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
     showPrice(null)
 
     if (!pickupCheck.usable) {
-      setBarError(t(pickupCheck.reason ?? 'form.pickupNotUsable'))
+      setBarError(keyMessage(pickupCheck.reason ?? 'form.pickupNotUsable'))
       return
     }
 
     // Spec 0029 (agy review): pressing Enter submits the form even with the button off, so say why here.
     if (availability?.acceptingOrders === false) {
-      setBarError(availability.notAcceptingReason ?? t('form.notAccepting'))
+      setBarError(
+        availability.notAcceptingReason
+          ? textMessage(availability.notAcceptingReason)
+          : keyMessage('form.notAccepting'),
+      )
       return
     }
 
     // No price for a pin nobody checked on the map (spec 0016, AC-5).
     if (!pinConfirmed) {
-      setBarError(t(CONFIRM_PIN_MESSAGE))
+      setBarError(keyMessage(CONFIRM_PIN_MESSAGE))
       if (linkedCustomer) setEditingCustomer(true)
       if (pinMapRef.current) {
         // `?.`: test browsers have no scrollIntoView.
@@ -614,14 +623,14 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
       } catch (lookupError) {
         setBarError(
           (lookupError as Error | undefined)?.name === 'TimeoutError'
-            ? t('pin.lookupTimedOut')
-            : t('pin.lookupFailed'),
+            ? keyMessage('pin.lookupTimedOut')
+            : keyMessage('pin.lookupFailed'),
         )
         return
       }
 
       if (!pickupCoordinates) {
-        setBarError(t('form.addressNotFound'))
+        setBarError(keyMessage('form.addressNotFound'))
         return
       }
 
@@ -651,12 +660,12 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
 
       // The restaurant changed something while the price was on its way: it is not for these values.
       if (pricedValuesKey(pricedValues) !== pricedValuesKey(form.getValues())) {
-        setBarError(t('form.changedWhilePricing'))
+        setBarError(keyMessage('form.changedWhilePricing'))
         return
       }
       showPrice({ values: pricedValues, pickupReadyAt, orderTotalValue, quote, quotes })
     } catch (err: any) {
-      setBarError(plainErrorMessage(err, t('form.priceFailed'), t))
+      setBarError(plainErrorMessage(err, 'form.priceFailed'))
     }
   }
 
@@ -707,7 +716,7 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
       if (isQuoteFailure(err)) {
         setIsExpired(true)
       } else {
-        setBarError(plainErrorMessage(err, t('form.sendFailed'), t))
+        setBarError(plainErrorMessage(err, 'form.sendFailed'))
       }
       return
     }
@@ -766,7 +775,9 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
         await confirmDelivery(legInput(index))
       } catch (legError: any) {
         // Row 10 review: the backend's reason, so the restaurant knows why before it retries.
-        return { firstLegId: first.id, legNotSent: index + 1, reason: plainErrorMessage(legError, '', t) }
+        // Words now, not a key: they go straight into a toast, which is gone before any switch.
+        const reason = plainErrorMessage(legError, null)
+        return { firstLegId: first.id, legNotSent: index + 1, reason: reason ? showMessage(reason, t) : '' }
       }
     }
     return { firstLegId: first.id, legNotSent: null, reason: '' }
@@ -844,7 +855,7 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
     }
     setConfirmedPin({ latitude: dropoffLatitude, longitude: dropoffLongitude, pinKey: currentPinKey })
     setPinMessage(null)
-    if (barError === t(CONFIRM_PIN_MESSAGE)) setBarError(null)
+    if (isMessageKey(barError, CONFIRM_PIN_MESSAGE)) setBarError(null)
   }
 
   // `Change`: the fields stay as they are, the order becomes a typed customer, the tick goes off.
@@ -1229,7 +1240,7 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
           quote={priced?.quote ?? null}
           quotes={priced?.quotes ?? []}
           pricedAddress={priced?.values.dropoffAddress.formattedAddress || null}
-          error={barError}
+          error={barError ? showMessage(barError, t) : null}
           disabled={!pickupCheck.usable || availability?.acceptingOrders === false}
           onSend={handleSend}
           onHeightChange={setBarHeight}

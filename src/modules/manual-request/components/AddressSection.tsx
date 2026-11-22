@@ -84,7 +84,8 @@ export function AddressSection<T extends FieldValues>({
   const [query, setQuery] = useState(initialQuery)
   const [results, setResults] = useState<NominatimResult[]>([])
   const [isSearching, setIsSearching] = useState(false)
-  const [searchError, setSearchError] = useState<string | null>(null)
+  // The error's translation key, translated where it is shown (row 47 review, finding 3).
+  const [searchErrorKey, setSearchErrorKey] = useState<string | null>(null)
   const [showResults, setShowResults] = useState(false)
 
   // ── The order form's typed fallback ─────────────────────────────────────
@@ -118,7 +119,7 @@ export function AddressSection<T extends FieldValues>({
     const q = query.trim()
     if (!q) return
     setIsSearching(true)
-    setSearchError(null)
+    setSearchErrorKey(null)
     setResults([])
     try {
       const viewbox = near && hasValidCoordinates(near.latitude, near.longitude) ? `&viewbox=${nearbyViewbox(near)}` : ''
@@ -138,14 +139,12 @@ export function AddressSection<T extends FieldValues>({
       // so the restaurant sees "Search failed" instead of nothing at all.
       if (!res.ok) throw new Error(`Search failed (HTTP ${res.status})`)
       const data: NominatimResult[] = await res.json()
-      if (data.length === 0) setSearchError(t('address.noResults'))
+      if (data.length === 0) setSearchErrorKey('address.noResults')
       setResults(data)
       setShowResults(true)
     } catch (error) {
-      setSearchError(
-        (error as Error | undefined)?.name === 'TimeoutError'
-          ? t('address.searchTimedOut')
-          : t('address.searchFailed'),
+      setSearchErrorKey(
+        (error as Error | undefined)?.name === 'TimeoutError' ? 'address.searchTimedOut' : 'address.searchFailed',
       )
     } finally {
       setIsSearching(false)
@@ -292,8 +291,8 @@ export function AddressSection<T extends FieldValues>({
             ))}
           </ul>
         )}
-        {searchError && (
-          <p className="text-sm text-destructive mt-1">{searchError}</p>
+        {searchErrorKey && (
+          <p className="text-sm text-destructive mt-1">{t(searchErrorKey)}</p>
         )}
         {searchShowsStreetError && (
           <p id={streetErrorId} className="mt-1 text-sm font-medium text-destructive">

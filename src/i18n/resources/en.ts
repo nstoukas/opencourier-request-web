@@ -20,6 +20,10 @@ export const en = {
     notifications: 'Notifications ({hotkey})',
     minutes_one: '{{count}} min',
     minutes_other: '{{count}} min',
+    // "at" before a time of day, through useFormat().atTime. Two keys because Greek uses another word at
+    // one o'clock ("στη 01:05", "στις 13:05"); English says "at" for both.
+    atTime: 'at {{time}}',
+    atOneOClock: 'at {{time}}',
   },
   language: {
     label: 'Language',
@@ -256,7 +260,8 @@ export const en = {
     viewStatus: 'View status',
     notInList: '{{leg}} is not in this list.',
     openTheOrder: 'Open the order',
-    openOrderToChange: 'To change the ready time or cancel, <link>open the order</link>.',
+    openOrderToChange: 'To change the ready time or cancel, [link].',
+    openOrderLink: 'open the order',
   },
   // Cancelling one delivery (spec 0015) or every leg of an order (spec 0046).
   cancel: {
@@ -374,6 +379,9 @@ export const en = {
     created: 'Created: {{time}}',
     viewStatus: 'View Status',
     edit: 'Edit',
+    // The red button on a row that cancels the delivery. Not common.cancel, which backs out of a dialog:
+    // in Greek those are two different words.
+    cancel: 'Cancel',
     previous: 'Previous',
     next: 'Next',
     pageOf: 'Page {{page}} of {{total}}',
@@ -487,8 +495,8 @@ export const en = {
   ready: {
     changeFailed: 'The ready time could not be changed.',
     notChanged: 'not changed',
-    foodReadyAt: 'Food ready at {{time}}',
-    readyAt: 'Ready at {{time}}',
+    foodReadyAt: 'Food ready {{atTime}}',
+    readyAt: 'Ready {{atTime}}',
     foodReady: 'Food ready',
   },
   // A complaint about the rider on an order (spec 0052).

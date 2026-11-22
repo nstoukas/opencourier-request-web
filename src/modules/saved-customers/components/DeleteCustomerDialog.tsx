@@ -25,11 +25,12 @@ interface DeleteCustomerDialogProps {
 export function DeleteCustomerDialog({ customer, onClose, onDeleted }: DeleteCustomerDialogProps) {
   const { t } = useTranslation()
   const [isDeleting, setIsDeleting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  // The error's translation key, translated where it is shown (row 47 review, finding 3).
+  const [errorKey, setErrorKey] = useState<string | null>(null)
 
   const confirm = async () => {
     setIsDeleting(true)
-    setError(null)
+    setErrorKey(null)
     try {
       await deleteSavedCustomer(customer.id)
       onDeleted(customer.id)
@@ -38,7 +39,7 @@ export function DeleteCustomerDialog({ customer, onClose, onDeleted }: DeleteCus
         onDeleted(customer.id)
         return
       }
-      setError(t('customers.deleteFailed'))
+      setErrorKey('customers.deleteFailed')
       setIsDeleting(false)
     }
   }
@@ -50,9 +51,9 @@ export function DeleteCustomerDialog({ customer, onClose, onDeleted }: DeleteCus
           <AlertDialogTitle>{t('customers.deleteTitle', { name: customer.name })}</AlertDialogTitle>
           <AlertDialogDescription>{t('customers.deleteDescription')}</AlertDialogDescription>
         </AlertDialogHeader>
-        {error ? (
+        {errorKey ? (
           <p role="alert" className="text-sm text-destructive">
-            {error}
+            {t(errorKey)}
           </p>
         ) : null}
         <AlertDialogFooter>

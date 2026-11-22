@@ -70,6 +70,17 @@ export function formatTime(iso: string | null | undefined, language: Language = 
   return TIME[language].format(new Date(iso))
 }
 
+/**
+ * Whether a time reads as one o'clock (01:00 to 01:59) on Greek time. Greek says "στη 01:05" (στη μία)
+ * but "στις 13:05", so the sentence that puts "at" before a time needs to know (row 47 review).
+ * formatToParts splits the formatted time into pieces, so the hour can be read on its own.
+ */
+export function isOneOClock(iso: string | null | undefined): boolean {
+  if (!iso) return false
+  const hour = TIME.el.formatToParts(new Date(iso)).find((part) => part.type === 'hour')
+  return hour?.value === '01'
+}
+
 // The backend names its unit in words ('KILOMETERS'); the page shows the symbol, the same in Greek and
 // English (row 47). A unit not listed here is shown in lower case, as before.
 const UNIT_SYMBOLS: Record<string, string> = { KM: 'km', KILOMETERS: 'km', KILOMETER: 'km', MI: 'mi', MILES: 'mi', MILE: 'mi' }
