@@ -22,6 +22,7 @@ export const el: Translations = {
     minutes_other: '{{count, number}} λεπτά',
     atTime: 'στις {{time}}',
     atOneOClock: 'στη {{time}}',
+    requestTimedOut: 'Ο διακομιστής δεν απάντησε εγκαίρως. Δοκιμάστε ξανά σε λίγο.',
   },
   language: {
     label: 'Γλώσσα',

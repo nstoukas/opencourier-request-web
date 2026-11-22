@@ -1,3 +1,4 @@
+// Copy from: opencourier-backend/src/localization/en.ts. Nothing checks this copy against it (a renamed param would show blank; decision 124.11).
 // COPIED from opencourier-backend/src/localization/en.ts (spec 0054, row 124), the server's own texts, so
 // the portal shows the server's refusals and dispatch stop sentences in its reader's language. Keep it a
 // plain copy: when the backend's file changes, copy it again (only the export names differ: `serverEn`,

@@ -24,6 +24,8 @@ export const en = {
     // one o'clock ("στη 01:05", "στις 13:05"); English says "at" for both.
     atTime: 'at {{time}}',
     atOneOClock: 'at {{time}}',
+    // A call the server did not answer in time (manualRequestFetch's timeout), through serverMessage.
+    requestTimedOut: 'The server did not answer in time. Please try again in a moment.',
   },
   language: {
     label: 'Language',

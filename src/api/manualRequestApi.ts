@@ -18,6 +18,7 @@ import { EnumDeliveryEventType } from '../shared-types'
 import { notifyPartnerUnauthorized } from './partnerSessionEvents'
 import { usePolledFetch } from '../hooks/usePolledFetch'
 import type { Language } from '../i18n/language'
+import { REQUEST_TIMEOUT_CODE } from '../i18n/serverText'
 import {
   getManualRequestApiMode,
   PARTNER_AUTH_BASE_URL,
@@ -61,7 +62,11 @@ export async function manualRequestFetch<T>(
     })
   } catch (error: any) {
     if (error?.name === 'AbortError') {
-      throw new Error(`Request timed out after ${REQUEST_TIMEOUT_MS / 1000}s. Check backend availability and token.`)
+      // The English stays for developers and logs; the code lets serverMessage word it for the restaurant,
+      // in their language (row 124 review, decision 124.10).
+      const timeout: any = new Error(`Request timed out after ${REQUEST_TIMEOUT_MS / 1000}s. Check backend availability and token.`)
+      timeout.code = REQUEST_TIMEOUT_CODE
+      throw timeout
     }
     throw error
   } finally {

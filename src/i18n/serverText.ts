@@ -22,8 +22,11 @@
 //   {{name, when}}      an ISO time as HH:mm, and its day when that is not today ("09:00 tomorrow")
 //   $t(server.enum.x.{{name}})   another key, looked up after the value is filled in
 //
-// KNOWN GAP, left as it was (row 47 review, finding 4, ruled pre-existing; decision 124.2): a failure
-// the server never answered (a timeout, "Request failed (HTTP 500)", the proxy's "Backend unreachable.")
+// A timeout is worded here too (row 124 review, decision 124.10): manualRequestFetch gives it the code
+// REQUEST_TIMEOUT_CODE, and serverMessage shows the portal's own `common.requestTimedOut` for it.
+//
+// KNOWN GAP, left as it was (row 47 review, finding 4, ruled pre-existing; decision 124.2): any other
+// failure the server never answered ("Request failed (HTTP 500)", the proxy's "Backend unreachable.")
 // has no code, so its message, our developer English, still comes back from serverMessage, and the places
 // that call `serverMessage(err, i18n) ?? t(...)` with no status check show it: deliveries/index.tsx (edit
 // save, edit load, list load), AvailabilityStrip, ReadyControls, OrderLegsSection, CancelOrderLegsDialog,
@@ -36,6 +39,12 @@ import { formatMoney, formatTime } from '../utils/format'
 import { LOCALES, toLanguage, type Language } from './language'
 
 const TIME_ZONE = 'Europe/Athens'
+
+/**
+ * The code manualRequestFetch gives a call the server did not answer in time. Not a server code: no
+ * `server.error` template has it, so serverMessage words it from the portal's own `common.requestTimedOut`.
+ */
+export const REQUEST_TIMEOUT_CODE = 'REQUEST_TIMEOUT'
 
 // A value the server sends inside `params`. A "part" is a piece of sentence with its own template
 // (only delivery records use them; refusals and banners send plain values), kept so the renderer
@@ -54,9 +63,15 @@ const DAY_WORDS: Record<Language, { today: string; tomorrow: string; on: string 
   en: { today: 'today', tomorrow: 'tomorrow', on: 'on' },
 }
 
-// The YYYY-MM-DD day of an instant on Greek time ('en-CA' writes dates in that order).
+// Built once, since building a formatter is slow.
+const GREEK_DATE = new Intl.DateTimeFormat('en-CA', { timeZone: TIME_ZONE, year: 'numeric', month: '2-digit', day: '2-digit' })
+
+// The YYYY-MM-DD day of a valid date on Greek time. formatToParts hands back the year, month and day as
+// separate pieces, so the result never depends on how a locale orders or separates them (row 124 review).
 function greekDay(date: Date): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: TIME_ZONE }).format(date)
+  const parts = GREEK_DATE.formatToParts(date)
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value ?? ''
+  return `${part('year')}-${part('month')}-${part('day')}`
 }
 
 // "today", "tomorrow", or "on 3 August" (Greek "στις 3 Αυγούστου"), seen from now on Greek time.
@@ -145,6 +160,18 @@ function hasServerText(i18n: I18n, key: string): boolean {
   return lookup(i18n, 'en', key) !== null
 }
 
+// The template of `key` filled in, in the reader's language, or null if rendering throws (Intl on a value
+// it cannot read, say). These sentences are drawn during render, in the dispatch banner and the order bar
+// among others, and a throw there would take the page down; the callers show the server's English
+// instead (row 124 review).
+function safeRender(i18n: I18n, key: string, params: ServerParams): string | null {
+  try {
+    return render(i18n, toLanguage(i18n.language), key, params)
+  } catch {
+    return null
+  }
+}
+
 // `typeof x === 'object'` is also true for null, hence the second check.
 function asParams(value: unknown): ServerParams {
   return typeof value === 'object' && value !== null ? (value as ServerParams) : {}
@@ -163,7 +190,7 @@ export function codedSentenceText(
   english: string,
 ): string {
   const key = `server.${group}.${code}`
-  return code && hasServerText(i18n, key) ? render(i18n, toLanguage(i18n.language), key, asParams(params)) : english
+  return code && hasServerText(i18n, key) ? (safeRender(i18n, key, asParams(params)) ?? english) : english
 }
 
 // ── Refusals (AC-6) ──────────────────────────────────────────────────────────────────────────
@@ -184,9 +211,12 @@ export interface ServerError {
  */
 export function serverMessage(error: ServerError | null | undefined, i18n: I18n): string | undefined {
   if (typeof error !== 'object' || error === null) return undefined
+  const message = typeof error.message === 'string' && error.message.length > 0 ? error.message : undefined
+  // No answer in time: the portal's own sentence in the reader's language, not the developer English.
+  if (error.code === REQUEST_TIMEOUT_CODE) return i18n.t('common.requestTimedOut')
   if (typeof error.code === 'string' && hasServerText(i18n, `server.error.${error.code}`)) {
-    return render(i18n, toLanguage(i18n.language), `server.error.${error.code}`, asParams(error.params))
+    // A throw while rendering shows the server's English instead (or, with none, the caller's sentence).
+    return safeRender(i18n, `server.error.${error.code}`, asParams(error.params)) ?? message
   }
-  const message = error.message
-  return typeof message === 'string' && message.length > 0 ? message : undefined
+  return message
 }
