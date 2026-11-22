@@ -1,4 +1,5 @@
 import React, { useId } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Checkbox } from '../../../admin-web-components'
 import { retentionHelperText, useRetentionMonths } from '../hooks/useRetentionMonths'
 
@@ -13,6 +14,7 @@ interface SaveCustomerTickProps {
  * and how long they are kept.
  */
 export function SaveCustomerTick({ checked, onCheckedChange }: SaveCustomerTickProps) {
+  const { t } = useTranslation()
   const id = useId()
   const helperId = `${id}-helper`
   const months = useRetentionMonths()
@@ -34,10 +36,10 @@ export function SaveCustomerTick({ checked, onCheckedChange }: SaveCustomerTickP
       />
       <span className="space-y-1">
         <span id={labelId} className="block text-base font-medium leading-snug">
-          Save this customer for next time (they agreed)
+          {t('customers.saveTick')}
         </span>
         <span id={helperId} className="block text-sm text-muted-foreground">
-          {retentionHelperText(months)}
+          {retentionHelperText(months, t)}
         </span>
       </span>
     </label>

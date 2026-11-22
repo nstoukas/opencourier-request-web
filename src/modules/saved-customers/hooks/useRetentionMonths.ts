@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import type { TFunction } from 'i18next'
 import { fetchRetentionMonths } from '../../../api/savedCustomersApi'
 
 // How many months an unused saved customer is kept (the co-op's setting), or null until it is read
@@ -20,9 +21,9 @@ export function useRetentionMonths(): number | null {
 }
 
 // The helper line under the save tick (spec 0005, AC-1).
-export function retentionHelperText(months: number | null): string {
+export function retentionHelperText(months: number | null, t: TFunction): string {
   if (months === null) {
-    return 'Only your restaurant sees it. It is deleted after a period unused that the co-op sets.'
+    return t('customers.retentionUnknown')
   }
-  return `Only your restaurant sees it. It is deleted after ${months} ${months === 1 ? 'month' : 'months'} unused.`
+  return t('customers.retentionMonths', { count: months })
 }

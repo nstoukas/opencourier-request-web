@@ -1,5 +1,6 @@
 import React from 'react'
 import { Warning } from '@phosphor-icons/react'
+import { useTranslation } from 'react-i18next'
 import { Alert, AlertDescription } from '../../../admin-web-components'
 import { CUSTOMER_SAVE_FAILURES, CUSTOMER_SAVE_NOTICES, CustomerSaveFailure } from '../utils/saveAfterOrder'
 
@@ -15,11 +16,12 @@ function isFailure(value: unknown): value is CustomerSaveFailure {
  * other value (or none) shows nothing.
  */
 export function CustomerSaveNotice({ code }: { code: unknown }) {
+  const { t } = useTranslation()
   if (!isFailure(code)) return null
   return (
     <Alert variant="warning">
       <Warning className="size-4" aria-hidden="true" />
-      <AlertDescription>{CUSTOMER_SAVE_NOTICES[code]}</AlertDescription>
+      <AlertDescription>{t(CUSTOMER_SAVE_NOTICES[code])}</AlertDescription>
     </Alert>
   )
 }

@@ -1,5 +1,7 @@
 import React from 'react'
 import { UserCircle } from '@phosphor-icons/react'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import { Button, Card } from '../../../admin-web-components'
 import type { SavedCustomer } from '../types'
 import { customerStreet } from '../utils/fields'
@@ -16,10 +18,10 @@ interface PickedCustomerCardProps {
 }
 
 // "Floor 3 · Doorbell Papadopoulou" (spec 0016), each part left out when empty; empty when both are.
-export function floorAndDoorbellLine(customer: Pick<SavedCustomer, 'floor' | 'doorbell'>): string {
+export function floorAndDoorbellLine(customer: Pick<SavedCustomer, 'floor' | 'doorbell'>, t: TFunction): string {
   return [
-    customer.floor?.trim() ? `Floor ${customer.floor.trim()}` : '',
-    customer.doorbell?.trim() ? `Doorbell ${customer.doorbell.trim()}` : '',
+    customer.floor?.trim() ? t('customers.floorPart', { floor: customer.floor.trim() }) : '',
+    customer.doorbell?.trim() ? t('customers.doorbellPart', { doorbell: customer.doorbell.trim() }) : '',
   ]
     .filter(Boolean)
     .join(' · ')
@@ -31,6 +33,8 @@ export function floorAndDoorbellLine(customer: Pick<SavedCustomer, 'floor' | 'do
  * button on the page while a customer is linked.
  */
 export function PickedCustomerCard({ customer, editing, onEdit, onChange, changeRef }: PickedCustomerCardProps) {
+  const { t } = useTranslation()
+  const floorLine = floorAndDoorbellLine(customer, t)
   return (
     <Card className="space-y-3 p-4">
       <div className="flex items-start gap-3">
@@ -38,12 +42,12 @@ export function PickedCustomerCard({ customer, editing, onEdit, onChange, change
         <div className="min-w-0 flex-1 space-y-0.5 break-words">
           <p className="font-medium">{customer.name}</p>
           {editing ? (
-            <p className="text-sm text-muted-foreground">Saved customer. Edit the details below.</p>
+            <p className="text-sm text-muted-foreground">{t('customers.pickedEditing')}</p>
           ) : (
             <>
               <p className="text-sm text-muted-foreground">{customer.phone}</p>
               <p className="text-sm">{customerStreet(customer)}</p>
-              {floorAndDoorbellLine(customer) ? <p className="text-sm">{floorAndDoorbellLine(customer)}</p> : null}
+              {floorLine ? <p className="text-sm">{floorLine}</p> : null}
             </>
           )}
         </div>
@@ -51,11 +55,11 @@ export function PickedCustomerCard({ customer, editing, onEdit, onChange, change
       <div className="flex gap-2">
         {editing ? null : (
           <Button type="button" variant="outline" size="xl" className="flex-1" onClick={onEdit}>
-            Edit
+            {t('customers.edit')}
           </Button>
         )}
         <Button ref={changeRef} type="button" variant="outline" size="xl" className="flex-1" onClick={onChange}>
-          Change
+          {t('customers.change')}
         </Button>
       </div>
     </Card>

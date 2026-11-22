@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { AddressBook, MagnifyingGlass, Plus, WarningCircle } from '@phosphor-icons/react'
+import { useTranslation } from 'react-i18next'
 import {
   Alert,
   AlertDescription,
@@ -30,6 +31,7 @@ type ListState =
  * used first, 20 at a time. Only this restaurant's customers ever come back from the backend.
  */
 export function CustomersPage() {
+  const { t } = useTranslation()
   const { toast } = useToast()
   const [query, setQuery] = useState('')
   // The search actually sent: the typed text after a 300 ms pause, or '' under 2 characters.
@@ -86,7 +88,7 @@ export function CustomersPage() {
         return { status: 'ready', items, total: next.total, page: current.page + 1 }
       })
     } catch {
-      toast({ title: 'Could not load more customers', description: 'Try again in a moment.', variant: 'destructive' })
+      toast({ title: t('customers.loadMoreFailed'), description: t('customers.tryAgainSoon'), variant: 'destructive' })
     } finally {
       setIsLoadingMore(false)
     }
@@ -106,7 +108,7 @@ export function CustomersPage() {
     if (editing === 'add') {
       // The new customer is the most recently used: load the first page again, with the same search.
       setReloadCount((count) => count + 1)
-      toast({ title: 'Customer saved', description: saved.name })
+      toast({ title: t('customers.saved'), description: saved.name })
     } else {
       // An edit is not a use, so the order stays; replace the card where it is.
       setList((current) =>
@@ -114,7 +116,7 @@ export function CustomersPage() {
           ? { ...current, items: current.items.map((item) => (item.id === saved.id ? saved : item)) }
           : current,
       )
-      toast({ title: 'Changes saved', description: saved.name })
+      toast({ title: t('customers.changesSaved'), description: saved.name })
     }
     setEditing(null)
   }
@@ -124,12 +126,12 @@ export function CustomersPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Customers"
-        description="Your regular customers, ready to pick on a new order. Only your restaurant sees them."
+        title={t('customers.title')}
+        description={t('customers.description')}
         actions={
           <Button type="button" onClick={() => setEditing('add')}>
             <Plus className="mr-1.5 size-4" aria-hidden="true" />
-            Add
+            {t('customers.add')}
           </Button>
         }
       />
@@ -143,8 +145,8 @@ export function CustomersPage() {
           type="search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search name or phone"
-          aria-label="Search saved customers by name or phone"
+          placeholder={t('customers.searchPlaceholder')}
+          aria-label={t('customers.searchLabel')}
           className="pl-9"
         />
       </div>
@@ -152,7 +154,7 @@ export function CustomersPage() {
       {/* tabIndex -1: focus can be moved here after a delete, without adding a tab stop. */}
       <div ref={listRef} tabIndex={-1} className="space-y-3 outline-none" aria-busy={list.status === 'loading'}>
         {list.status === 'loading' ? (
-          <div className="space-y-3" aria-label="Loading customers">
+          <div className="space-y-3" aria-label={t('customers.loading')}>
             {[0, 1, 2].map((key) => (
               <Skeleton key={key} className="h-24 w-full rounded-xl" />
             ))}
@@ -161,27 +163,26 @@ export function CustomersPage() {
           <Alert variant="destructive">
             <WarningCircle className="size-4" aria-hidden="true" />
             <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
-              <span>Your saved customers could not be loaded.</span>
+              <span>{t('customers.loadFailed')}</span>
               <Button type="button" variant="outline" size="sm" onClick={() => setReloadCount((count) => count + 1)}>
-                Try again
+                {t('common.tryAgain')}
               </Button>
             </AlertDescription>
           </Alert>
         ) : list.items.length === 0 ? (
           isSearching ? (
             <p className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
-              No saved customer matches.
+              {t('customers.noMatch')}
             </p>
           ) : (
             <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed p-10 text-center">
               <AddressBook className="size-10 text-muted-foreground" aria-hidden="true" />
               <p className="max-w-sm text-sm text-muted-foreground">
-                Customers you save from an order appear here. Tick &ldquo;Save this customer for next time&rdquo; on
-                a new delivery, or add one now.
+                {t('customers.empty')}
               </p>
               <Button type="button" variant="outline" onClick={() => setEditing('add')}>
                 <Plus className="mr-1.5 size-4" aria-hidden="true" />
-                Add a customer
+                {t('customers.addCustomer')}
               </Button>
             </div>
           )
@@ -200,13 +201,13 @@ export function CustomersPage() {
         <div className="flex flex-col items-center gap-2">
           {list.items.length < list.total ? (
             <Button type="button" variant="outline" onClick={showMore} disabled={isLoadingMore}>
-              {isLoadingMore ? <Spinner className="mr-2" label="Loading more customers" /> : null}
-              Show more
+              {isLoadingMore ? <Spinner className="mr-2" label={t('customers.loadingMore')} /> : null}
+              {t('customers.showMore')}
             </Button>
           ) : null}
           {/* aria-live: a screen reader hears the new count after Show more, without moving focus. */}
           <p ref={countRef} tabIndex={-1} className="text-sm text-muted-foreground outline-none" aria-live="polite">
-            {list.items.length} of {list.total}
+            {t('customers.countOf', { shown: list.items.length, total: list.total })}
           </p>
         </div>
       ) : null}
@@ -219,7 +220,7 @@ export function CustomersPage() {
           onGone={(id) => {
             setEditing(null)
             removeFromList(id)
-            toast({ title: 'This customer was already deleted.' })
+            toast({ title: t('customers.alreadyDeleted') })
           }}
         />
       ) : null}
@@ -231,7 +232,7 @@ export function CustomersPage() {
           onDeleted={(id) => {
             setDeleting(null)
             removeFromList(id)
-            toast({ title: 'Customer deleted' })
+            toast({ title: t('customers.deleted') })
           }}
         />
       ) : null}

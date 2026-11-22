@@ -3,6 +3,8 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { WarningCircle } from '@phosphor-icons/react'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import {
   Alert,
   AlertDescription,
@@ -46,17 +48,18 @@ import { DEFAULT_COUNTRY_CODE, phoneSearchDigits } from '../utils/fields'
 
 // The dialog's own small form. The address uses the order form's field names (`dropoffAddress`,
 // `dropoffLatitude`, `dropoffLongitude`) so AddressSection can be reused unchanged in its compact mode.
-const dialogSchema = z.object({
-  name: z.string().trim().min(1, "Enter the customer's name"),
-  phone: z.string().trim().min(1, "Enter the customer's phone"),
+// Built from `t`, so its refusals read in the reader's language (row 47).
+const buildDialogSchema = (t: TFunction) => z.object({
+  name: z.string().trim().min(1, t('customerDialog.nameRequired')),
+  phone: z.string().trim().min(1, t('customerDialog.phoneRequired')),
   notes: z.string().optional(),
   // Spec 0016: the floor and the name on the doorbell, the backend's column sizes.
-  floor: z.string().max(FLOOR_MAX, `Keep this to ${FLOOR_MAX} characters`).optional(),
-  doorbell: z.string().max(DOORBELL_MAX, `Keep this to ${DOORBELL_MAX} characters`).optional(),
+  floor: z.string().max(FLOOR_MAX, t('form.keepTo', { max: FLOOR_MAX })).optional(),
+  doorbell: z.string().max(DOORBELL_MAX, t('form.keepTo', { max: DOORBELL_MAX })).optional(),
   dropoffAddress: z.object({
-    streetAddress: z.array(z.string().trim().min(1, 'Enter the street and number')).min(1),
+    streetAddress: z.array(z.string().trim().min(1, t('customerDialog.streetRequired'))).min(1),
     houseNumber: z.string().optional(),
-    city: z.string().trim().min(1, 'Enter the city'),
+    city: z.string().trim().min(1, t('customerDialog.cityRequired')),
     state: z.string().optional(),
     zipCode: z.string().optional(),
     countryCode: z.string().optional(),
@@ -65,7 +68,7 @@ const dialogSchema = z.object({
   dropoffLatitude: z.number(),
   dropoffLongitude: z.number(),
 })
-type DialogValues = z.infer<typeof dialogSchema>
+type DialogValues = z.infer<ReturnType<typeof buildDialogSchema>>
 
 function initialValues(customer: SavedCustomer | null): DialogValues {
   return {
@@ -91,8 +94,10 @@ function initialValues(customer: SavedCustomer | null): DialogValues {
 // Where the map point came from: see addressPinKey.
 const pinKey = (values: Pick<DialogValues, 'dropoffAddress'>) => addressPinKey(values.dropoffAddress)
 
-export const CONFIRM_PIN_MESSAGE = 'Confirm the pin on the map'
-export const MOVE_FALLBACK_FIRST = "The map shows Volos centre. Move it to the customer's entrance first."
+// Translation keys of the dialog's two pin sentences; `pinMessage` below holds keys too (geocode's
+// sentences are keys), translated where they are shown.
+export const CONFIRM_PIN_MESSAGE = 'form.confirmPin'
+export const MOVE_FALLBACK_FIRST = 'customerDialog.moveFallbackFirst'
 
 // A customer as loaded counts as confirmed (spec 0016, AC-6): its point was confirmed when it was saved,
 // or moved there by a rider. A new customer starts with nothing confirmed.
@@ -120,12 +125,18 @@ interface CustomerDialogProps {
  * in the dialog and keep what was typed; a phone another saved customer has names that customer.
  */
 export function CustomerDialog({ customer, onClose, onSaved, onGone }: CustomerDialogProps) {
+  const { t } = useTranslation()
   const isEdit = customer !== null
+  // The schema in the reader's language; the resolver reads the latest through the ref (see the order form).
+  const dialogSchema = useMemo(() => buildDialogSchema(t), [t])
+  const dialogSchemaRef = useRef(dialogSchema)
+  dialogSchemaRef.current = dialogSchema
   const form = useForm<DialogValues>({
-    resolver: zodResolver(dialogSchema),
+    resolver: (values, context, options) => zodResolver(dialogSchemaRef.current)(values, context, options),
     defaultValues: initialValues(customer),
   })
   const [isSaving, setIsSaving] = useState(false)
+  // The dialog's refusal, already in words (a server sentence or a translated one).
   const [error, setError] = useState<string | null>(null)
 
   // The pin (spec 0016, AC-6): confirmed only while the form holds exactly the confirmed point and address.
@@ -195,7 +206,7 @@ export function CustomerDialog({ customer, onClose, onSaved, onGone }: CustomerD
     }
     setConfirmedPin({ latitude, longitude, pinKey: currentPinKey })
     setPinMessage(null)
-    if (error === CONFIRM_PIN_MESSAGE) setError(null)
+    if (error === t(CONFIRM_PIN_MESSAGE)) setError(null)
   }
 
   const initialQuery = useMemo(() => customer?.formattedAddress ?? '', [customer])
@@ -203,7 +214,7 @@ export function CustomerDialog({ customer, onClose, onSaved, onGone }: CustomerD
   const save = async (values: DialogValues) => {
     // No save for a pin nobody checked on the map (spec 0016, AC-6). Save never looks an address up.
     if (!pinConfirmed) {
-      setError(CONFIRM_PIN_MESSAGE)
+      setError(t(CONFIRM_PIN_MESSAGE))
       return
     }
     setError(null)
@@ -231,14 +242,14 @@ export function CustomerDialog({ customer, onClose, onSaved, onGone }: CustomerD
         return
       }
       if (failure.statusCode === 409) {
-        setError(await clashMessage(values.phone, failure.conflictingCustomerId))
+        setError(await clashMessage(values.phone, failure.conflictingCustomerId, t))
         return
       }
       // A 422's message is a plain sentence written for the restaurant; anything else gets a general one.
       setError(
         failure.statusCode === 422 && failure.message
           ? failure.message
-          : 'The customer could not be saved. Try again in a moment.',
+          : t('customerDialog.saveFailed'),
       )
     } finally {
       setIsSaving(false)
@@ -250,8 +261,8 @@ export function CustomerDialog({ customer, onClose, onSaved, onGone }: CustomerD
     <Dialog open onOpenChange={(open) => !open && !isSaving && onClose()}>
       <DialogContent className="max-h-[90dvh] max-w-lg overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{isEdit ? 'Edit customer' : 'Add customer'}</DialogTitle>
-          <DialogDescription>Only your restaurant sees saved customers.</DialogDescription>
+          <DialogTitle>{isEdit ? t('customerDialog.editTitle') : t('customerDialog.addTitle')}</DialogTitle>
+          <DialogDescription>{t('customerDialog.description')}</DialogDescription>
         </DialogHeader>
 
         <Form {...form}>
@@ -261,7 +272,7 @@ export function CustomerDialog({ customer, onClose, onSaved, onGone }: CustomerD
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Name</FormLabel>
+                  <FormLabel>{t('customerDialog.name')}</FormLabel>
                   <FormControl>
                     <Input autoComplete="off" {...field} />
                   </FormControl>
@@ -274,16 +285,16 @@ export function CustomerDialog({ customer, onClose, onSaved, onGone }: CustomerD
               name="phone"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Phone</FormLabel>
+                  <FormLabel>{t('form.phone')}</FormLabel>
                   <FormControl>
-                    <Input type="tel" autoComplete="off" placeholder="e.g. 691 234 5678" {...field} />
+                    <Input type="tel" autoComplete="off" placeholder={t('form.phonePlaceholder')} {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
 
-            <AddressSection control={form.control} prefix="dropoff" label="Address" compact initialQuery={initialQuery} />
+            <AddressSection control={form.control} prefix="dropoff" label={t('form.address')} compact initialQuery={initialQuery} />
 
             {hasValidCoordinates(latitude, longitude) ? (
               <PinMap
@@ -291,17 +302,17 @@ export function CustomerDialog({ customer, onClose, onSaved, onGone }: CustomerD
                 confirmed={pinConfirmed}
                 onMove={movePin}
                 onConfirm={confirmPin}
-                message={pinMessage}
+                message={pinMessage ? t(pinMessage) : null}
               />
             ) : (
               <div className="space-y-2">
                 {pinMessage ? (
                   <p role="alert" className="text-sm text-destructive">
-                    {pinMessage}
+                    {t(pinMessage)}
                   </p>
                 ) : null}
                 <Button type="button" variant="outline" className="w-full" onClick={showOnMap} disabled={isLocating}>
-                  {isLocating ? 'Finding the address…' : 'Show on map'}
+                  {isLocating ? t('form.findingAddress') : t('form.showOnMap')}
                 </Button>
               </div>
             )}
@@ -313,10 +324,10 @@ export function CustomerDialog({ customer, onClose, onSaved, onGone }: CustomerD
                 render={({ field }) => (
                   <FormItem className="col-span-1">
                     <FormLabel>
-                      Floor <span className="font-normal text-muted-foreground">(optional)</span>
+                      {t('form.floor')} <span className="font-normal text-muted-foreground">{t('common.optional')}</span>
                     </FormLabel>
                     <FormControl>
-                      <Input autoComplete="off" placeholder="3" {...field} />
+                      <Input autoComplete="off" placeholder={t('form.floorPlaceholder')} {...field} />
                     </FormControl>
                     <LimitCounter length={field.value?.length ?? 0} limit={FLOOR_MAX} />
                     <FormMessage />
@@ -329,10 +340,10 @@ export function CustomerDialog({ customer, onClose, onSaved, onGone }: CustomerD
                 render={({ field }) => (
                   <FormItem className="col-span-2">
                     <FormLabel>
-                      Name on the doorbell <span className="font-normal text-muted-foreground">(optional)</span>
+                      {t('form.doorbell')} <span className="font-normal text-muted-foreground">{t('common.optional')}</span>
                     </FormLabel>
                     <FormControl>
-                      <Input autoComplete="off" placeholder="Papadopoulou" {...field} />
+                      <Input autoComplete="off" placeholder={t('form.doorbellPlaceholder')} {...field} />
                     </FormControl>
                     <LimitCounter length={field.value?.length ?? 0} limit={DOORBELL_MAX} />
                     <FormMessage />
@@ -347,10 +358,10 @@ export function CustomerDialog({ customer, onClose, onSaved, onGone }: CustomerD
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>
-                    Notes for the rider <span className="font-normal text-muted-foreground">(optional)</span>
+                    {t('customerDialog.riderNotes')} <span className="font-normal text-muted-foreground">{t('common.optional')}</span>
                   </FormLabel>
                   <FormControl>
-                    <Textarea rows={2} className="resize-none" placeholder="e.g. Ring twice" {...field} />
+                    <Textarea rows={2} className="resize-none" placeholder={t('customerDialog.riderNotesPlaceholder')} {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -366,11 +377,11 @@ export function CustomerDialog({ customer, onClose, onSaved, onGone }: CustomerD
 
             <DialogFooter className="gap-2">
               <Button type="button" variant="outline" onClick={onClose} disabled={isSaving}>
-                Cancel
+                {t('common.cancel')}
               </Button>
               <Button type="submit" disabled={isSaving}>
-                {isSaving ? <Spinner className="mr-2" label="Saving" /> : null}
-                {isSaving ? 'Saving…' : 'Save'}
+                {isSaving ? <Spinner className="mr-2" label={t('common.saving')} /> : null}
+                {isSaving ? t('common.saving') : t('common.save')}
               </Button>
             </DialogFooter>
           </form>
@@ -381,15 +392,19 @@ export function CustomerDialog({ customer, onClose, onSaved, onGone }: CustomerD
 }
 
 // The 409's sentence: the other customer by name and phone when the list can find them (spec 0005).
-async function clashMessage(typedPhone: string, conflictingCustomerId: string | undefined): Promise<string> {
-  const base = 'Another saved customer has this phone'
+async function clashMessage(
+  typedPhone: string,
+  conflictingCustomerId: string | undefined,
+  t: TFunction,
+): Promise<string> {
+  const plain = t('customerDialog.phoneClash')
   const digits = phoneSearchDigits(typedPhone)
-  if (!conflictingCustomerId || digits.length < 2) return `${base}.`
+  if (!conflictingCustomerId || digits.length < 2) return plain
   try {
     const result = await listSavedCustomers({ q: digits, perPage: 50 })
     const other = result.items.find((item) => item.id === conflictingCustomerId)
-    return other ? `${base}: ${other.name}, ${other.phone}.` : `${base}.`
+    return other ? t('customerDialog.phoneClashNamed', { name: other.name, phone: other.phone }) : plain
   } catch {
-    return `${base}.`
+    return plain
   }
 }

@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -22,6 +23,7 @@ interface DeleteCustomerDialogProps {
 
 /** Asks first, naming the customer, then deletes for good (spec 0005, AC-2). */
 export function DeleteCustomerDialog({ customer, onClose, onDeleted }: DeleteCustomerDialogProps) {
+  const { t } = useTranslation()
   const [isDeleting, setIsDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -36,7 +38,7 @@ export function DeleteCustomerDialog({ customer, onClose, onDeleted }: DeleteCus
         onDeleted(customer.id)
         return
       }
-      setError('The customer could not be deleted. Try again in a moment.')
+      setError(t('customers.deleteFailed'))
       setIsDeleting(false)
     }
   }
@@ -45,10 +47,8 @@ export function DeleteCustomerDialog({ customer, onClose, onDeleted }: DeleteCus
     <AlertDialog open onOpenChange={(open) => !open && !isDeleting && onClose()}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Delete {customer.name}?</AlertDialogTitle>
-          <AlertDialogDescription>
-            Their saved name, phone and address are removed for good. Past orders keep their own copy.
-          </AlertDialogDescription>
+          <AlertDialogTitle>{t('customers.deleteTitle', { name: customer.name })}</AlertDialogTitle>
+          <AlertDialogDescription>{t('customers.deleteDescription')}</AlertDialogDescription>
         </AlertDialogHeader>
         {error ? (
           <p role="alert" className="text-sm text-destructive">
@@ -56,11 +56,11 @@ export function DeleteCustomerDialog({ customer, onClose, onDeleted }: DeleteCus
           </p>
         ) : null}
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+          <AlertDialogCancel disabled={isDeleting}>{t('common.cancel')}</AlertDialogCancel>
           {/* A plain Button, not AlertDialogAction, so the dialog stays open until the delete is done. */}
           <Button variant="destructive" onClick={confirm} disabled={isDeleting}>
-            {isDeleting ? <Spinner className="mr-2" label="Deleting" /> : null}
-            Delete
+            {isDeleting ? <Spinner className="mr-2" label={t('customers.deleting')} /> : null}
+            {t('customers.delete')}
           </Button>
         </AlertDialogFooter>
       </AlertDialogContent>

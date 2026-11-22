@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Command,
   CommandGroup,
@@ -37,6 +38,7 @@ interface SavedCustomerPickerProps {
 export function SavedCustomerPicker({ linked, onPick, changeRef }: SavedCustomerPickerProps) {
   const [query, setQuery] = useState('')
   // Escape closes the list until the restaurant types again.
+  const { t } = useTranslation()
   const [dismissed, setDismissed] = useState(false)
   const search = useSavedCustomerSearch(linked ? '' : query, PICKER_PAGE_SIZE)
   // The highlighted row (cmdk's value). cmdk highlights a first row by itself only when it filters the
@@ -55,13 +57,15 @@ export function SavedCustomerPicker({ linked, onPick, changeRef }: SavedCustomer
   const [announcement, setAnnouncement] = useState('')
   useEffect(() => {
     if (linked) {
-      setAnnouncement(`Saved customer: ${linked.name}. The drop off fields are filled in.`)
+      setAnnouncement(t('picker.picked', { name: linked.name }))
       changeRef.current?.focus()
     } else if (wasLinked.current) {
-      setAnnouncement('Saved customer cleared. The fields keep what they hold.')
+      setAnnouncement(t('picker.cleared'))
       inputRef.current?.focus()
     }
     wasLinked.current = linked !== null
+    // `t` changes only with the language; the announcement is about a pick, not a language switch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [linked])
 
   const showList = !dismissed && search.status === 'ready' && search.items.length > 0
@@ -70,11 +74,11 @@ export function SavedCustomerPicker({ linked, onPick, changeRef }: SavedCustomer
   const searchMessage = dismissed
     ? ''
     : search.status === 'loading'
-      ? 'Searching saved customers…'
+      ? t('picker.searching')
       : search.status === 'error'
-        ? 'Search is not available. Fill in the fields below.'
+        ? t('picker.unavailable')
         : search.status === 'ready' && search.items.length === 0
-          ? 'No saved customer matches. Fill in the fields below.'
+          ? t('picker.noMatch')
           : ''
 
   return (
@@ -87,7 +91,7 @@ export function SavedCustomerPicker({ linked, onPick, changeRef }: SavedCustomer
           {/* The visible label. The input's accessible name comes from Command's `label` below: cmdk ties
               its input to a hidden label of its own and overrides any id or aria-labelledby we pass. */}
           <p aria-hidden="true" className="text-sm font-medium">
-            Saved customer <span className="font-normal text-muted-foreground">(optional)</span>
+            {t('picker.label')} <span className="font-normal text-muted-foreground">{t('common.optional')}</span>
           </p>
           {/* shouldFilter={false}: the backend already searched, so cmdk must not filter the rows again. */}
           <Command
@@ -96,7 +100,7 @@ export function SavedCustomerPicker({ linked, onPick, changeRef }: SavedCustomer
             onBlur={(event) => {
               if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDismissed(true)
             }}
-            label="Saved customer"
+            label={t('picker.label')}
             shouldFilter={false}
             value={highlighted}
             onValueChange={setHighlighted}
@@ -114,7 +118,7 @@ export function SavedCustomerPicker({ linked, onPick, changeRef }: SavedCustomer
                 setQuery(value)
                 setDismissed(false)
               }}
-              placeholder="Type a name or phone"
+              placeholder={t('picker.placeholder')}
               // 48 px and 16 px text, so a phone neither misses the tap nor zooms in (spec 0006, AC-3).
               className="h-12 text-base"
             />
@@ -141,7 +145,7 @@ export function SavedCustomerPicker({ linked, onPick, changeRef }: SavedCustomer
             ) : null}
           </Command>
           <p role="status" className="flex min-h-5 items-center gap-2 text-sm text-muted-foreground">
-            {search.status === 'loading' && !dismissed ? <Spinner label="Searching saved customers" /> : null}
+            {search.status === 'loading' && !dismissed ? <Spinner label={t('picker.searchingLabel')} /> : null}
             {searchMessage}
           </p>
         </div>
