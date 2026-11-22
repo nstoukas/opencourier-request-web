@@ -17,6 +17,7 @@ export const el: Translations = {
     saving: 'Αποθήκευση…',
     loading: 'Φόρτωση…',
     loadingLabel: 'Φόρτωση',
+    notifications: 'Ειδοποιήσεις ({hotkey})',
     minutes_one: '{{count}} λεπτό',
     minutes_other: '{{count}} λεπτά',
   },

@@ -70,7 +70,11 @@ export function formatTime(iso: string | null | undefined, language: Language = 
   return TIME[language].format(new Date(iso))
 }
 
-/** A distance with its unit, one decimal, for example 2.43 and 'KM' read "2,4 km" (Greek) or "2.4 km". */
+// The backend names its unit in words ('KILOMETERS'); the page shows the symbol, the same in Greek and
+// English (row 47). A unit not listed here is shown in lower case, as before.
+const UNIT_SYMBOLS: Record<string, string> = { KM: 'km', KILOMETERS: 'km', KILOMETER: 'km', MI: 'mi', MILES: 'mi', MILE: 'mi' }
+
+/** A distance with its unit, one decimal, for example 2.43 and 'KILOMETERS' read "2,4 km" (Greek) or "2.4 km". */
 export function formatDistance(
   value: number | null | undefined,
   unit: string | null | undefined,
@@ -78,7 +82,7 @@ export function formatDistance(
 ): string {
   if (value == null) return '—'
   const number = new Intl.NumberFormat(LOCALES[language], { maximumFractionDigits: 1 }).format(value)
-  return unit ? `${number} ${unit.toLowerCase()}` : number
+  return unit ? `${number} ${UNIT_SYMBOLS[unit.toUpperCase()] ?? unit.toLowerCase()}` : number
 }
 
 /** A whole date with no time, for example "30/09/2026". Missing reads "—". */

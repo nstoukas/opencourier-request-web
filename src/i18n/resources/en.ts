@@ -17,6 +17,7 @@ export const en = {
     saving: 'Saving…',
     loading: 'Loading…',
     loadingLabel: 'Loading',
+    notifications: 'Notifications ({hotkey})',
     minutes_one: '{{count}} min',
     minutes_other: '{{count}} min',
   },

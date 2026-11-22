@@ -49,12 +49,15 @@ function formatLocationAddress(loc: PartnerDeliveryPickupDto | PartnerDeliveryDr
   if (!loc) return '—'
   const trimmed = loc.formattedAddress?.trim()
   if (trimmed) return trimmed
+  // Greek order, as the order form builds a typed address (row 47, decision 47.8): the street then its
+  // number, the postcode before the town, a region if any, and the country only when it is not Greece.
   const streetLine =
     loc.addressLine1?.trim() ||
-    [loc.houseNumber, loc.street].filter(Boolean).join(' ').trim()
-  const cityLine = [loc.city, loc.state, loc.zipCode].filter(Boolean).join(', ')
-  const parts = [streetLine || null, cityLine || null, loc.countryCode ?? null].filter(Boolean)
-  return parts.length ? parts.join(' · ') : '—'
+    [loc.street, loc.houseNumber].filter(Boolean).join(' ').trim()
+  const postcodeTown = [loc.zipCode, loc.city].filter(Boolean).join(' ')
+  const country = loc.countryCode && loc.countryCode.toUpperCase() !== 'GR' ? loc.countryCode : null
+  const parts = [streetLine || null, postcodeTown || null, loc.state || null, country].filter(Boolean)
+  return parts.length ? parts.join(', ') : '—'
 }
 
 function courierLabel(d: PartnerDeliveryDto, t: TFunction): string {

@@ -1,9 +1,11 @@
 'use client'
 
+import { useTranslation } from 'react-i18next'
 import { Toast, ToastClose, ToastDescription, ToastProvider, ToastTitle, ToastViewport } from './Toast'
 import { useToast } from './useToast'
 
 export function Toaster() {
+  const { t } = useTranslation()
   const { toasts } = useToast()
 
   return (
@@ -20,7 +22,8 @@ export function Toaster() {
           </Toast>
         )
       })}
-      <ToastViewport />
+      {/* Radix names the toast area for screen readers and puts the shortcut where {hotkey} is. */}
+      <ToastViewport label={t('common.notifications')} />
     </ToastProvider>
   )
 }

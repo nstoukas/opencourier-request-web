@@ -125,9 +125,9 @@ export function AddressSection<T extends FieldValues>({
       const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&addressdetails=1&limit=6${viewbox}`
       const res = await fetch(url, {
         headers: {
-          // Results in Latin letters whatever the reader's language: the address text is stored and shared
-          // with riders, admin and the saved customer search, so its script is not a display choice
-          // (decision 47.7).
+          // The same request whatever the reader's language: the address text is stored and shared with
+          // riders, admin and the saved customer search, so which names Nominatim gives back is not a
+          // display choice (decision 47.7).
           'Accept-Language': 'en',
           'User-Agent': 'opencourier-request-web/1.0 (manual delivery form)',
         },
