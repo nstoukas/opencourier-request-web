@@ -8,9 +8,11 @@
 //
 //     if (code && i18n.exists(`serverErrors.${code}`)) return t(`serverErrors.${code}`, params)
 //
-// and only falls back to the server's sentence for a code it does not know. Every caller already
-// goes through here (restaurantErrorText and the order form's plainErrorMessage), so that change is
-// made in this file alone, plus the `serverErrors` keys in both language files (decision 47.3).
+// and only falls back to the server's sentence for a code it does not know. Every place that shows a
+// server's sentence already goes through here (restaurantErrorText, the order form's plainErrorMessage,
+// and the dialogs, cards and sections that show a refusal), so that change is made in this file, plus
+// the `serverErrors` keys in both language files (decision 47.3). The function will then need `t`: its
+// callers all have one at hand.
 // ─────────────────────────────────────────────────────────────────────────────────────────────
 
 /** The shape a failed partner call throws (manualRequestFetch sets these). */

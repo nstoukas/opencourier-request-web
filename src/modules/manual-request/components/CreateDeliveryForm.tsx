@@ -913,7 +913,7 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
           ) : profileError ? (
             <Alert variant="destructive">
               <AlertDescription>
-                {profileError instanceof Error ? profileError.message : t('form.profileFailed')}
+                {(profileError instanceof Error ? serverMessage(profileError) : undefined) ?? t('form.profileFailed')}
               </AlertDescription>
             </Alert>
           ) : !pickupCheck.usable ? (

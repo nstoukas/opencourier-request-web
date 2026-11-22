@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { WarningCircle } from '@phosphor-icons/react'
 import { useTranslation } from 'react-i18next'
+import { serverMessage } from '../../../i18n/serverText'
 import type { TFunction } from 'i18next'
 import {
   Alert,
@@ -246,11 +247,8 @@ export function CustomerDialog({ customer, onClose, onSaved, onGone }: CustomerD
         return
       }
       // A 422's message is a plain sentence written for the restaurant; anything else gets a general one.
-      setError(
-        failure.statusCode === 422 && failure.message
-          ? failure.message
-          : t('customerDialog.saveFailed'),
-      )
+      const refusal = failure.statusCode === 422 ? serverMessage(failure) : undefined
+      setError(refusal ?? t('customerDialog.saveFailed'))
     } finally {
       setIsSaving(false)
     }
