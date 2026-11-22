@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Alert, AlertDescription, Button, Spinner, StatusBadge } from '../../admin-web-components'
 import { createDelivery, fetchOrderLegs, requestQuote } from '../../api/manualRequestApi'
@@ -11,6 +11,7 @@ import {
 } from '../manual-request/types'
 import { legLabel, legsToCancel, retryQuoteInput } from '../manual-request/utils/legs'
 import { formatMoney } from '../../utils/format'
+import { usePolledFetch } from '../../hooks/usePolledFetch'
 import { CancelOrderLegsDialog } from './CancelOrderLegsDialog'
 
 const SIZE_OPTIONS: ChoicePillOption[] = [
@@ -41,24 +42,30 @@ type Props = {
  * expired by now, so it is always priced again); and Cancel all for the legs not yet ended.
  */
 export function OrderLegsSection({ deliveryId, version, onChanged, onLegs }: Props) {
-  const [order, setOrder] = useState<PartnerOrderLegsDto | null>(null)
-  const [loadError, setLoadError] = useState<string | null>(null)
   const [cancelOpen, setCancelOpen] = useState(false)
 
-  const load = useCallback(async () => {
-    try {
-      const answer = await fetchOrderLegs(deliveryId)
-      setOrder(answer)
-      onLegs?.(answer.legs)
-      setLoadError(null)
-    } catch (err: any) {
-      setLoadError(err?.message ?? 'The other legs of this order could not be loaded.')
-    }
-  }, [deliveryId, onLegs])
+  // agy's review of row 10: the legs are read again every 30 s while the tab is visible, like the page
+  // itself (usePolledFetch, the rule in this repo's AGENTS.md), so another leg's new status and rider show
+  // without a reload. `version` stays as the page's way to ask for a read at once.
+  const load = useCallback((): Promise<PartnerOrderLegsDto> => fetchOrderLegs(deliveryId), [deliveryId])
+  const { data, error, refetch } = usePolledFetch(load, { enabled: Boolean(deliveryId) })
+  const order = data ?? null
+  const loadError = error ? ((error as any)?.message ?? 'The other legs of this order could not be loaded.') : null
 
+  // A bump of `version` after the first render: read again now. useRef keeps the last version seen
+  // without causing a render.
+  const versionSeen = useRef(version)
   useEffect(() => {
-    void load()
-  }, [load, version])
+    if (version === versionSeen.current) return
+    versionSeen.current = version
+    void refetch()
+  }, [version, refetch])
+
+  // Hand the page each answer. Only an answer holding this page's own leg: right after a move to another
+  // leg, `data` is still the previous order's until the new read lands.
+  useEffect(() => {
+    if (order && order.legs.some((leg) => leg.id === deliveryId)) onLegs?.(order.legs)
+  }, [order, deliveryId, onLegs])
 
   if (loadError && !order) return <p className="text-sm text-destructive">{loadError}</p>
   if (!order || order.legs.length === 0) return null
@@ -69,7 +76,7 @@ export function OrderLegsSection({ deliveryId, version, onChanged, onLegs }: Pro
   // after it. A delivered leg still counts as live: the customer is waiting for the rest.
   const orderEnded = order.legs.every((leg) => leg.status === 'CANCELED' || leg.status === 'FAILED')
   const refresh = () => {
-    void load()
+    void refetch()
     onChanged()
   }
 
