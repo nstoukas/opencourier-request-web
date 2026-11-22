@@ -45,6 +45,10 @@ jest.mock('../../utils/manualRequestAuth', () => ({
   getManualRequestApiMode: jest.fn(),
 }))
 
+jest.mock('../complaints/RiderComplaintSection', () => ({
+  RiderComplaintSection: () => null,
+}))
+
 describe('DeliveryStatusPage (/manual-request/[deliveryId]/status.tsx)', () => {
   const mockCancel = jest.fn()
   const mockRefetch = jest.fn()

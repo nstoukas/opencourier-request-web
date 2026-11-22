@@ -46,6 +46,10 @@ jest.mock('../../utils/manualRequestAuth', () => ({
   getManualRequestApiMode: jest.fn(),
 }))
 
+jest.mock('../complaints/RiderComplaintSection', () => ({
+  RiderComplaintSection: () => null,
+}))
+
 const mockUseGetDelivery = useGetManualRequestDeliveryQuery as jest.Mock
 const mockUseCancelMutation = useCancelManualRequestDeliveryMutation as jest.Mock
 const mockReportDeliveryProduct = reportDeliveryProduct as jest.Mock

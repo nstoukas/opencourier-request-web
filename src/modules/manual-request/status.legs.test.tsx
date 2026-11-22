@@ -47,6 +47,10 @@ jest.mock('../../utils/manualRequestAuth', () => ({
   getManualRequestApiMode: jest.fn(),
 }))
 
+jest.mock('../complaints/RiderComplaintSection', () => ({
+  RiderComplaintSection: () => null,
+}))
+
 describe('the order page of a leg (spec 0046)', () => {
   const refetch = jest.fn()
   const showPage = (data: ReturnType<typeof legFixture>) => {

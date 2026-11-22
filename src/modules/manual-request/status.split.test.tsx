@@ -43,6 +43,10 @@ jest.mock('../../utils/manualRequestAuth', () => ({
   getManualRequestApiMode: jest.fn(),
 }))
 
+jest.mock('../complaints/RiderComplaintSection', () => ({
+  RiderComplaintSection: () => null,
+}))
+
 describe('the order page after a split at pickup (spec 0047, AC-8, AC-10)', () => {
   // Draws the page for one delivery, as the partner API answered it.
   const showPage = (data: ReturnType<typeof legFixture>) => {
