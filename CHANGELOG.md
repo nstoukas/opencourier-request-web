@@ -37,6 +37,21 @@ has the full reasoning and verification notes.
 On 2 November rows 29, 32, 31 and 28 were merged in. The GA rows (29 and 32) have the entries
 below; rows 31 and 28 are recorded in the workspace's scope and walkthroughs.
 
+### Fixes from the cross family review of rows 79, 10 and 11
+The cross family review (agy, `/crosscheck review`) that rows 79, 10 and 11 owed was given on 22 November;
+its fixes were built on `fix/agy-owed-reviews` and merged the same day. Rows 79 and 11 needed no change here.
+- Row 10: on an order page, "+ minutes" sent each other leg the ready time the page last read, so a
+  second tap before the page read the legs again sent an old time, and the legs' times drifted apart
+  (a leg rider who came early waited, charged to the restaurant). The controls now keep each leg's
+  answer and send it while the page still shows the time it showed at that tap; on a leg's page the
+  ready buttons wait until the order's legs were read once (a line says so meanwhile). `4a7dfbf`
+- Row 10: the order page reads the other legs again every 30 s while the tab is visible, so another
+  leg's new status and rider show without a reload. `8212a02`
+- Row 10: an order card in the history with a leg missing from its list (on another page of it, or
+  never sent) no longer offers Cancel all or the ready buttons, which acted on the legs shown only and
+  left a live leg to be dispatched; it links to the order page, which reads every leg. `43c44f7`;
+  tests by agy, `d3d38e3`.
+
 ### Complaints about a rider (scope row 83, spec 0052, Beta)
 Built on `feat/complaints` and merged on 22 November, with the backend, adminweb and courier app halves.
 - A delivered or cancelled order's page has a complaint section under Courier: the restaurant files a
