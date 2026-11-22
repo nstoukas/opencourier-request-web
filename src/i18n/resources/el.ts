@@ -245,7 +245,8 @@ export const el: Translations = {
     viewStatus: 'Προβολή κατάστασης',
     notInList: '{{leg}}: δεν είναι σε αυτή τη λίστα.',
     openTheOrder: 'Ανοίξτε την παραγγελία',
-    openOrderToChange: 'Για να αλλάξετε την ώρα ετοιμότητας ή να ακυρώσετε, <link>ανοίξτε την παραγγελία</link>.',
+    openOrderToChange: 'Για να αλλάξετε την ώρα ετοιμότητας ή να ακυρώσετε, [link].',
+    openOrderLink: 'ανοίξτε την παραγγελία',
   },
   cancel: {
     byRestaurant: 'Πρέπει να την ακυρώσουμε εμείς',

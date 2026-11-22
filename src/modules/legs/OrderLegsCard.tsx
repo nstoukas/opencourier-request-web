@@ -1,7 +1,6 @@
 import React, { useState } from 'react'
 import Link from 'next/link'
-// Trans renders a translated sentence that holds a React element, here a link inside the words.
-import { Trans, useTranslation } from 'react-i18next'
+import { useTranslation } from 'react-i18next'
 import { Button, Card, CardContent, CardHeader, CardTitle, Separator, StatusBadge } from '../../admin-web-components'
 import { HistoryItem, absentLegNumbers, legLabel, legsToCancel } from '../manual-request/utils/legs'
 import { useFormat } from '../../i18n/useFormat'
@@ -97,11 +96,20 @@ export function OrderLegsCard({
             order page reads every leg, so both are offered there instead. */}
         {missing.length > 0 && (open.length > 0 || toCancel.length > 0) ? (
           <p className="text-sm" data-testid="order-legs-open-order">
-            {/* <link>…</link> in the translation becomes this Link, so each language places it in its own words. */}
-            <Trans
-              i18nKey="orderLegs.openOrderToChange"
-              components={{ link: <Link href={`/manual-request/${first.id}/status`} className="underline" /> }}
-            />
+            {/* Trans drops the text of a Next Link (seen in row 47's tests), so the sentence is split at the [link] marker:
+                the words before and after come from the translation, the link label is its own key. */}
+            {(() => {
+              const [before, after = ''] = t('orderLegs.openOrderToChange').split('[link]')
+              return (
+                <>
+                  {before}
+                  <Link href={`/manual-request/${first.id}/status`} className="underline">
+                    {t('orderLegs.openOrderLink')}
+                  </Link>
+                  {after}
+                </>
+              )
+            })()}
           </p>
         ) : null}
 

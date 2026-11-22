@@ -260,7 +260,8 @@ export const en = {
     viewStatus: 'View status',
     notInList: '{{leg}} is not in this list.',
     openTheOrder: 'Open the order',
-    openOrderToChange: 'To change the ready time or cancel, <link>open the order</link>.',
+    openOrderToChange: 'To change the ready time or cancel, [link].',
+    openOrderLink: 'open the order',
   },
   // Cancelling one delivery (spec 0015) or every leg of an order (spec 0046).
   cancel: {
