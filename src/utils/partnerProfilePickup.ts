@@ -58,36 +58,37 @@ export function mapPartnerProfileToPickupValues(profile: PartnerProfileDto): Par
   }
 }
 
+// `reason` is the translation key of why the pickup cannot be used; the form translates it.
 export function checkPartnerPickupUsable(profile: PartnerProfileDto | undefined): { usable: boolean; reason: string | null } {
   if (!profile) {
-    return { usable: false, reason: 'Profile data is unavailable.' }
+    return { usable: false, reason: 'pickup.profileUnavailable' }
   }
 
   if (!profile.name || !profile.name.trim()) {
-    return { usable: false, reason: 'Your restaurant profile is missing a name.' }
+    return { usable: false, reason: 'pickup.missingName' }
   }
 
   if (!profile.phoneNumber || profile.phoneNumber.trim().length < 7) {
-    return { usable: false, reason: 'Your restaurant profile is missing a valid phone number.' }
+    return { usable: false, reason: 'pickup.missingPhone' }
   }
 
   if (!profile.pickupAddress) {
-    return { usable: false, reason: 'Your restaurant does not have a pickup address on file.' }
+    return { usable: false, reason: 'pickup.missingAddress' }
   }
 
   const { street, houseNumber, city, state, latitude, longitude } = profile.pickupAddress
 
   const streetCombined = [street, houseNumber].filter(Boolean).join(' ').trim()
   if (!streetCombined) {
-    return { usable: false, reason: 'Your restaurant pickup address is missing a street.' }
+    return { usable: false, reason: 'pickup.missingStreet' }
   }
 
   if (!city || !city.trim() || !state || !state.trim()) {
-    return { usable: false, reason: 'Your restaurant pickup address is missing city or state.' }
+    return { usable: false, reason: 'pickup.missingCity' }
   }
 
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || (latitude === 0 && longitude === 0)) {
-    return { usable: false, reason: 'Your restaurant pickup address is missing valid coordinates.' }
+    return { usable: false, reason: 'pickup.missingCoordinates' }
   }
 
   return { usable: true, reason: null }

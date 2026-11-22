@@ -13,8 +13,9 @@ export interface OrderItemLine {
 export const ITEM_NAME_MAX = 60
 export const ITEM_QUANTITY_MAX = 20
 export const ITEM_LINES_MAX = 20
-export const ITEM_NAME_REQUIRED = 'Name the item, or remove the line.'
-export const ITEM_NAME_TOO_LONG = `Keep the item name to ${ITEM_NAME_MAX} characters.`
+// The translation keys of the two item name refusals (the second takes the limit as {{max}}).
+export const ITEM_NAME_REQUIRED = 'items.nameRequired'
+export const ITEM_NAME_TOO_LONG = 'items.nameTooLong'
 
 export const emptyItemLine = (): OrderItemLine => ({ name: '', quantity: 1, kind: null })
 

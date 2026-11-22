@@ -10,6 +10,9 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
+import { useTranslation } from 'react-i18next'
+// TFunction is the type of i18next's `t`, so the plain functions below can take it as a parameter.
+import type { TFunction } from 'i18next'
 import {
   Alert,
   AlertDescription,
@@ -95,62 +98,71 @@ import {
   checkPartnerPickupUsable,
   mapPartnerProfileToPickupValues,
 } from '../../../utils/partnerProfilePickup'
+import { serverMessage } from '../../../i18n/serverText'
 
 // ─── Validation schema ────────────────────────────────────────────────────────
 
-const addressSchema = z.object({
+// The schema is built from `t`, so every refusal is worded in the reader's language (row 47). The form
+// builds it once per language (useMemo below); the shape never changes, only the words.
+const buildAddressSchema = (t: TFunction) => z.object({
   streetAddress: z
-    .array(z.string().refine((value) => value.trim() !== '', 'Search the address and pick a result, or type it'))
+    .array(z.string().refine((value) => value.trim() !== '', t('form.streetRequired')))
     .min(1),
-  city: z.string().refine((value) => value.trim() !== '', 'Enter the town'),
+  city: z.string().refine((value) => value.trim() !== '', t('form.townRequired')),
   // Hidden: Volos addresses have none, and the backend accepts it empty (spec 0005).
   state: z.string(),
   zipCode: z.string().optional(),
-  countryCode: z.string().length(2, 'Use 2-letter country code').transform((value) => value.toUpperCase()),
+  countryCode: z.string().length(2, t('form.countryCode')).transform((value) => value.toUpperCase()),
   // Hidden, and always sent empty for the drop off (spec 0006, Key invariants).
   houseNumber: z.string().optional(),
   /** OpenStreetMap Nominatim `display_name` when chosen from search or geocoder fallback. */
   formattedAddress: z.string().optional(),
 })
 
-const READY_IN_REQUIRED = 'Choose when the order is ready'
-// Spec 0043 (AC-4): the box size is the restaurant's choice every time; nothing is picked for it.
-export const BOX_SIZE_REQUIRED = 'Choose the box size'
+// The translation key of the box size refusal. Spec 0043 (AC-4): the box size is the restaurant's choice
+// every time; nothing is picked for it.
+export const BOX_SIZE_REQUIRED = 'form.boxSizeRequired'
 
-const formSchema = z.object({
+// A function that returns the schema: `t` turns each key into the reader's words.
+function buildFormSchema(t: TFunction) {
+  const addressSchema = buildAddressSchema(t)
+  const readyInRequired = t('form.readyInRequired')
+  const boxSizeRequired = t(BOX_SIZE_REQUIRED)
+  const phoneRequired = t('form.phoneRequired')
+  return z.object({
   // Pickup
   // WARNING: These fields are still in the Zod schema but have no rendered inputs. checkPartnerPickupUsable must mirror their constraints.
-  pickupName: z.string().min(1, 'Pickup contact name is required'),
-  pickupPhoneNumber: z.string().min(7, 'Valid phone number required'),
-  pickupBusinessName: z.string().min(1, 'Pickup business name is required'),
+  pickupName: z.string().min(1, t('form.pickupNameRequired')),
+  pickupPhoneNumber: z.string().min(7, phoneRequired),
+  pickupBusinessName: z.string().min(1, t('form.pickupBusinessRequired')),
   pickupAddress: addressSchema,
-  pickupLatitude: z.number({ invalid_type_error: 'Enter a valid latitude' }),
-  pickupLongitude: z.number({ invalid_type_error: 'Enter a valid longitude' }),
+  pickupLatitude: z.number({ invalid_type_error: t('form.latitudeInvalid') }),
+  pickupLongitude: z.number({ invalid_type_error: t('form.longitudeInvalid') }),
 
   // The customer
-  dropoffName: z.string().refine((value) => value.trim() !== '', 'Enter the customer name'),
-  dropoffPhoneNumber: z.string().min(7, 'Valid phone number required'),
+  dropoffName: z.string().refine((value) => value.trim() !== '', t('form.customerNameRequired')),
+  dropoffPhoneNumber: z.string().min(7, phoneRequired),
   dropoffAddress: addressSchema,
-  dropoffLatitude: z.number({ invalid_type_error: 'Enter a valid latitude' }),
-  dropoffLongitude: z.number({ invalid_type_error: 'Enter a valid longitude' }),
+  dropoffLatitude: z.number({ invalid_type_error: t('form.latitudeInvalid') }),
+  dropoffLongitude: z.number({ invalid_type_error: t('form.longitudeInvalid') }),
   // Form rules, not maxLength: a saved customer's longer text still shows, with a red counter (spec 0016, AC-1).
-  floor: z.string().max(FLOOR_MAX, `Keep this to ${FLOOR_MAX} characters`),
-  doorbell: z.string().max(DOORBELL_MAX, `Keep this to ${DOORBELL_MAX} characters`),
-  note: z.string().max(RIDER_NOTE_MAX, `Keep this to ${RIDER_NOTE_MAX} characters`),
+  floor: z.string().max(FLOOR_MAX, t('form.keepTo', { max: FLOOR_MAX })),
+  doorbell: z.string().max(DOORBELL_MAX, t('form.keepTo', { max: DOORBELL_MAX })),
+  note: z.string().max(RIDER_NOTE_MAX, t('form.keepTo', { max: RIDER_NOTE_MAX })),
 
   // The order
   readyInMinutes: z
-    .number({ required_error: READY_IN_REQUIRED, invalid_type_error: READY_IN_REQUIRED })
-    .refine((value) => isReadyInMinutes(value), READY_IN_REQUIRED),
+    .number({ required_error: readyInRequired, invalid_type_error: readyInRequired })
+    .refine((value) => isReadyInMinutes(value), readyInRequired),
   // Spec 0043 (AC-4): the box size, sent as boxSize. The co-op's settings turn it into box units, so a
   // rider is never sent with a box that is already too full.
-  packageSize: z.nativeEnum(ManualRequestPackageSize, { errorMap: () => ({ message: BOX_SIZE_REQUIRED }) }),
+  packageSize: z.nativeEnum(ManualRequestPackageSize, { errorMap: () => ({ message: boxSizeRequired }) }),
   // Spec 0046 (AC-2): "How many boxes?", 1 to 4. Above 1 the order goes as that many deliveries ("legs"),
   // each priced and paid in full; packageSize is box 1's size and moreBoxSizes holds boxes 2 onwards,
   // kept at boxCount - 1 entries when the count changes.
   boxCount: z.number().int().min(1).max(MAX_BOXES),
   moreBoxSizes: z.array(
-    z.nativeEnum(ManualRequestPackageSize, { errorMap: () => ({ message: BOX_SIZE_REQUIRED }) }),
+    z.nativeEnum(ManualRequestPackageSize, { errorMap: () => ({ message: boxSizeRequired }) }),
   ),
   // Spec 0028: optional item lines, each named, with a quantity and an optional Drink or Side mark.
   items: z
@@ -158,8 +170,8 @@ const formSchema = z.object({
       z.object({
         name: z
           .string()
-          .refine((value) => value.trim() !== '', ITEM_NAME_REQUIRED)
-          .refine((value) => value.trim().length <= ITEM_NAME_MAX, ITEM_NAME_TOO_LONG),
+          .refine((value) => value.trim() !== '', t(ITEM_NAME_REQUIRED))
+          .refine((value) => value.trim().length <= ITEM_NAME_MAX, t(ITEM_NAME_TOO_LONG, { max: ITEM_NAME_MAX })),
         quantity: z.number().int().min(1).max(ITEM_QUANTITY_MAX),
         kind: z.enum(['DRINK', 'SIDE']).nullable(),
       }),
@@ -168,11 +180,13 @@ const formSchema = z.object({
   // The text as typed; the number is worked out at Get price (AC-4).
   orderTotal: z.string().superRefine((value, ctx) => {
     const problem = orderTotalProblem(value)
-    if (problem) ctx.addIssue({ code: z.ZodIssueCode.custom, message: problem })
+    if (problem) ctx.addIssue({ code: z.ZodIssueCode.custom, message: t(problem) })
   }),
-})
+  })
+}
 
-export type CreateDeliveryFormValues = z.infer<typeof formSchema>
+// `ReturnType<typeof buildFormSchema>` is the schema's type; z.infer turns it into the values' type.
+export type CreateDeliveryFormValues = z.infer<ReturnType<typeof buildFormSchema>>
 
 // ─── Default values ───────────────────────────────────────────────────────────
 
@@ -322,13 +336,17 @@ function resolveSubmittedFormattedAddress(
   )
 }
 
-// A failed call's message in plain words: the backend's own sentence, never a status code.
-function plainErrorMessage(err: any, fallback: string) {
+// A failed call's message in plain words: the backend's own sentence (through serverMessage, where its
+// error codes will be translated, spec 0054 AC-6), never a status code. A failure with no status (a
+// timeout, a dropped connection) has only the browser's or our own English words for developers, so the
+// caller's sentence shows instead (decision 47.6).
+function plainErrorMessage(err: any, fallback: string, t: TFunction) {
   const statusCode = err?.statusCode ?? err?.status
   if (statusCode === 401) {
-    return 'Your session has expired or is not valid. Please sign in again.'
+    return t('form.sessionExpired')
   }
-  const message: string | undefined = err?.message
+  if (statusCode === undefined) return fallback
+  const message = serverMessage(err)
   return message && !/^Request failed \(HTTP \d+\)$/.test(message) ? message : fallback
 }
 
@@ -351,32 +369,36 @@ type FocusableField = (typeof FIELDS_IN_PAGE_ORDER)[number]
 // The fields hidden behind a picked customer's card until Edit.
 const CUSTOMER_FIELDS: readonly FocusableField[] = FIELDS_IN_PAGE_ORDER.slice(0, 6)
 
-export const CONFIRM_PIN_MESSAGE = 'Confirm the pin on the map'
-export const MOVE_FALLBACK_FIRST = "The map shows your restaurant. Move it to the customer's entrance first."
+// The translation keys of two pin sentences, exported for the tests.
+export const CONFIRM_PIN_MESSAGE = 'form.confirmPin'
+export const MOVE_FALLBACK_FIRST = 'form.moveFallbackFirst'
 
 // The Ready in pills for a restaurant whose usual time is `usual` (spec 0023, AC-2).
-function readyInPills(usual: number | null | undefined): ChoicePillOption[] {
+function readyInPills(usual: number | null | undefined, t: TFunction): ChoicePillOption[] {
   return readyInOptions(usual).map((minutes) => ({
     value: String(minutes),
-    label: minutes === 0 ? 'Now' : `${minutes} min`,
+    label: minutes === 0 ? t('form.readyNow') : t('common.minutes', { count: minutes }),
   }))
 }
 
 // Spec 0046 (AC-2): "How many boxes?", 1 to 4.
 const BOX_COUNT_OPTIONS: ChoicePillOption[] = BOX_COUNTS.map((count) => ({ value: String(count), label: String(count) }))
 
-const SIZE_OPTIONS: ChoicePillOption[] = [
-  { value: ManualRequestPackageSize.SMALL, label: 'Small' },
-  { value: ManualRequestPackageSize.MEDIUM, label: 'Medium' },
-  { value: ManualRequestPackageSize.LARGE, label: 'Large' },
+// The three box sizes, each with its label's translation key.
+const SIZE_OPTIONS: { value: ManualRequestPackageSize; labelKey: string }[] = [
+  { value: ManualRequestPackageSize.SMALL, labelKey: 'form.sizeSmall' },
+  { value: ManualRequestPackageSize.MEDIUM, labelKey: 'form.sizeMedium' },
+  { value: ManualRequestPackageSize.LARGE, labelKey: 'form.sizeLarge' },
 ]
+const sizeOptions = (t: TFunction): ChoicePillOption[] =>
+  SIZE_OPTIONS.map((option) => ({ value: option.value, label: t(option.labelKey) }))
 
-// Spec 0043 (AC-4, cross check 5): one line per size, fixed words (not co-op settings). Kept in one
-// list so the Greek interface (row 47) can turn them into translation keys in one place.
+// Spec 0043 (AC-4, cross check 5): one line per size, fixed words (not co-op settings), as translation
+// keys (row 47): `text` is the key, translated where it is shown.
 export const BOX_SIZE_DESCRIPTIONS: { size: ManualRequestPackageSize; text: string }[] = [
-  { size: ManualRequestPackageSize.SMALL, text: 'Small: one meal or a coffee' },
-  { size: ManualRequestPackageSize.MEDIUM, text: 'Medium: a full bag' },
-  { size: ManualRequestPackageSize.LARGE, text: 'Large: fills the box' },
+  { size: ManualRequestPackageSize.SMALL, text: 'form.sizeSmallHint' },
+  { size: ManualRequestPackageSize.MEDIUM, text: 'form.sizeMediumHint' },
+  { size: ManualRequestPackageSize.LARGE, text: 'form.sizeLargeHint' },
 ]
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -384,6 +406,13 @@ export const BOX_SIZE_DESCRIPTIONS: { size: ManualRequestPackageSize; text: stri
 // `availability`: the restaurant's busy mode and pause, read by the page (spec 0029). While it is loading
 // the form behaves as before; the server refuses a paused order either way.
 export function CreateDeliveryForm({ availability }: { availability?: PartnerAvailability } = {}) {
+  const { t } = useTranslation()
+  // The schema in the reader's language, built again only when the language changes.
+  const formSchema = useMemo(() => buildFormSchema(t), [t])
+  // The resolver below reads the schema through this ref, so a language switch reaches validation too
+  // (react-hook-form keeps the resolver it was first given).
+  const formSchemaRef = useRef(formSchema)
+  formSchemaRef.current = formSchema
   const { toast } = useToast()
   const navigator = useRequestPageNavigator()
 
@@ -420,7 +449,7 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
   )
 
   const form = useForm<CreateDeliveryFormValues>({
-    resolver: zodResolver(formSchema),
+    resolver: (values, context, options) => zodResolver(formSchemaRef.current)(values, context, options),
     defaultValues: buildDefaultValues(),
     // The form focuses the first refused field itself (handleInvalid), after opening what hides it.
     shouldFocusError: false,
@@ -473,7 +502,8 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
   const [confirmedPin, setConfirmedPin] = useState<ConfirmedPin | null>(null)
   const pinConfirmed = isPinConfirmed(confirmedPin, dropoffLatitude, dropoffLongitude, currentPinKey)
   const hasDropoffPoint = hasValidCoordinates(dropoffLatitude, dropoffLongitude)
-  // A sentence above the map (an address the lookup did not find), and "Show on map" running.
+  // The translation key of a sentence above the map (an address the lookup did not find), and "Show on
+  // map" running.
   const [pinMessage, setPinMessage] = useState<string | null>(null)
   const [isLocating, setIsLocating] = useState(false)
   // The map was opened at the restaurant (the address was not found) and not moved yet: that point is
@@ -540,19 +570,19 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
     showPrice(null)
 
     if (!pickupCheck.usable) {
-      setBarError(pickupCheck.reason ?? 'Your restaurant profile pickup address is not usable.')
+      setBarError(t(pickupCheck.reason ?? 'form.pickupNotUsable'))
       return
     }
 
     // Spec 0029 (agy review): pressing Enter submits the form even with the button off, so say why here.
     if (availability?.acceptingOrders === false) {
-      setBarError(availability.notAcceptingReason ?? 'This restaurant cannot place orders right now.')
+      setBarError(availability.notAcceptingReason ?? t('form.notAccepting'))
       return
     }
 
     // No price for a pin nobody checked on the map (spec 0016, AC-5).
     if (!pinConfirmed) {
-      setBarError(CONFIRM_PIN_MESSAGE)
+      setBarError(t(CONFIRM_PIN_MESSAGE))
       if (linkedCustomer) setEditingCustomer(true)
       if (pinMapRef.current) {
         // `?.`: test browsers have no scrollIntoView.
@@ -584,14 +614,14 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
       } catch (lookupError) {
         setBarError(
           (lookupError as Error | undefined)?.name === 'TimeoutError'
-            ? 'The address lookup did not answer. Try again, or search the address and pick a result.'
-            : 'The address lookup failed. Check your connection and try again.',
+            ? t('pin.lookupTimedOut')
+            : t('pin.lookupFailed'),
         )
         return
       }
 
       if (!pickupCoordinates) {
-        setBarError('This address was not found on the map. Search for it and pick a result.')
+        setBarError(t('form.addressNotFound'))
         return
       }
 
@@ -621,12 +651,12 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
 
       // The restaurant changed something while the price was on its way: it is not for these values.
       if (pricedValuesKey(pricedValues) !== pricedValuesKey(form.getValues())) {
-        setBarError('Something changed while the price was on its way. Get the price again.')
+        setBarError(t('form.changedWhilePricing'))
         return
       }
       showPrice({ values: pricedValues, pickupReadyAt, orderTotalValue, quote, quotes })
     } catch (err: any) {
-      setBarError(plainErrorMessage(err, 'The price could not be worked out. Try again.'))
+      setBarError(plainErrorMessage(err, t('form.priceFailed'), t))
     }
   }
 
@@ -677,7 +707,7 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
       if (isQuoteFailure(err)) {
         setIsExpired(true)
       } else {
-        setBarError(plainErrorMessage(err, 'The order could not be sent. Try again.'))
+        setBarError(plainErrorMessage(err, t('form.sendFailed'), t))
       }
       return
     }
@@ -694,15 +724,15 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
       // Spec 0046 (AC-3): leg 1 went, a later leg did not. The order page lists the legs, says which was never
       // sent, and offers Retry for it and Cancel for the ones sent.
       toast({
-        title: `${legLabel(legNotSent, order.quotes.length)} was not sent`,
-        description: [legNotSentReason, 'Try again or cancel the legs already sent, on the order page.']
+        title: t('form.legNotSentTitle', { leg: legLabel(legNotSent, order.quotes.length, t) }),
+        description: [legNotSentReason, t('form.legNotSentHint')]
           .filter(Boolean)
           .join(' '),
       })
     } else {
       toast({
-        title: order.quotes.length > 1 ? `Order sent as ${order.quotes.length} deliveries` : 'Delivery created',
-        description: `Delivery ${deliveryId} is now being processed.`,
+        title: order.quotes.length > 1 ? t('form.sentAsLegs', { count: order.quotes.length }) : t('form.deliveryCreated'),
+        description: t('form.deliveryProcessing', { id: deliveryId }),
       })
     }
 
@@ -736,7 +766,7 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
         await confirmDelivery(legInput(index))
       } catch (legError: any) {
         // Row 10 review: the backend's reason, so the restaurant knows why before it retries.
-        return { firstLegId: first.id, legNotSent: index + 1, reason: plainErrorMessage(legError, '') }
+        return { firstLegId: first.id, legNotSent: index + 1, reason: plainErrorMessage(legError, '', t) }
       }
     }
     return { firstLegId: first.id, legNotSent: null, reason: '' }
@@ -814,7 +844,7 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
     }
     setConfirmedPin({ latitude: dropoffLatitude, longitude: dropoffLongitude, pinKey: currentPinKey })
     setPinMessage(null)
-    if (barError === CONFIRM_PIN_MESSAGE) setBarError(null)
+    if (barError === t(CONFIRM_PIN_MESSAGE)) setBarError(null)
   }
 
   // `Change`: the fields stay as they are, the order becomes a typed customer, the tick goes off.
@@ -879,23 +909,23 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
         {/* ── From: the restaurant's pickup, from its profile (AC-5) ───────── */}
         <div data-testid="pickup-readonly">
           {isProfileLoading ? (
-            <p className="text-sm text-muted-foreground">Loading your restaurant&apos;s details…</p>
+            <p className="text-sm text-muted-foreground">{t('form.loadingProfile')}</p>
           ) : profileError ? (
             <Alert variant="destructive">
               <AlertDescription>
-                {profileError instanceof Error ? profileError.message : 'Your restaurant’s details could not be loaded.'}
+                {profileError instanceof Error ? profileError.message : t('form.profileFailed')}
               </AlertDescription>
             </Alert>
           ) : !pickupCheck.usable ? (
             <Alert variant="destructive">
               <AlertDescription>
-                <p className="font-medium">{pickupCheck.reason}</p>
-                <p>Only a co-op admin can set your restaurant&apos;s pickup details</p>
+                <p className="font-medium">{pickupCheck.reason ? t(pickupCheck.reason) : null}</p>
+                <p>{t('form.pickupAdminOnly')}</p>
               </AlertDescription>
             </Alert>
           ) : (
             <p className="text-sm text-muted-foreground break-words">
-              From: {profile?.name}, {pickupMapped?.pickupAddress.formattedAddress || '—'}
+              {t('form.fromLine', { name: profile?.name, address: pickupMapped?.pickupAddress.formattedAddress || '—' })}
             </p>
           )}
         </div>
@@ -921,7 +951,7 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
                 name="dropoffName"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Customer name</FormLabel>
+                    <FormLabel>{t('form.customerName')}</FormLabel>
                     <FormControl>
                       <Input autoComplete="off" className="h-12 text-base" {...field} />
                     </FormControl>
@@ -934,12 +964,12 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
                 name="dropoffPhoneNumber"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Phone</FormLabel>
+                    <FormLabel>{t('form.phone')}</FormLabel>
                     <FormControl>
                       <Input
                         type="tel"
                         autoComplete="off"
-                        placeholder="e.g. 691 234 5678"
+                        placeholder={t('form.phonePlaceholder')}
                         className="h-12 text-base"
                         {...field}
                       />
@@ -955,7 +985,7 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
                 key={linkedCustomer?.id ?? 'typed'}
                 control={form.control}
                 prefix="dropoff"
-                label="Address"
+                label={t('form.address')}
                 // The address the form holds, so it stays visible after Change too (empty on a new form).
                 initialQuery={form.getValues('dropoffAddress.formattedAddress') ?? ''}
                 near={pickupPoint}
@@ -970,14 +1000,14 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
                   confirmed={pinConfirmed}
                   onMove={handlePinMove}
                   onConfirm={handlePinConfirm}
-                  message={pinMessage}
+                  message={pinMessage ? t(pinMessage) : null}
                   large
                 />
               ) : (
                 <div ref={pinMapRef} className="space-y-2">
                   {pinMessage ? (
                     <p role="alert" className="text-sm text-destructive">
-                      {pinMessage}
+                      {t(pinMessage)}
                     </p>
                   ) : null}
                   {form.watch('dropoffAddress.streetAddress.0')?.trim() ? (
@@ -988,7 +1018,7 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
                       onClick={handleShowOnMap}
                       disabled={isLocating}
                     >
-                      {isLocating ? 'Finding the address…' : 'Show on map'}
+                      {isLocating ? t('form.findingAddress') : t('form.showOnMap')}
                     </Button>
                   ) : null}
                 </div>
@@ -1001,10 +1031,10 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
                   render={({ field }) => (
                     <FormItem className="col-span-1">
                       <FormLabel>
-                        Floor <span className="font-normal text-muted-foreground">(optional)</span>
+                        {t('form.floor')} <span className="font-normal text-muted-foreground">{t('common.optional')}</span>
                       </FormLabel>
                       <FormControl>
-                        <Input autoComplete="off" placeholder="3" className="h-12 text-base" {...field} />
+                        <Input autoComplete="off" placeholder={t('form.floorPlaceholder')} className="h-12 text-base" {...field} />
                       </FormControl>
                       <LimitCounter length={field.value?.length ?? 0} limit={FLOOR_MAX} />
                       <FormMessage />
@@ -1017,10 +1047,10 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
                   render={({ field }) => (
                     <FormItem className="col-span-2">
                       <FormLabel>
-                        Name on the doorbell <span className="font-normal text-muted-foreground">(optional)</span>
+                        {t('form.doorbell')} <span className="font-normal text-muted-foreground">{t('common.optional')}</span>
                       </FormLabel>
                       <FormControl>
-                        <Input autoComplete="off" placeholder="Papadopoulou" className="h-12 text-base" {...field} />
+                        <Input autoComplete="off" placeholder={t('form.doorbellPlaceholder')} className="h-12 text-base" {...field} />
                       </FormControl>
                       <LimitCounter length={field.value?.length ?? 0} limit={DOORBELL_MAX} />
                       <FormMessage />
@@ -1041,8 +1071,8 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
               <FormControl>
                 <ChoicePills
                   ref={field.ref}
-                  label="Ready in"
-                  options={readyInPills(profile?.usualPrepMinutes)}
+                  label={t('form.readyIn')}
+                  options={readyInPills(profile?.usualPrepMinutes, t)}
                   value={field.value === undefined || field.value === null ? '' : String(field.value)}
                   onValueChange={(value) => field.onChange(Number(value))}
                 />
@@ -1062,7 +1092,7 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
               <FormControl>
                 <ChoicePills
                   ref={field.ref}
-                  label="How many boxes?"
+                  label={t('form.boxCount')}
                   options={BOX_COUNT_OPTIONS}
                   value={String(field.value ?? 1)}
                   onValueChange={(value) => {
@@ -1077,7 +1107,7 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
               </FormControl>
               {boxCount > 1 ? (
                 <FormDescription>
-                  Each box goes as its own delivery with its own rider, and each is charged a delivery price.
+                  {t('form.boxCountHint')}
                 </FormDescription>
               ) : null}
               <FormMessage />
@@ -1093,8 +1123,8 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
               <FormControl>
                 <ChoicePills
                   ref={field.ref}
-                  label={boxCount > 1 ? 'Box 1 size' : 'Box size'}
-                  options={SIZE_OPTIONS}
+                  label={boxCount > 1 ? t('form.boxNumberSize', { number: 1 }) : t('form.boxSize')}
+                  options={sizeOptions(t)}
                   value={field.value ?? ''}
                   onValueChange={field.onChange}
                 />
@@ -1102,7 +1132,7 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
               <FormDescription>
                 {BOX_SIZE_DESCRIPTIONS.map((line) => (
                   <span key={line.size} className="block">
-                    {line.text}
+                    {t(line.text)}
                   </span>
                 ))}
               </FormDescription>
@@ -1122,8 +1152,8 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
                 <FormControl>
                   <ChoicePills
                     ref={field.ref}
-                    label={`Box ${index + 2} size`}
-                    options={SIZE_OPTIONS}
+                    label={t('form.boxNumberSize', { number: index + 2 })}
+                    options={sizeOptions(t)}
                     value={field.value ?? ''}
                     onValueChange={field.onChange}
                   />
@@ -1142,7 +1172,7 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
           name="orderTotal"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Order total</FormLabel>
+              <FormLabel>{t('form.orderTotal')}</FormLabel>
               <div className="relative">
                 <span
                   aria-hidden="true"
@@ -1159,7 +1189,7 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
                   />
                 </FormControl>
               </div>
-              <FormDescription>0 if it is free</FormDescription>
+              <FormDescription>{t('form.orderTotalHint')}</FormDescription>
               <FormMessage />
             </FormItem>
           )}
@@ -1171,12 +1201,12 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
           render={({ field }) => (
             <FormItem>
               <FormLabel>
-                Note for the rider <span className="font-normal text-muted-foreground">(optional)</span>
+                {t('form.riderNote')} <span className="font-normal text-muted-foreground">{t('common.optional')}</span>
               </FormLabel>
               <FormControl>
                 <Textarea
                   rows={3}
-                  placeholder="Ring twice, dog in the yard"
+                  placeholder={t('form.riderNotePlaceholder')}
                   className="resize-none text-base"
                   {...field}
                 />
@@ -1191,7 +1221,7 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
 
         {/* Spec 0029 (AC-8): busy mode lengthens this order's ready time on the server. */}
         {availability?.busyExtraMinutes && availability.acceptingOrders ? (
-          <p className="text-sm text-muted-foreground">Busy mode adds {availability.busyExtraMinutes} min to this order</p>
+          <p className="text-sm text-muted-foreground">{t('form.busyAdds', { minutes: availability.busyExtraMinutes })}</p>
         ) : null}
 
         <PriceSendBar

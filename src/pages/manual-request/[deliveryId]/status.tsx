@@ -6,6 +6,8 @@ import { OrderLegsSection } from '../../../modules/legs/OrderLegsSection'
 import { legLabel } from '../../../modules/manual-request/utils/legs'
 import { splitChargeNote, splitOutcomeLine } from '../../../modules/legs/splitOutcome'
 import Head from 'next/head'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import Link from 'next/link'
 import { useRouter } from 'next/router'
 import {
@@ -29,7 +31,7 @@ import type {
 } from '../../../modules/manual-request/types'
 import { getManualRequestApiMode } from '../../../utils/manualRequestAuth'
 import { CustomerSaveNotice } from '../../../modules/saved-customers/components/CustomerSaveNotice'
-import { formatDateTime, formatMoney } from '../../../utils/format'
+import { useFormat } from '../../../i18n/useFormat'
 import { orderCodeOf } from '../../../utils/orderCode'
 import { restaurantErrorText } from '../../../utils/restaurantError'
 import { PageHeader } from '../../../modules/portal/components/PortalFrame'
@@ -37,6 +39,8 @@ import { CancelDeliveryDialog } from '../../../modules/cancel/CancelDeliveryDial
 
 const TERMINAL_STATUSES = new Set(['DROPPED_OFF', 'CANCELED', 'FAILED'])
 
+// A backend action code ("MEET_AT_DOOR") with spaces. These codes are shown as they are: they are the
+// API's own values, not words the portal chose (decision 47.9).
 function formatStatus(status: string) {
   return status.replace(/_/g, ' ')
 }
@@ -53,12 +57,15 @@ function formatLocationAddress(loc: PartnerDeliveryPickupDto | PartnerDeliveryDr
   return parts.length ? parts.join(' · ') : '—'
 }
 
-function courierLabel(d: PartnerDeliveryDto): string {
+function courierLabel(d: PartnerDeliveryDto, t: TFunction): string {
   const c = d.courier
-  if (!c) return 'Unassigned'
+  if (!c) return t('orderPage.unassigned')
   const name = [c.firstName, c.lastName].filter(Boolean).join(' ').trim()
-  return name || c.id || 'Assigned'
+  return name || c.id || t('orderPage.assigned')
 }
+
+// An item's box size in the reader's language (the order form's words); an unknown code shows as it is.
+const SIZE_KEYS: Record<string, string> = { SMALL: 'form.sizeSmall', MEDIUM: 'form.sizeMedium', LARGE: 'form.sizeLarge' }
 
 function PartnerDeliveryDetails({
   data,
@@ -74,6 +81,8 @@ function PartnerDeliveryDetails({
   // alone (agy's review of row 10). Always true for a single delivery.
   legsLoaded?: boolean
 }) {
+  const { t } = useTranslation()
+  const format = useFormat()
   const tips = data.tips ?? 0
   const orderItems = data.orderItems ?? []
 
@@ -81,11 +90,11 @@ function PartnerDeliveryDetails({
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <StatusBadge status={data.status} className="text-sm" />
-        <p className="text-xs text-muted-foreground">Created {formatDateTime(data.createdAt)}</p>
+        <p className="text-xs text-muted-foreground">{t('orderPage.createdAt', { time: format.dateTime(data.createdAt) })}</p>
       </div>
 
       <section className="space-y-2">
-        <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Schedule</h2>
+        <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t('orderPage.schedule')}</h2>
         {/* Spec 0023 (AC-8): the ready promise and its buttons, in place of "Pickup ready", which showed
             pickupReadyAt (the pickup moment once the rider has the food). */}
         {legsLoaded ? (
@@ -96,20 +105,20 @@ function PartnerDeliveryDetails({
             otherLegs={otherLegs.map((leg) => ({
               id: leg.id,
               readyAt: leg.readyAt,
-              legLabel: legLabel(leg.legNumber ?? 0, leg.legCount ?? 0),
+              legLabel: legLabel(leg.legNumber ?? 0, leg.legCount ?? 0, t),
             }))}
           />
         ) : (
           <p className="text-sm text-muted-foreground" data-testid="ready-waiting-for-legs">
-            The ready time shows once the order&apos;s legs are loaded.
+            {t('orderPage.readyWaitsForLegs')}
           </p>
         )}
         <DetailList
           items={[
-            { label: 'Pickup deadline', value: formatDateTime(data.pickupDeadlineAt) },
-            { label: 'Dropoff ready', value: formatDateTime(data.dropoffReadyAt) },
-            { label: 'Dropoff ETA', value: formatDateTime(data.dropoffEta) },
-            { label: 'Dropoff deadline', value: formatDateTime(data.dropoffDeadlineAt) },
+            { label: t('orderPage.pickupDeadline'), value: format.dateTime(data.pickupDeadlineAt) },
+            { label: t('orderPage.dropoffReady'), value: format.dateTime(data.dropoffReadyAt) },
+            { label: t('orderPage.dropoffEta'), value: format.dateTime(data.dropoffEta) },
+            { label: t('orderPage.dropoffDeadline'), value: format.dateTime(data.dropoffDeadlineAt) },
           ]}
         />
       </section>
@@ -120,16 +129,16 @@ function PartnerDeliveryDetails({
       <Separator />
 
       <section className="space-y-2">
-        <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Courier</h2>
+        <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t('orderPage.courier')}</h2>
         <DetailList
           items={[
-            { label: 'Name', value: courierLabel(data) },
+            { label: t('orderPage.name'), value: courierLabel(data, t) },
             ...(data.courier?.phoneNumber
-              ? [{ label: 'Phone', value: data.courier.phoneNumber } as const]
+              ? [{ label: t('orderPage.phone'), value: data.courier.phoneNumber } as const]
               : []),
-            ...(data.courier?.id ? [{ label: 'Courier ID', value: data.courier.id, mono: true } as const] : []),
+            ...(data.courier?.id ? [{ label: t('orderPage.courierId'), value: data.courier.id, mono: true } as const] : []),
             ...(data.courier?.vehicleType != null
-              ? [{ label: 'Vehicle', value: String(data.courier.vehicleType) || '—' } as const]
+              ? [{ label: t('orderPage.vehicle'), value: String(data.courier.vehicleType) || '—' } as const]
               : []),
           ]}
         />
@@ -143,7 +152,7 @@ function PartnerDeliveryDetails({
 
       <div className="grid gap-6 lg:grid-cols-2">
         <section className="space-y-2">
-          <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Pickup</h2>
+          <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t('orderPage.pickup')}</h2>
           {data.pickup ? (
             <>
               <p className="text-sm font-medium">{data.pickup.pickupBusinessName}</p>
@@ -156,19 +165,19 @@ function PartnerDeliveryDetails({
               <Separator className="my-3" />
               <DetailList
                 items={[
-                  { label: 'Contact name', value: data.pickup.pickupName },
-                  { label: 'Phone', value: data.pickup.pickupPhoneNumber },
-                  { label: 'Notes', value: data.pickup.pickupNotes ?? '—' },
+                  { label: t('orderPage.contactName'), value: data.pickup.pickupName },
+                  { label: t('orderPage.phone'), value: data.pickup.pickupPhoneNumber },
+                  { label: t('orderPage.notes'), value: data.pickup.pickupNotes ?? '—' },
                 ]}
               />
             </>
           ) : (
-            <p className="text-sm text-muted-foreground">No pickup details</p>
+            <p className="text-sm text-muted-foreground">{t('orderPage.noPickup')}</p>
           )}
         </section>
 
         <section className="space-y-2">
-          <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Dropoff</h2>
+          <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t('orderPage.dropoff')}</h2>
           {data.dropoff ? (
             <>
               <p className="text-sm font-medium">{data.dropoff.dropoffBusinessName ?? data.dropoff.dropoffName}</p>
@@ -181,17 +190,17 @@ function PartnerDeliveryDetails({
               <Separator className="my-3" />
               <DetailList
                 items={[
-                  { label: 'Recipient', value: data.dropoff.dropoffName },
-                  { label: 'Phone', value: data.dropoff.dropoffPhoneNumber },
-                  { label: 'Floor', value: data.dropoff.dropoffFloor ?? '—' },
-                  { label: 'Doorbell', value: data.dropoff.dropoffDoorbell ?? '—' },
-                  { label: 'Notes', value: data.dropoff.dropoffNotes ?? '—' },
-                  { label: 'Seller notes', value: data.dropoff.dropoffSellerNotes ?? '—' },
+                  { label: t('orderPage.recipient'), value: data.dropoff.dropoffName },
+                  { label: t('orderPage.phone'), value: data.dropoff.dropoffPhoneNumber },
+                  { label: t('orderPage.floor'), value: data.dropoff.dropoffFloor ?? '—' },
+                  { label: t('orderPage.doorbell'), value: data.dropoff.dropoffDoorbell ?? '—' },
+                  { label: t('orderPage.notes'), value: data.dropoff.dropoffNotes ?? '—' },
+                  { label: t('orderPage.sellerNotes'), value: data.dropoff.dropoffSellerNotes ?? '—' },
                 ]}
               />
             </>
           ) : (
-            <p className="text-sm text-muted-foreground">No dropoff details</p>
+            <p className="text-sm text-muted-foreground">{t('orderPage.noDropoff')}</p>
           )}
         </section>
       </div>
@@ -199,24 +208,24 @@ function PartnerDeliveryDetails({
       <Separator />
 
       <section className="space-y-2">
-        <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Order & pricing</h2>
+        <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t('orderPage.orderAndPricing')}</h2>
         <DetailList
           items={[
-            { label: 'Order reference', value: data.orderReference ?? '—' },
-            { label: 'Declared order value', value: formatMoney(data.orderTotalValue ?? null, data.currencyCode) },
-            { label: 'Total cost', value: formatMoney(data.totalCost, data.currencyCode) },
-            { label: 'Fee', value: formatMoney(data.fee ?? null, data.currencyCode) },
-            { label: 'Tips', value: formatMoney(tips, data.currencyCode) },
-            { label: 'Courier compensation', value: formatMoney(data.totalCompensation ?? null, data.currencyCode) },
-            { label: 'Deliverable action', value: data.deliverableAction ? formatStatus(data.deliverableAction) : '—' },
-            { label: 'Undeliverable action', value: data.undeliverableAction ? formatStatus(data.undeliverableAction) : '—' },
-            { label: 'Undeliverable reason', value: data.undeliverableReason ?? '—' },
-            { label: 'Requires ID', value: data.requiresId ? 'Yes' : 'No' },
+            { label: t('orderPage.orderReference'), value: data.orderReference ?? '—' },
+            { label: t('orderPage.declaredOrderValue'), value: format.money(data.orderTotalValue ?? null, data.currencyCode) },
+            { label: t('orderPage.totalCost'), value: format.money(data.totalCost, data.currencyCode) },
+            { label: t('orderPage.fee'), value: format.money(data.fee ?? null, data.currencyCode) },
+            { label: t('orderPage.tips'), value: format.money(tips, data.currencyCode) },
+            { label: t('orderPage.courierCompensation'), value: format.money(data.totalCompensation ?? null, data.currencyCode) },
+            { label: t('orderPage.deliverableAction'), value: data.deliverableAction ? formatStatus(data.deliverableAction) : '—' },
+            { label: t('orderPage.undeliverableAction'), value: data.undeliverableAction ? formatStatus(data.undeliverableAction) : '—' },
+            { label: t('orderPage.undeliverableReason'), value: data.undeliverableReason ?? '—' },
+            { label: t('orderPage.requiresId'), value: data.requiresId ? t('orderPage.yes') : t('orderPage.no') },
           ]}
         />
         {orderItems.length > 0 ? (
           <div className="mt-3 space-y-2">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Items</p>
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t('items.legend')}</p>
             <ul className="divide-y rounded-md border text-sm">
               {orderItems.map((item, i) => (
                 <li key={`${item.name}-${i}`} className="flex flex-wrap justify-between gap-2 px-3 py-2">
@@ -225,13 +234,13 @@ function PartnerDeliveryDetails({
                     {/* Spec 0028: the restaurant's mark, so it sees what the rider will see first. */}
                     {item.kind === 'DRINK' || item.kind === 'SIDE' ? (
                       <span className="ml-2 rounded-full bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground">
-                        {item.kind === 'DRINK' ? 'Drink' : 'Side'}
+                        {item.kind === 'DRINK' ? t('items.drink') : t('items.side')}
                       </span>
                     ) : null}
                   </span>
                   <span className="text-muted-foreground">
                     ×{item.quantity}
-                    {item.size ? ` · ${item.size}` : ''}
+                    {item.size ? ` · ${SIZE_KEYS[item.size] ? t(SIZE_KEYS[item.size]) : item.size}` : ''}
                   </span>
                 </li>
               ))}
@@ -243,14 +252,14 @@ function PartnerDeliveryDetails({
       <Separator />
 
       <section className="space-y-2">
-        <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Identifiers</h2>
+        <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t('orderPage.identifiers')}</h2>
         <DetailList
           items={[
-            { label: 'Quote ID', value: data.quoteId ?? data.deliveryQuoteId ?? '—', mono: true },
-            { label: 'Delivery quote ID', value: data.deliveryQuoteId ?? '—', mono: true },
-            { label: 'Idempotency key', value: data.idempotencyKey ?? '—', mono: true },
-            { label: 'External ID', value: data.externalId ?? '—', mono: true },
-            { label: 'External store ID', value: data.externalStoreId ?? '—', mono: true },
+            { label: t('orderPage.quoteId'), value: data.quoteId ?? data.deliveryQuoteId ?? '—', mono: true },
+            { label: t('orderPage.deliveryQuoteId'), value: data.deliveryQuoteId ?? '—', mono: true },
+            { label: t('orderPage.idempotencyKey'), value: data.idempotencyKey ?? '—', mono: true },
+            { label: t('orderPage.externalId'), value: data.externalId ?? '—', mono: true },
+            { label: t('orderPage.externalStoreId'), value: data.externalStoreId ?? '—', mono: true },
           ]}
         />
         {data.externalUserInfo != null ? (
@@ -264,7 +273,7 @@ function PartnerDeliveryDetails({
         <>
           <Separator />
           <section className="space-y-2">
-            <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Customer notes</h2>
+            <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t('orderPage.customerNotes')}</h2>
             <pre className="max-h-40 overflow-auto rounded-md border bg-muted/40 p-3 text-xs">
               {JSON.stringify(data.customerNotes, null, 2)}
             </pre>
@@ -276,23 +285,26 @@ function PartnerDeliveryDetails({
 }
 
 function AdminDeliveryDetails({ data }: { data: ManualRequestDeliveryDto }) {
+  const { t } = useTranslation()
+  const format = useFormat()
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <StatusBadge status={data.status} className="text-sm" />
         <p className="text-xs text-muted-foreground">
-          Created {formatDateTime(data.createdAt)} · Updated {formatDateTime(data.updatedAt)}
+          {t('orderPage.createdAt', { time: format.dateTime(data.createdAt) })} ·{' '}
+          {t('orderPage.updatedAt', { time: format.dateTime(data.updatedAt) })}
         </p>
       </div>
 
       <section className="space-y-2">
-        <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Delivery</h2>
+        <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t('orderPage.delivery')}</h2>
         <DetailList
           items={[
-            { label: 'Courier ID', value: data.courierId ?? 'Unassigned' },
-            { label: 'Partner ID', value: data.partnerId ?? '—', mono: true },
-            { label: 'Delivery quote ID', value: data.deliveryQuoteId, mono: true },
-            { label: 'Order reference', value: data.orderReference ?? '—' },
+            { label: t('orderPage.courierId'), value: data.courierId ?? t('orderPage.unassigned') },
+            { label: t('orderPage.partnerId'), value: data.partnerId ?? '—', mono: true },
+            { label: t('orderPage.deliveryQuoteId'), value: data.deliveryQuoteId, mono: true },
+            { label: t('orderPage.orderReference'), value: data.orderReference ?? '—' },
           ]}
         />
       </section>
@@ -300,16 +312,16 @@ function AdminDeliveryDetails({ data }: { data: ManualRequestDeliveryDto }) {
       <Separator />
 
       <section className="space-y-2">
-        <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Pickup</h2>
+        <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t('orderPage.pickup')}</h2>
         <DetailList
           items={[
-            { label: 'Location ID', value: data.pickupLocationId, mono: true },
-            { label: 'Name', value: data.pickupName },
-            { label: 'Business', value: data.pickupBusinessName },
-            { label: 'Phone', value: data.pickupPhoneNumber },
-            { label: 'Notes', value: data.pickupNotes ?? '—' },
-            { label: 'Ready', value: formatDateTime(data.pickupReadyAt) },
-            { label: 'Deadline', value: formatDateTime(data.pickupDeadlineAt) },
+            { label: t('orderPage.locationId'), value: data.pickupLocationId, mono: true },
+            { label: t('orderPage.name'), value: data.pickupName },
+            { label: t('orderPage.business'), value: data.pickupBusinessName },
+            { label: t('orderPage.phone'), value: data.pickupPhoneNumber },
+            { label: t('orderPage.notes'), value: data.pickupNotes ?? '—' },
+            { label: t('orderPage.ready'), value: format.dateTime(data.pickupReadyAt) },
+            { label: t('orderPage.deadline'), value: format.dateTime(data.pickupDeadlineAt) },
           ]}
         />
       </section>
@@ -317,17 +329,17 @@ function AdminDeliveryDetails({ data }: { data: ManualRequestDeliveryDto }) {
       <Separator />
 
       <section className="space-y-2">
-        <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Dropoff</h2>
+        <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t('orderPage.dropoff')}</h2>
         <DetailList
           items={[
-            { label: 'Location ID', value: data.dropoffLocationId, mono: true },
-            { label: 'Name', value: data.dropoffName },
-            { label: 'Business', value: data.dropoffBusinessName ?? '—' },
-            { label: 'Phone', value: data.dropoffPhoneNumber },
-            { label: 'Notes', value: data.dropoffNotes ?? '—' },
-            { label: 'Ready', value: formatDateTime(data.dropoffReadyAt) },
-            { label: 'ETA', value: formatDateTime(data.dropoffEta) },
-            { label: 'Deadline', value: formatDateTime(data.dropoffDeadlineAt) },
+            { label: t('orderPage.locationId'), value: data.dropoffLocationId, mono: true },
+            { label: t('orderPage.name'), value: data.dropoffName },
+            { label: t('orderPage.business'), value: data.dropoffBusinessName ?? '—' },
+            { label: t('orderPage.phone'), value: data.dropoffPhoneNumber },
+            { label: t('orderPage.notes'), value: data.dropoffNotes ?? '—' },
+            { label: t('orderPage.ready'), value: format.dateTime(data.dropoffReadyAt) },
+            { label: t('orderPage.eta'), value: format.dateTime(data.dropoffEta) },
+            { label: t('orderPage.deadline'), value: format.dateTime(data.dropoffDeadlineAt) },
           ]}
         />
       </section>
@@ -335,15 +347,15 @@ function AdminDeliveryDetails({ data }: { data: ManualRequestDeliveryDto }) {
       <Separator />
 
       <section className="space-y-2">
-        <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Pricing & actions</h2>
+        <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t('orderPage.pricingAndActions')}</h2>
         <DetailList
           items={[
-            { label: 'Currency', value: data.currencyCode },
-            { label: 'Total cost', value: formatMoney(data.totalCost, data.currencyCode) },
-            { label: 'Pay', value: formatMoney(data.pay, data.currencyCode) },
-            { label: 'Fee', value: formatMoney(data.fee, data.currencyCode) },
-            { label: 'Deliverable action', value: formatStatus(data.deliverableAction) },
-            { label: 'Undeliverable action', value: data.undeliverableAction ? formatStatus(data.undeliverableAction) : '—' },
+            { label: t('orderPage.currency'), value: data.currencyCode },
+            { label: t('orderPage.totalCost'), value: format.money(data.totalCost, data.currencyCode) },
+            { label: t('orderPage.pay'), value: format.money(data.pay, data.currencyCode) },
+            { label: t('orderPage.fee'), value: format.money(data.fee, data.currencyCode) },
+            { label: t('orderPage.deliverableAction'), value: formatStatus(data.deliverableAction) },
+            { label: t('orderPage.undeliverableAction'), value: data.undeliverableAction ? formatStatus(data.undeliverableAction) : '—' },
           ]}
         />
       </section>
@@ -352,6 +364,7 @@ function AdminDeliveryDetails({ data }: { data: ManualRequestDeliveryDto }) {
 }
 
 export default function ManualRequestStatusPage() {
+  const { t } = useTranslation()
   const router = useRouter()
   const deliveryId = typeof router.query.deliveryId === 'string' ? router.query.deliveryId : ''
   const partnerMode = getManualRequestApiMode() === 'partner'
@@ -375,13 +388,13 @@ export default function ManualRequestStatusPage() {
   )
   const partnerData = partnerMode ? (data as PartnerDeliveryDto | undefined) : undefined
   // Spec 0047: split at pickup, or left because it didn't fit one box.
-  const splitLine = partnerData ? splitOutcomeLine(partnerData) : null
+  const splitLine = partnerData ? splitOutcomeLine(partnerData, t) : null
   // Decision 11.10: what the split costs the restaurant, and why a leg the split made reads cost 0.
-  const splitNote = partnerData ? splitChargeNote(partnerData) : null
+  const splitNoteKey = partnerData ? splitChargeNote(partnerData) : null
   const isLeg = Boolean(partnerData?.legCount)
   // The server's own sentence for a refusal, else a general line (restaurantErrorText). A 401 is handled
   // by the frame, which checks the session.
-  const errorMessage = restaurantErrorText(error, 'The order could not be loaded. Try again in a moment.')
+  const errorMessage = restaurantErrorText(error, t('orderPage.loadFailed'))
 
   const isTerminal = data ? TERMINAL_STATUSES.has(data.status) : false
 
@@ -389,23 +402,23 @@ export default function ManualRequestStatusPage() {
   return (
     <>
       <Head>
-        <title>Delivery Status · OpenCourier</title>
+        <title>{t('orderPage.documentTitle')}</title>
       </Head>
       {/* The frame (PortalFrame) supplies <main> and the 768px column; this is the page inside it. */}
       <div className="space-y-6">
         <PageHeader
-          title="Delivery Status"
+          title={t('orderPage.title')}
           actions={
             <>
               {partnerMode ? (
                 <Link href="/manual-request/deliveries" className="underline">
-                  All deliveries
+                  {t('orderPage.allDeliveries')}
                 </Link>
               ) : null}
               {/* asChild: the Button's look on the Link itself, so it stays a real link (spec 0006, AC-14).
                   The order form mounts afresh there, so it opens empty. */}
               <Button asChild size="xl">
-                <Link href="/manual-request">New order</Link>
+                <Link href="/manual-request">{t('orderPage.newOrder')}</Link>
               </Button>
             </>
           }
@@ -420,7 +433,7 @@ export default function ManualRequestStatusPage() {
                 glance. The full id stays below it. */}
             {deliveryId ? (
               <p className="text-sm text-muted-foreground">
-                Order code{' '}
+                {t('orderPage.orderCode')}{' '}
                 <span className="block font-mono text-4xl font-bold tracking-wide text-foreground" data-testid="order-code">
                   #{orderCodeOf(deliveryId)}
                 </span>
@@ -429,19 +442,19 @@ export default function ManualRequestStatusPage() {
             <CardTitle className="break-all font-mono text-base text-muted-foreground">{deliveryId || '—'}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {isLoading && !data ? <p className="text-sm text-muted-foreground">Loading delivery status...</p> : null}
+            {isLoading && !data ? <p className="text-sm text-muted-foreground">{t('orderPage.loading')}</p> : null}
             {error && !data ? <p className="text-sm text-destructive">{errorMessage}</p> : null}
             {/* The page refreshes every 30 s until the order ends (spec 0017, AC-4); a failed refresh keeps it. */}
             {error && data ? (
               <p role="status" className="text-sm text-muted-foreground">
-                Could not refresh just now. It tries again in 30 seconds.
+                {t('orderPage.refreshFailed')}
               </p>
             ) : null}
 
             {/* Spec 0046 (AC-6): which leg this is, and the order's other legs. */}
             {partnerData?.legNumber && partnerData.legCount ? (
               <p className="text-base font-medium" data-testid="leg-label">
-                {legLabel(partnerData.legNumber, partnerData.legCount)}
+                {legLabel(partnerData.legNumber, partnerData.legCount, t)}
               </p>
             ) : null}
             {/* Spec 0047 (AC-8, AC-10): split by dispatch at pickup, or left because it didn't fit one box. */}
@@ -450,9 +463,9 @@ export default function ManualRequestStatusPage() {
                 {splitLine}
               </p>
             ) : null}
-            {splitNote ? (
+            {splitNoteKey ? (
               <p className="text-xs text-muted-foreground" data-testid="split-charge-note">
-                {splitNote}
+                {t(splitNoteKey)}
               </p>
             ) : null}
             {data && partnerMode ? (
@@ -492,18 +505,18 @@ export default function ManualRequestStatusPage() {
                 }}
                 disabled={isLoading}
               >
-                Refresh
+                {t('orderPage.refresh')}
               </Button>
               <Button
                 variant="destructive"
                 onClick={() => setCancelOpen(true)}
                 disabled={!data || isTerminal || !deliveryId}
               >
-                Cancel delivery
+                {t('cancel.confirm')}
               </Button>
             </div>
             {isTerminal ? (
-              <p className="text-xs text-muted-foreground">This delivery can no longer be cancelled.</p>
+              <p className="text-xs text-muted-foreground">{t('orderPage.cannotCancel')}</p>
             ) : null}
             {cancelOpen ? (
               <CancelDeliveryDialog

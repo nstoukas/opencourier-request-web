@@ -18,6 +18,7 @@ import {
   Spinner,
 } from '../../../admin-web-components'
 import { MagnifyingGlass, MapPin, X } from '@phosphor-icons/react'
+import { useTranslation } from 'react-i18next'
 import { cn } from '../../../ui-shared-utils'
 import { GEOCODE_TIMEOUT_MS, hasValidCoordinates } from '../utils/geocode'
 import { GeoPoint, nearbyViewbox } from '../utils/orderForm'
@@ -72,6 +73,7 @@ export function AddressSection<T extends FieldValues>({
   near,
   defaultTown = '',
 }: AddressSectionProps<T>) {
+  const { t } = useTranslation()
   const { setValue, getValues, getFieldState } = useFormContext<T>()
   const field = (name: string) => `${prefix}Address.${name}` as Path<T>
   const coord = (name: string) => `${prefix}${name.charAt(0).toUpperCase()}${name.slice(1)}` as Path<T>
@@ -123,6 +125,9 @@ export function AddressSection<T extends FieldValues>({
       const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&addressdetails=1&limit=6${viewbox}`
       const res = await fetch(url, {
         headers: {
+          // Results in Latin letters whatever the reader's language: the address text is stored and shared
+          // with riders, admin and the saved customer search, so its script is not a display choice
+          // (decision 47.7).
           'Accept-Language': 'en',
           'User-Agent': 'opencourier-request-web/1.0 (manual delivery form)',
         },
@@ -133,14 +138,14 @@ export function AddressSection<T extends FieldValues>({
       // so the restaurant sees "Search failed" instead of nothing at all.
       if (!res.ok) throw new Error(`Search failed (HTTP ${res.status})`)
       const data: NominatimResult[] = await res.json()
-      if (data.length === 0) setSearchError('No results found. Try a more specific address.')
+      if (data.length === 0) setSearchError(t('address.noResults'))
       setResults(data)
       setShowResults(true)
     } catch (error) {
       setSearchError(
         (error as Error | undefined)?.name === 'TimeoutError'
-          ? 'Search did not answer. Try again, or type the address.'
-          : 'Search failed. Check your connection and try again.',
+          ? t('address.searchTimedOut')
+          : t('address.searchFailed'),
       )
     } finally {
       setIsSearching(false)
@@ -225,7 +230,7 @@ export function AddressSection<T extends FieldValues>({
               // While the typed fields are closed, an error on the street focuses this box.
               ref={compact || typing ? undefined : street.field.ref}
               type="text"
-              placeholder={compact ? 'Search address to auto-fill' : 'e.g. Iasonos 12'}
+              placeholder={compact ? t('address.searchPlaceholder') : t('address.streetPlaceholder')}
               value={query}
               className={cn('pl-8', compact ? 'pr-8' : 'pr-12', control48)}
               aria-invalid={searchShowsStreetError ? true : undefined}
@@ -241,7 +246,7 @@ export function AddressSection<T extends FieldValues>({
                 type="button"
                 onClick={handleClear}
                 // The button shows only an icon, so this is the name a screen reader says.
-                aria-label="Clear search"
+                aria-label={t('address.clearSearch')}
                 className={cn(
                   'absolute right-0 top-1/2 -translate-y-1/2 inline-flex items-center justify-center text-muted-foreground hover:text-foreground',
                   compact ? 'right-2' : 'size-12',
@@ -261,9 +266,9 @@ export function AddressSection<T extends FieldValues>({
             )}
           >
             {isSearching
-              ? <Spinner label="Searching" />
+              ? <Spinner label={t('address.searching')} />
               : <MagnifyingGlass className="h-4 w-4" />}
-            Search
+            {t('address.search')}
           </button>
         </div>
 
@@ -304,9 +309,9 @@ export function AddressSection<T extends FieldValues>({
             name={field('streetAddress.0')}
             render={({ field: f }) => (
               <FormItem className="sm:col-span-6">
-                <FormLabel>Street address or PO Box</FormLabel>
+                <FormLabel>{t('address.streetOrPoBox')}</FormLabel>
                 <FormControl>
-                  <Input placeholder="e.g. Iasonos 12" {...f} />
+                  <Input placeholder={t('address.streetPlaceholder')} {...f} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -318,9 +323,9 @@ export function AddressSection<T extends FieldValues>({
             name={field('city')}
             render={({ field: f }) => (
               <FormItem className="sm:col-span-4">
-                <FormLabel>City</FormLabel>
+                <FormLabel>{t('address.city')}</FormLabel>
                 <FormControl>
-                  <Input placeholder="e.g. Volos" {...f} />
+                  <Input placeholder={t('address.cityPlaceholder')} {...f} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -332,9 +337,9 @@ export function AddressSection<T extends FieldValues>({
             name={field('zipCode')}
             render={({ field: f }) => (
               <FormItem className="sm:col-span-2">
-                <FormLabel>ZIP / Postal code</FormLabel>
+                <FormLabel>{t('address.postcode')}</FormLabel>
                 <FormControl>
-                  <Input placeholder="e.g. 38221" {...f} />
+                  <Input placeholder={t('address.postcodePlaceholder')} {...f} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -344,7 +349,7 @@ export function AddressSection<T extends FieldValues>({
       ) : typing ? (
         <div className="space-y-3">
           <div className="space-y-2">
-            <Label htmlFor={`${searchId}-street`}>Street and number</Label>
+            <Label htmlFor={`${searchId}-street`}>{t('address.streetAndNumber')}</Label>
             <Input
               id={`${searchId}-street`}
               ref={street.field.ref}
@@ -352,7 +357,7 @@ export function AddressSection<T extends FieldValues>({
               value={street.field.value ?? ''}
               onChange={street.field.onChange}
               onBlur={street.field.onBlur}
-              placeholder="e.g. Iasonos 12"
+              placeholder={t('address.streetPlaceholder')}
               autoComplete="off"
               aria-invalid={streetError ? true : undefined}
               aria-describedby={streetError ? streetErrorId : undefined}
@@ -364,7 +369,7 @@ export function AddressSection<T extends FieldValues>({
             name={field('city')}
             render={({ field: f }) => (
               <FormItem>
-                <FormLabel>Town</FormLabel>
+                <FormLabel>{t('address.town')}</FormLabel>
                 <FormControl>
                   <Input autoComplete="off" className={control48} {...f} />
                 </FormControl>
@@ -375,7 +380,7 @@ export function AddressSection<T extends FieldValues>({
         </div>
       ) : (
         <Button type="button" variant="link" className="h-12 px-0 text-base underline" onClick={openTyping}>
-          Can&apos;t find it? Type it
+          {t('address.typeIt')}
         </Button>
       )}
     </div>

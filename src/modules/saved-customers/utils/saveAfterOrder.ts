@@ -11,11 +11,11 @@ export type CustomerSaveOutcome = 'none' | 'saved' | 'clash' | 'invalid' | 'fail
 export const CUSTOMER_SAVE_FAILURES = ['clash', 'invalid', 'failed'] as const
 export type CustomerSaveFailure = (typeof CUSTOMER_SAVE_FAILURES)[number]
 
-// The status page's notice for each failure (spec 0005, the order flow's step 3).
+// The translation key of the status page's notice for each failure (spec 0005, the order flow's step 3).
 export const CUSTOMER_SAVE_NOTICES: Record<CustomerSaveFailure, string> = {
-  clash: 'Order sent. The customer was not saved: another saved customer has this phone.',
-  invalid: 'Order sent. The customer was not saved: the details were refused.',
-  failed: "Order sent. The customer was not saved: the co-op's server did not answer.",
+  clash: 'customerSave.clash',
+  invalid: 'customerSave.invalid',
+  failed: 'customerSave.failed',
 }
 
 const statusOf = (error: unknown) => (error as SavedCustomerError | undefined)?.statusCode

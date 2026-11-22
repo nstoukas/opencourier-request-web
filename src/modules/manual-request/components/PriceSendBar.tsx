@@ -5,19 +5,21 @@
  */
 import React, { useEffect, useRef } from 'react'
 import { Alert, AlertDescription, Button, Spinner } from '../../../admin-web-components'
-import { formatDistance, formatMoney, formatTime } from '../../../utils/format'
+import { useTranslation } from 'react-i18next'
+import { useFormat } from '../../../i18n/useFormat'
 import { ManualRequestQuoteDto } from '../types'
 import { legPriceLines } from '../utils/legs'
 
 // needs price → pricing → priced → sending; a priced order can also become expired.
 export type BarPhase = 'needs-price' | 'pricing' | 'priced' | 'expired' | 'sending'
 
+// The button's words in each phase, as translation keys.
 const BUTTON_TEXT: Record<BarPhase, string> = {
-  'needs-price': 'Get price',
-  pricing: 'Getting price…',
-  priced: 'Send order',
-  expired: 'Get a new price',
-  sending: 'Sending…',
+  'needs-price': 'bar.getPrice',
+  pricing: 'bar.gettingPrice',
+  priced: 'bar.sendOrder',
+  expired: 'bar.getNewPrice',
+  sending: 'bar.sending',
 }
 
 interface PriceSendBarProps {
@@ -47,6 +49,7 @@ export function PriceSendBar({
   onSend,
   onHeightChange,
 }: PriceSendBarProps) {
+  const { t } = useTranslation()
   const barRef = useRef<HTMLDivElement>(null)
 
   // ResizeObserver: tells us whenever the bar's size changes (a price or an error appears). Older test
@@ -79,7 +82,7 @@ export function PriceSendBar({
         {/* aria-live: a screen reader says the price when it arrives, and says when it expired. */}
         <div aria-live="polite">
           {phase === 'expired' ? (
-            <p className="text-base font-medium text-destructive">This price has expired</p>
+            <p className="text-base font-medium text-destructive">{t('bar.expired')}</p>
           ) : showsPrice ? (
             <PriceSummary quote={quote} quotes={quotes} pricedAddress={pricedAddress} />
           ) : null}
@@ -93,7 +96,7 @@ export function PriceSendBar({
           onClick={sends ? onSend : undefined}
         >
           {busy ? <Spinner className="mr-2" /> : null}
-          {BUTTON_TEXT[phase]}
+          {t(BUTTON_TEXT[phase])}
         </Button>
       </div>
     </div>
@@ -109,21 +112,23 @@ function PriceSummary({
   quotes: ManualRequestQuoteDto[]
   pricedAddress: string | null
 }) {
+  const { t } = useTranslation()
+  const format = useFormat()
   // Spec 0046 (AC-2, cross check 7): "2 deliveries × 3,80 € = 7,60 €", or a line per leg when prices differ.
-  const legLines = legPriceLines(quotes)
+  const legLines = legPriceLines(quotes, t, format.language)
   // Row 10 review: for legs the big figure is what the customer pays, the sum of the legs (decision 10.4 changed).
   const legsTotal = quotes.length > 1 ? quotes.reduce((sum, leg) => sum + leg.quoteRangeFrom, 0) : null
-  const priceFrom = formatMoney(quote.quoteRangeFrom, quote.currency)
-  const priceTo = formatMoney(quote.quoteRangeTo, quote.currency)
+  const priceFrom = format.money(quote.quoteRangeFrom, quote.currency)
+  const priceTo = format.money(quote.quoteRangeTo, quote.currency)
   const price = quote.quoteRangeFrom === quote.quoteRangeTo ? priceFrom : `${priceFrom} – ${priceTo}`
-  const eta = quote.dropoffEta ? formatTime(quote.dropoffEta) : `~${quote.duration} min`
+  const eta = quote.dropoffEta ? format.time(quote.dropoffEta) : t('bar.aboutMinutes', { count: quote.duration })
 
   return (
     <div className="space-y-0.5 break-words">
       <p className="flex flex-wrap items-baseline gap-x-3">
-        <span className="text-2xl font-bold tabular-nums">{legsTotal !== null ? formatMoney(legsTotal, quote.currency) : price}</span>
+        <span className="text-2xl font-bold tabular-nums">{legsTotal !== null ? format.money(legsTotal, quote.currency) : price}</span>
         <span className="text-sm text-muted-foreground">
-          ETA {eta} · {formatDistance(quote.distance, quote.distanceUnit)}
+          {t('bar.eta', { eta, distance: format.distance(quote.distance, quote.distanceUnit) })}
         </span>
       </p>
       {legLines.length > 0 ? (
@@ -136,9 +141,9 @@ function PriceSummary({
         </div>
       ) : null}
       {/* The address the price was made for, so a wrong search match is caught before sending. */}
-      {pricedAddress ? <p className="text-sm">To: {pricedAddress}</p> : null}
+      {pricedAddress ? <p className="text-sm">{t('bar.to', { address: pricedAddress })}</p> : null}
       {quote.expiresAt ? (
-        <p className="text-sm text-muted-foreground">Valid until {formatTime(quote.expiresAt)}</p>
+        <p className="text-sm text-muted-foreground">{t('bar.validUntil', { time: format.time(quote.expiresAt) })}</p>
       ) : null}
     </div>
   )

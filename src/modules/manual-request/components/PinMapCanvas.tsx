@@ -5,7 +5,8 @@
 
 import React, { useEffect, useRef } from 'react'
 import 'leaflet/dist/leaflet.css'
-import { MapContainer, TileLayer, useMap, useMapEvents } from 'react-leaflet'
+import { useTranslation } from 'react-i18next'
+import { MapContainer, TileLayer, useMap, useMapEvents, ZoomControl } from 'react-leaflet'
 import type { GeoPoint } from '../utils/orderForm'
 
 export interface PinMapCanvasProps {
@@ -54,12 +55,13 @@ function CenterFollower({ center, onUserMove }: Omit<PinMapCanvasProps, 'zoom'>)
 }
 
 export function PinMapCanvas({ center, zoom, onUserMove }: PinMapCanvasProps) {
+  const { t } = useTranslation()
   return (
     // `isolate` starts a stacking context, so Leaflet's own z-index values (up to 1000) stay inside this box
     // and never paint over the page's sticky header or the fixed Get price bar.
     <div
       role="group"
-      aria-label="Map of the customer's entrance. Drag it, or use the arrow keys, to put the pin on the entrance."
+      aria-label={t('pin.mapLabel')}
       className="relative isolate h-[220px] w-full overflow-hidden rounded-md border"
     >
       {/* Zooming keeps the centre where it is ('center'), so only a drag moves the pin's point. */}
@@ -69,8 +71,11 @@ export function PinMapCanvas({ center, zoom, onUserMove }: PinMapCanvasProps) {
         scrollWheelZoom="center"
         touchZoom="center"
         doubleClickZoom="center"
+        // Leaflet's own + and − buttons carry English tooltips, so they are replaced by the ZoomControl below.
+        zoomControl={false}
         className="h-full w-full"
       >
+        <ZoomControl position="topleft" zoomInTitle={t('pin.zoomIn')} zoomOutTitle={t('pin.zoomOut')} />
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"

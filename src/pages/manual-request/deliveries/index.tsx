@@ -3,6 +3,7 @@ import { AvailabilityStrip } from '../../../modules/availability/AvailabilityStr
 import { WaitRecordCard } from '../../../modules/availability/WaitRecordCard'
 import { useState } from 'react'
 import Head from 'next/head'
+import { useTranslation } from 'react-i18next'
 import Link from 'next/link'
 import {
   Button,
@@ -28,7 +29,8 @@ import {
   useUpdateManualRequestDeliveryMutation,
 } from '../../../api/manualRequestApi'
 import { PartnerDeliveryDto } from '../../../modules/manual-request/types'
-import { formatDateTime, formatMoney } from '../../../utils/format'
+import { useFormat } from '../../../i18n/useFormat'
+import { serverMessage } from '../../../i18n/serverText'
 import { PageHeader } from '../../../modules/portal/components/PortalFrame'
 import { CancelDeliveryDialog } from '../../../modules/cancel/CancelDeliveryDialog'
 import { OrderLegsCard } from '../../../modules/legs/OrderLegsCard'
@@ -61,6 +63,7 @@ function fromDatetimeLocal(value: string): string | null {
 }
 
 function EditDialog({ delivery, onClose, onSaved }: EditDialogProps) {
+  const { t } = useTranslation()
   const [orderReference, setOrderReference] = useState(delivery.orderReference ?? '')
   const [pickupNotes, setPickupNotes] = useState(delivery.pickup?.pickupNotes ?? '')
   // The ready time moves only by the audited buttons on the order (spec 0023, decision 21.9); the update
@@ -80,7 +83,7 @@ function EditDialog({ delivery, onClose, onSaved }: EditDialogProps) {
     const dropoffLat = delivery.dropoff?.latitude
     const dropoffLon = delivery.dropoff?.longitude
     if (dropoffLat == null || dropoffLon == null) {
-      setError('Dropoff coordinates are missing — cannot update this delivery.')
+      setError(t('orders.editNoCoordinates'))
       return
     }
     try {
@@ -98,7 +101,7 @@ function EditDialog({ delivery, onClose, onSaved }: EditDialogProps) {
       })
       onSaved()
     } catch (err: any) {
-      setError(err?.message ?? 'Update failed.')
+      setError(serverMessage(err) ?? t('orders.editFailed'))
     }
   }
 
@@ -106,38 +109,38 @@ function EditDialog({ delivery, onClose, onSaved }: EditDialogProps) {
     <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Edit Delivery</DialogTitle>
+          <DialogTitle>{t('orders.editTitle')}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-5 py-2 max-h-[70vh] overflow-y-auto pr-1">
           <div className="space-y-1.5">
-            <Label htmlFor="edit-order-ref">Order Reference</Label>
+            <Label htmlFor="edit-order-ref">{t('orders.editOrderReference')}</Label>
             <Input
               id="edit-order-ref"
               value={orderReference}
               onChange={(e) => setOrderReference(e.target.value)}
-              placeholder="e.g. ORD-12345"
+              placeholder={t('orders.editOrderReferencePlaceholder')}
             />
           </div>
 
           <Separator />
 
           <div className="space-y-3">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Pickup</p>
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('orderPage.pickup')}</p>
             <div className="space-y-1.5">
-              <Label htmlFor="edit-pickup-notes">Notes</Label>
+              <Label htmlFor="edit-pickup-notes">{t('orderPage.notes')}</Label>
               <Textarea
                 id="edit-pickup-notes"
                 value={pickupNotes}
                 onChange={(e) => setPickupNotes(e.target.value)}
-                placeholder="Instructions for the courier at pickup"
+                placeholder={t('orders.editPickupNotesPlaceholder')}
                 rows={2}
               />
             </div>
             <div className="grid sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="edit-pickup-deadline">
-                  Deadline <span className="text-muted-foreground font-normal">(optional)</span>
+                  {t('orderPage.deadline')} <span className="text-muted-foreground font-normal">{t('common.optional')}</span>
                 </Label>
                 <Input
                   id="edit-pickup-deadline"
@@ -152,21 +155,21 @@ function EditDialog({ delivery, onClose, onSaved }: EditDialogProps) {
           <Separator />
 
           <div className="space-y-3">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Dropoff</p>
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('orderPage.dropoff')}</p>
             <div className="space-y-1.5">
-              <Label htmlFor="edit-dropoff-notes">Notes</Label>
+              <Label htmlFor="edit-dropoff-notes">{t('orderPage.notes')}</Label>
               <Textarea
                 id="edit-dropoff-notes"
                 value={dropoffNotes}
                 onChange={(e) => setDropoffNotes(e.target.value)}
-                placeholder="Instructions for the courier at dropoff"
+                placeholder={t('orders.editDropoffNotesPlaceholder')}
                 rows={2}
               />
             </div>
             <div className="grid sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="edit-dropoff-ready">
-                  Ready At <span className="text-muted-foreground font-normal">(optional)</span>
+                  {t('orders.editReadyAt')} <span className="text-muted-foreground font-normal">{t('common.optional')}</span>
                 </Label>
                 <Input
                   id="edit-dropoff-ready"
@@ -177,7 +180,7 @@ function EditDialog({ delivery, onClose, onSaved }: EditDialogProps) {
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="edit-dropoff-deadline">
-                  Deadline <span className="text-muted-foreground font-normal">(optional)</span>
+                  {t('orderPage.deadline')} <span className="text-muted-foreground font-normal">{t('common.optional')}</span>
                 </Label>
                 <Input
                   id="edit-dropoff-deadline"
@@ -194,10 +197,10 @@ function EditDialog({ delivery, onClose, onSaved }: EditDialogProps) {
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={isLoading}>
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button onClick={handleSave} disabled={isLoading}>
-            {isLoading ? 'Saving...' : 'Save changes'}
+            {isLoading ? t('common.saving') : t('orders.saveChanges')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -206,6 +209,8 @@ function EditDialog({ delivery, onClose, onSaved }: EditDialogProps) {
 }
 
 export default function DeliveriesPage() {
+  const { t } = useTranslation()
+  const format = useFormat()
   const [page, setPage] = useState(1)
   const PER_PAGE = 20
   // The frame (PortalFrame) shows this page only once the restaurant is signed in, and handles a session
@@ -227,7 +232,7 @@ export default function DeliveriesPage() {
       const full = await fetchPartnerDelivery(deliveryId)
       setEditingDelivery(full)
     } catch (err: any) {
-      setStatusMessage(err?.message ?? 'Failed to load delivery details.')
+      setStatusMessage(serverMessage(err) ?? t('orders.editLoadFailed'))
     } finally {
       setLoadingEditId(null)
     }
@@ -246,16 +251,16 @@ export default function DeliveriesPage() {
   return (
     <>
       <Head>
-        <title>My Orders · OpenCourier</title>
+        <title>{t('orders.documentTitle')}</title>
       </Head>
       {/* The frame (PortalFrame) supplies <main> and the 768px column; this is the page inside it. */}
       <div className="space-y-6">
         <PageHeader
-          title="My Orders"
+          title={t('orders.title')}
           description={
             data?.historyDays
-              ? `Your orders from the last ${data.historyDays} ${data.historyDays === 1 ? 'day' : 'days'}, and any still open.`
-              : "Only your restaurant's deliveries appear here."
+              ? t('orders.historyDays', { count: data.historyDays })
+              : t('orders.onlyYours')
           }
         />
         <AvailabilityStrip availability={availabilityQuery.availability} onChanged={availabilityQuery.refetch} />
@@ -265,18 +270,18 @@ export default function DeliveriesPage() {
         {/* A poll that fails keeps the list on screen and says so; only a first load that fails shows the error alone. */}
         {error && data ? (
           <p role="status" className="text-sm text-muted-foreground">
-            Could not refresh the list just now. It tries again in 30 seconds.
+            {t('orders.refreshFailed')}
           </p>
         ) : null}
 
         {isLoading && !data ? (
-          <p className="text-sm text-muted-foreground">Loading deliveries...</p>
+          <p className="text-sm text-muted-foreground">{t('orders.loading')}</p>
         ) : error && !data ? (
           <p className="text-sm text-destructive">
-            {(error as any)?.message ?? 'Failed to load deliveries. Check your credentials and try again.'}
+            {serverMessage(error as any) ?? t('orders.loadFailed')}
           </p>
         ) : deliveries.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No orders yet.</p>
+          <p className="text-sm text-muted-foreground">{t('orders.empty')}</p>
         ) : (
           <div className="space-y-3">
             {groupHistory(deliveries).map((item) => {
@@ -302,17 +307,17 @@ export default function DeliveriesPage() {
                         ) : null}
                         {/* Spec 0047 (AC-8): left at the restaurant because it didn't fit one box. */}
                         {(() => {
-                          const line = splitOutcomeLine(delivery)
-                          const note = splitChargeNote(delivery)
+                          const line = splitOutcomeLine(delivery, t)
+                          const noteKey = splitChargeNote(delivery)
                           return line ? (
                             <>
                               <p className="text-sm font-medium" data-testid="split-outcome">
                                 {line}
                               </p>
                               {/* Decision 11.10: what the split costs the restaurant, and why a cost reads 0. */}
-                              {note ? (
+                              {noteKey ? (
                                 <p className="text-xs text-muted-foreground" data-testid="split-charge-note">
-                                  {note}
+                                  {t(noteKey)}
                                 </p>
                               ) : null}
                             </>
@@ -326,7 +331,7 @@ export default function DeliveriesPage() {
                     <div className="grid sm:grid-cols-2 gap-2 text-sm">
                       {delivery.pickup ? (
                         <div>
-                          <p className="font-medium text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Pickup</p>
+                          <p className="font-medium text-xs text-muted-foreground uppercase tracking-wide mb-0.5">{t('orderPage.pickup')}</p>
                           <p>{delivery.pickup.pickupName}</p>
                           <p className="text-muted-foreground">
                             {delivery.pickup.formattedAddress ?? delivery.pickup.city ?? '—'}
@@ -335,7 +340,7 @@ export default function DeliveriesPage() {
                       ) : null}
                       {delivery.dropoff ? (
                         <div>
-                          <p className="font-medium text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Dropoff</p>
+                          <p className="font-medium text-xs text-muted-foreground uppercase tracking-wide mb-0.5">{t('orderPage.dropoff')}</p>
                           <p>{delivery.dropoff.dropoffName}</p>
                           <p className="text-muted-foreground">
                             {delivery.dropoff.formattedAddress ?? delivery.dropoff.city ?? '—'}
@@ -345,11 +350,11 @@ export default function DeliveriesPage() {
                     </div>
 
                     <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                      <span>Cost: {formatMoney(delivery.totalCost, delivery.currencyCode)}</span>
+                      <span>{t('orders.cost', { amount: format.money(delivery.totalCost, delivery.currencyCode) })}</span>
                       {delivery.dropoffEta ? (
-                        <span>ETA: {formatDateTime(delivery.dropoffEta)}</span>
+                        <span>{t('orders.eta', { time: format.dateTime(delivery.dropoffEta) })}</span>
                       ) : null}
-                      <span>Created: {formatDateTime(delivery.createdAt)}</span>
+                      <span>{t('orders.created', { time: format.dateTime(delivery.createdAt) })}</span>
                     </div>
 
                     <ReadyControls
@@ -362,7 +367,7 @@ export default function DeliveriesPage() {
 
                     <div className="flex flex-wrap gap-2">
                       <Link href={`/manual-request/${delivery.id}/status`}>
-                        <Button variant="outline" size="sm">View Status</Button>
+                        <Button variant="outline" size="sm">{t('orders.viewStatus')}</Button>
                       </Link>
                       {!isTerminal ? (
                         <>
@@ -372,7 +377,7 @@ export default function DeliveriesPage() {
                             onClick={() => handleEdit(delivery.id)}
                             disabled={loadingEditId === delivery.id}
                           >
-                            {loadingEditId === delivery.id ? 'Loading...' : 'Edit'}
+                            {loadingEditId === delivery.id ? t('common.loading') : t('orders.edit')}
                           </Button>
                           <Button
                             variant="destructive"
@@ -380,7 +385,7 @@ export default function DeliveriesPage() {
                             onClick={() => handleCancel(delivery.id)}
                             disabled={isCancelingThis}
                           >
-                            Cancel
+                            {t('common.cancel')}
                           </Button>
                         </>
                       ) : null}
@@ -404,10 +409,10 @@ export default function DeliveriesPage() {
               disabled={!pagination.prevPage}
               onClick={() => setPage(pagination.prevPage!)}
             >
-              Previous
+              {t('orders.previous')}
             </Button>
             <span className="text-sm text-muted-foreground">
-              Page {pagination.currentPage} of {pagination.totalPages}
+              {t('orders.pageOf', { page: pagination.currentPage, total: pagination.totalPages })}
             </span>
             <Button
               variant="outline"
@@ -415,7 +420,7 @@ export default function DeliveriesPage() {
               disabled={!pagination.nextPage}
               onClick={() => setPage(pagination.nextPage!)}
             >
-              Next
+              {t('orders.next')}
             </Button>
           </div>
         ) : null}
@@ -427,7 +432,7 @@ export default function DeliveriesPage() {
           onClose={() => setEditingDelivery(null)}
           onSaved={() => {
             setEditingDelivery(null)
-            setStatusMessage('Delivery updated.')
+            setStatusMessage(t('orders.updated'))
             refetch()
           }}
         />
@@ -439,7 +444,7 @@ export default function DeliveriesPage() {
           onClose={() => setCancelingId(null)}
           onCancelled={() => {
             setCancelingId(null)
-            setStatusMessage('Delivery cancelled.')
+            setStatusMessage(t('orders.cancelled'))
             refetch()
           }}
         />

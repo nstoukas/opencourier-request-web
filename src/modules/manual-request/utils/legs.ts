@@ -4,7 +4,10 @@
  * (this app) works the legs out; the backend only stores the labels. These are the pure rules the order
  * form, the order page and the history share.
  */
+// TFunction is the type of i18next's `t`, so these plain functions can take it as a parameter.
+import type { TFunction } from 'i18next'
 import { formatMoney } from '../../../utils/format'
+import type { Language } from '../../../i18n/language'
 import {
   ManualRequestDeliveryInput,
   ManualRequestPackageSize,
@@ -17,8 +20,9 @@ import {
 export const MAX_BOXES = 4
 export const BOX_COUNTS = [1, 2, 3, 4] as const
 
-export function legLabel(legNumber: number, legCount: number): string {
-  return `Leg ${legNumber} of ${legCount}`
+// "Leg 1 of 2", in the reader's language.
+export function legLabel(legNumber: number, legCount: number, t: TFunction): string {
+  return t('legs.label', { number: legNumber, count: legCount })
 }
 
 // The price a quote shows: its single figure, or the lower end of a range (the delivery is charged its
@@ -29,17 +33,20 @@ function quoteCents(quote: ManualRequestQuoteDto): number {
 
 // AC-2 and cross check 7: the total before Confirm. The same price on every leg reads
 // "2 deliveries × 3,80 € = 7,60 €"; prices that differ get one line per leg, then the total.
-export function legPriceLines(quotes: ManualRequestQuoteDto[]): string[] {
+export function legPriceLines(quotes: ManualRequestQuoteDto[], t: TFunction, language: Language): string[] {
   if (quotes.length < 2) return []
   const currency = quotes[0].currency
   const prices = quotes.map(quoteCents)
   const total = prices.reduce((sum, cents) => sum + cents, 0)
+  const money = (cents: number) => formatMoney(cents, currency, language)
   if (prices.every((cents) => cents === prices[0])) {
-    return [`${quotes.length} deliveries × ${formatMoney(prices[0], currency)} = ${formatMoney(total, currency)}`]
+    return [t('legs.samePriceLine', { count: quotes.length, price: money(prices[0]), total: money(total) })]
   }
   return [
-    ...prices.map((cents, index) => `${legLabel(index + 1, quotes.length)}: ${formatMoney(cents, currency)}`),
-    `Total ${formatMoney(total, currency)}`,
+    ...prices.map((cents, index) =>
+      t('legs.priceLine', { leg: legLabel(index + 1, quotes.length, t), price: money(cents) }),
+    ),
+    t('legs.totalLine', { total: money(total) }),
   ]
 }
 

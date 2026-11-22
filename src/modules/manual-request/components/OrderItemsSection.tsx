@@ -1,15 +1,17 @@
 import React, { useState } from 'react'
 import { useFieldArray, useWatch, type UseFormReturn } from 'react-hook-form'
 import { Minus, Plus, X } from '@phosphor-icons/react'
+import { useTranslation } from 'react-i18next'
 import { Button, FormControl, FormField, FormItem, FormMessage, Input } from '../../../admin-web-components'
 import { cn } from '../../../ui-shared-utils'
 import { LimitCounter } from './LimitCounter'
 import { ITEM_LINES_MAX, ITEM_NAME_MAX, ITEM_QUANTITY_MAX, OrderItemKind, emptyItemLine } from '../utils/orderItems'
 import type { CreateDeliveryFormValues } from './CreateDeliveryForm'
 
-const KINDS: { value: OrderItemKind; label: string }[] = [
-  { value: 'DRINK', label: 'Drink' },
-  { value: 'SIDE', label: 'Side' },
+// The two marks, each with its label's translation key.
+const KINDS: { value: OrderItemKind; labelKey: string }[] = [
+  { value: 'DRINK', labelKey: 'items.drink' },
+  { value: 'SIDE', labelKey: 'items.side' },
 ]
 
 // Spec 0028 (row 103): the order's items, optional and collapsed, so the fast path (spec 0006) gains no
@@ -17,6 +19,7 @@ const KINDS: { value: OrderItemKind; label: string }[] = [
 // marks, a tap on the marked one clears, a tap on the other switches). They are buttons with
 // aria-pressed, not a radio group: a radio cannot be cleared by tapping it again.
 export function OrderItemsSection({ form }: { form: UseFormReturn<CreateDeliveryFormValues> }) {
+  const { t } = useTranslation()
   const { fields, append, remove } = useFieldArray({ control: form.control, name: 'items' })
   const [open, setOpen] = useState(fields.length > 0)
 
@@ -32,14 +35,14 @@ export function OrderItemsSection({ form }: { form: UseFormReturn<CreateDelivery
         }}
       >
         <Plus aria-hidden="true" className="mr-2 h-5 w-5" />
-        Add items (optional)
+        {t('items.add')}
       </Button>
     )
   }
 
   return (
     <fieldset className="space-y-3">
-      <legend className="text-sm font-medium">Items</legend>
+      <legend className="text-sm font-medium">{t('items.legend')}</legend>
       {fields.map((line, index) => (
         <div key={line.id} className="space-y-2 rounded-md border p-3" data-testid={`item-line-${index}`}>
           <div className="flex items-start gap-2">
@@ -50,8 +53,8 @@ export function OrderItemsSection({ form }: { form: UseFormReturn<CreateDelivery
                 <FormItem className="min-w-0 flex-1">
                   <FormControl>
                     <Input
-                      aria-label={`Item ${index + 1} name`}
-                      placeholder="e.g. Cola"
+                      aria-label={t('items.nameLabel', { number: index + 1 })}
+                      placeholder={t('items.namePlaceholder')}
                       autoComplete="off"
                       className="h-12 text-base"
                       {...field}
@@ -66,7 +69,7 @@ export function OrderItemsSection({ form }: { form: UseFormReturn<CreateDelivery
               type="button"
               variant="ghost"
               className="h-12 w-12 shrink-0 p-0"
-              aria-label={`Remove item ${index + 1}`}
+              aria-label={t('items.remove', { number: index + 1 })}
               onClick={() => remove(index)}
             >
               <X aria-hidden="true" className="h-5 w-5" />
@@ -77,12 +80,12 @@ export function OrderItemsSection({ form }: { form: UseFormReturn<CreateDelivery
               control={form.control}
               name={`items.${index}.quantity`}
               render={({ field }) => (
-                <div className="flex items-center gap-1" role="group" aria-label={`Quantity of item ${index + 1}`}>
+                <div className="flex items-center gap-1" role="group" aria-label={t('items.quantityLabel', { number: index + 1 })}>
                   <Button
                     type="button"
                     variant="outline"
                     className="h-12 w-12 p-0"
-                    aria-label="One less"
+                    aria-label={t('items.oneLess')}
                     disabled={field.value <= 1}
                     onClick={() => field.onChange(Math.max(1, field.value - 1))}
                   >
@@ -95,7 +98,7 @@ export function OrderItemsSection({ form }: { form: UseFormReturn<CreateDelivery
                     type="button"
                     variant="outline"
                     className="h-12 w-12 p-0"
-                    aria-label="One more"
+                    aria-label={t('items.oneMore')}
                     disabled={field.value >= ITEM_QUANTITY_MAX}
                     onClick={() => field.onChange(Math.min(ITEM_QUANTITY_MAX, field.value + 1))}
                   >
@@ -122,7 +125,7 @@ export function OrderItemsSection({ form }: { form: UseFormReturn<CreateDelivery
                           pressed ? 'border-primary bg-primary text-primary-foreground' : 'bg-background',
                         )}
                       >
-                        {kind.label}
+                        {t(kind.labelKey)}
                       </button>
                     )
                   })}
@@ -135,7 +138,7 @@ export function OrderItemsSection({ form }: { form: UseFormReturn<CreateDelivery
       {fields.length < ITEM_LINES_MAX ? (
         <Button type="button" variant="outline" className="h-12 w-full text-base" onClick={() => append(emptyItemLine())}>
           <Plus aria-hidden="true" className="mr-2 h-5 w-5" />
-          Add another item
+          {t('items.addAnother')}
         </Button>
       ) : null}
     </fieldset>
@@ -153,9 +156,14 @@ function KindGroup({
   index: number
   children: React.ReactNode
 }) {
+  const { t } = useTranslation()
   const name = useWatch({ control: form.control, name: `items.${index}.name` })
   return (
-    <div className="flex gap-2" role="group" aria-label={`Kind of ${name?.trim() || `item ${index + 1}`}`}>
+    <div
+      className="flex gap-2"
+      role="group"
+      aria-label={t('items.kindOf', { name: name?.trim() || t('items.itemNumber', { number: index + 1 }) })}
+    >
       {children}
     </div>
   )

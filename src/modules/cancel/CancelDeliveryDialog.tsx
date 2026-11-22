@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -11,6 +12,7 @@ import {
   Spinner,
 } from '../../admin-web-components'
 import { useCancelManualRequestDeliveryMutation, type PartnerCancelledBy } from '../../api/manualRequestApi'
+import { serverMessage } from '../../i18n/serverText'
 
 interface CancelDeliveryDialogProps {
   deliveryId: string
@@ -19,9 +21,10 @@ interface CancelDeliveryDialogProps {
   onCancelled: () => void
 }
 
-const CHOICES: { value: PartnerCancelledBy; label: string }[] = [
-  { value: 'RESTAURANT', label: 'We need to cancel it' },
-  { value: 'CUSTOMER', label: 'The customer asked to cancel' },
+// Who wants to cancel, each with its label's translation key.
+const CHOICES: { value: PartnerCancelledBy; labelKey: string }[] = [
+  { value: 'RESTAURANT', labelKey: 'cancel.byRestaurant' },
+  { value: 'CUSTOMER', labelKey: 'cancel.byCustomer' },
 ]
 
 /**
@@ -29,6 +32,7 @@ const CHOICES: { value: PartnerCancelledBy; label: string }[] = [
  * after a rider accepted is charged to it; the rider who took the job is paid either way.
  */
 export function CancelDeliveryDialog({ deliveryId, onClose, onCancelled }: CancelDeliveryDialogProps) {
+  const { t } = useTranslation()
   const [cancelledBy, setCancelledBy] = useState<PartnerCancelledBy>('RESTAURANT')
   const [error, setError] = useState<string | null>(null)
   const [cancelDelivery, { isLoading }] = useCancelManualRequestDeliveryMutation()
@@ -39,7 +43,7 @@ export function CancelDeliveryDialog({ deliveryId, onClose, onCancelled }: Cance
       await cancelDelivery({ deliveryId, cancelledBy })
       onCancelled()
     } catch (err: any) {
-      setError(err?.message ?? 'The delivery could not be cancelled. Try again in a moment.')
+      setError(serverMessage(err) ?? t('cancel.failed'))
     }
   }
 
@@ -47,14 +51,11 @@ export function CancelDeliveryDialog({ deliveryId, onClose, onCancelled }: Cance
     <AlertDialog open onOpenChange={(open) => !open && !isLoading && onClose()}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Cancel this delivery?</AlertDialogTitle>
-          <AlertDialogDescription>
-            If a rider has already accepted it, they are still paid for the job. A cancellation you make
-            after a rider accepted is charged to you; one your customer asked for is not.
-          </AlertDialogDescription>
+          <AlertDialogTitle>{t('cancel.title')}</AlertDialogTitle>
+          <AlertDialogDescription>{t('cancel.description')}</AlertDialogDescription>
         </AlertDialogHeader>
         <fieldset className="space-y-2">
-          <legend className="text-sm font-medium mb-1">Who wants to cancel?</legend>
+          <legend className="text-sm font-medium mb-1">{t('cancel.whoWants')}</legend>
           {CHOICES.map((choice) => (
             <label key={choice.value} className="flex items-center gap-2 text-sm">
               <input
@@ -64,7 +65,7 @@ export function CancelDeliveryDialog({ deliveryId, onClose, onCancelled }: Cance
                 checked={cancelledBy === choice.value}
                 onChange={() => setCancelledBy(choice.value)}
               />
-              {choice.label}
+              {t(choice.labelKey)}
             </label>
           ))}
         </fieldset>
@@ -74,11 +75,11 @@ export function CancelDeliveryDialog({ deliveryId, onClose, onCancelled }: Cance
           </p>
         ) : null}
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={isLoading}>Keep it</AlertDialogCancel>
+          <AlertDialogCancel disabled={isLoading}>{t('cancel.keepIt')}</AlertDialogCancel>
           {/* A plain Button, not AlertDialogAction, so the dialog stays open until the cancel is done. */}
           <Button variant="destructive" onClick={confirm} disabled={isLoading}>
-            {isLoading ? <Spinner className="mr-2" label="Cancelling" /> : null}
-            Cancel delivery
+            {isLoading ? <Spinner className="mr-2" label={t('cancelLegs.cancelling')} /> : null}
+            {t('cancel.confirm')}
           </Button>
         </AlertDialogFooter>
       </AlertDialogContent>

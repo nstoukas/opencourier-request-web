@@ -78,7 +78,9 @@ export async function geocodeCoordinatesFromAddress(
 
 // ─── "Show on map" (spec 0016, AC-4) ──────────────────────────────────────────
 
-export const ADDRESS_NOT_FOUND_ON_MAP = "Address not found. Move the map to the customer's entrance."
+// The translation key of the sentence shown when the lookup finds nothing. Every sentence this
+// file returns is a key; the form translates it where it is shown.
+export const ADDRESS_NOT_FOUND_ON_MAP = 'pin.notFound'
 
 // Where to put the pin for a typed address: the lookup's point, or, when the lookup finds nothing,
 // `fallback` (the restaurant's own point, else Volos centre) with a sentence asking the restaurant to
@@ -99,8 +101,8 @@ export async function lookUpPinForAddress(
     return {
       error:
         (lookupError as Error | undefined)?.name === 'TimeoutError'
-          ? 'The address lookup did not answer. Try again, or search the address and pick a result.'
-          : 'The address lookup failed. Check your connection and try again.',
+          ? 'pin.lookupTimedOut'
+          : 'pin.lookupFailed',
     }
   }
   if (!found) {

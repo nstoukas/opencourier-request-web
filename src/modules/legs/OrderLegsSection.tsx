@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import { Alert, AlertDescription, Button, Spinner, StatusBadge } from '../../admin-web-components'
 import { createDelivery, fetchOrderLegs, requestQuote } from '../../api/manualRequestApi'
 import { ChoicePills, ChoicePillOption } from '../manual-request/components/ChoicePills'
@@ -10,19 +12,21 @@ import {
   PartnerOrderLegsDto,
 } from '../manual-request/types'
 import { legLabel, legsToCancel, retryQuoteInput } from '../manual-request/utils/legs'
-import { formatMoney } from '../../utils/format'
+import { useFormat } from '../../i18n/useFormat'
+import { serverMessage } from '../../i18n/serverText'
 import { usePolledFetch } from '../../hooks/usePolledFetch'
 import { CancelOrderLegsDialog } from './CancelOrderLegsDialog'
 
-const SIZE_OPTIONS: ChoicePillOption[] = [
-  { value: ManualRequestPackageSize.SMALL, label: 'Small' },
-  { value: ManualRequestPackageSize.MEDIUM, label: 'Medium' },
-  { value: ManualRequestPackageSize.LARGE, label: 'Large' },
+// The three box sizes, labelled in the reader's language (the same words as the order form's).
+const sizeOptions = (t: TFunction): ChoicePillOption[] => [
+  { value: ManualRequestPackageSize.SMALL, label: t('form.sizeSmall') },
+  { value: ManualRequestPackageSize.MEDIUM, label: t('form.sizeMedium') },
+  { value: ManualRequestPackageSize.LARGE, label: t('form.sizeLarge') },
 ]
 
-function riderLine(leg: PartnerDeliveryDto): string {
+function riderLine(leg: PartnerDeliveryDto, t: TFunction): string {
   const name = [leg.courier?.firstName, leg.courier?.lastName].filter(Boolean).join(' ').trim()
-  return name || 'No rider yet'
+  return name || t('orderLegs.noRiderYet')
 }
 
 type Props = {
@@ -42,6 +46,7 @@ type Props = {
  * expired by now, so it is always priced again); and Cancel all for the legs not yet ended.
  */
 export function OrderLegsSection({ deliveryId, version, onChanged, onLegs }: Props) {
+  const { t } = useTranslation()
   const [cancelOpen, setCancelOpen] = useState(false)
 
   // agy's review of row 10: the legs are read again every 30 s while the tab is visible, like the page
@@ -50,7 +55,7 @@ export function OrderLegsSection({ deliveryId, version, onChanged, onLegs }: Pro
   const load = useCallback((): Promise<PartnerOrderLegsDto> => fetchOrderLegs(deliveryId), [deliveryId])
   const { data, error, refetch } = usePolledFetch(load, { enabled: Boolean(deliveryId) })
   const order = data ?? null
-  const loadError = error ? ((error as any)?.message ?? 'The other legs of this order could not be loaded.') : null
+  const loadError = error ? (serverMessage(error as any) ?? t('orderLegs.loadFailed')) : null
 
   // A bump of `version` after the first render: read again now. useRef keeps the last version seen
   // without causing a render.
@@ -83,19 +88,19 @@ export function OrderLegsSection({ deliveryId, version, onChanged, onLegs }: Pro
   return (
     <section className="space-y-3" data-testid="order-legs">
       <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        This order goes as {legCount} deliveries
+        {t('orderLegs.heading', { count: legCount })}
       </h2>
       <ul className="space-y-2">
         {order.legs.map((leg) => (
           <li key={leg.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
-            <span className="font-medium">{legLabel(leg.legNumber ?? 0, legCount)}</span>
-            <span className="text-muted-foreground">{riderLine(leg)}</span>
+            <span className="font-medium">{legLabel(leg.legNumber ?? 0, legCount, t)}</span>
+            <span className="text-muted-foreground">{riderLine(leg, t)}</span>
             <StatusBadge status={leg.status} />
             {leg.id === deliveryId ? (
-              <span className="text-xs text-muted-foreground">This page</span>
+              <span className="text-xs text-muted-foreground">{t('orderLegs.thisPage')}</span>
             ) : (
               <Link href={`/manual-request/${leg.id}/status`} className="underline">
-                View
+                {t('orderLegs.view')}
               </Link>
             )}
           </li>
@@ -104,8 +109,10 @@ export function OrderLegsSection({ deliveryId, version, onChanged, onLegs }: Pro
 
       {orderEnded && order.missingLegNumbers.length > 0 ? (
         <p className="text-sm text-muted-foreground">
-          {order.missingLegNumbers.map((number) => legLabel(number, legCount)).join(', ')}{' '}
-          {order.missingLegNumbers.length === 1 ? 'was' : 'were'} never sent, and the rest of the order was cancelled.
+          {t('orderLegs.neverSentRestCancelled', {
+            legs: order.missingLegNumbers.map((number) => legLabel(number, legCount, t)).join(', '),
+            count: order.missingLegNumbers.length,
+          })}
         </p>
       ) : null}
       {(orderEnded ? [] : order.missingLegNumbers).map((legNumber) => (
@@ -120,7 +127,7 @@ export function OrderLegsSection({ deliveryId, version, onChanged, onLegs }: Pro
 
       {toCancel.length > 0 ? (
         <Button variant="destructive" onClick={() => setCancelOpen(true)}>
-          Cancel all legs
+          {t('orderLegs.cancelAll')}
         </Button>
       ) : null}
       {cancelOpen ? (
@@ -145,8 +152,12 @@ function MissingLeg({
   const [size, setSize] = useState<ManualRequestPackageSize | ''>('')
   const [quote, setQuote] = useState<ManualRequestQuoteDto | null>(null)
   const [busy, setBusy] = useState(false)
+  const { t } = useTranslation()
+  const format = useFormat()
   const [error, setError] = useState<string | null>(null)
-  const label = legLabel(legNumber, legCount)
+  const label = legLabel(legNumber, legCount, t)
+  // The label inside a sentence ("Send leg 2 of 3"), lower case by the reader's language's rules.
+  const labelInSentence = label.toLocaleLowerCase(format.language)
 
   // A ready time in the past would be refused or meaningless: now, or the order's own time if later.
   const quoteInput = () => {
@@ -164,7 +175,7 @@ function MissingLeg({
     try {
       setQuote(await requestQuote(quoteInput()))
     } catch (err: any) {
-      setError(err?.message ?? 'The price could not be worked out. Try again.')
+      setError(serverMessage(err) ?? t('form.priceFailed'))
     } finally {
       setBusy(false)
     }
@@ -194,7 +205,7 @@ function MissingLeg({
       })
       onSent()
     } catch (err: any) {
-      setError(err?.message ?? `${label} could not be sent. Try again.`)
+      setError(serverMessage(err) ?? t('orderLegs.legSendFailed', { leg: label }))
       setQuote(null)
     } finally {
       setBusy(false)
@@ -203,10 +214,10 @@ function MissingLeg({
 
   return (
     <div className="space-y-2 rounded-md border border-destructive/40 p-3" data-testid={`missing-leg-${legNumber}`}>
-      <p className="text-sm font-medium">{label} was never sent</p>
+      <p className="text-sm font-medium">{t('orderLegs.neverSent', { leg: label })}</p>
       <ChoicePills
-        label={`${label} size`}
-        options={SIZE_OPTIONS}
+        label={t('orderLegs.legSize', { leg: label })}
+        options={sizeOptions(t)}
         value={size}
         onValueChange={(value) => {
           setSize(value as ManualRequestPackageSize)
@@ -214,7 +225,8 @@ function MissingLeg({
       />
       {quote ? (
         <p className="text-sm">
-          Price for {label.toLowerCase()}: <span className="font-medium">{formatMoney(quote.quoteRangeFrom, quote.currency)}</span>
+          {t('orderLegs.priceFor', { leg: labelInSentence })}{' '}
+          <span className="font-medium">{format.money(quote.quoteRangeFrom, quote.currency)}</span>
         </p>
       ) : null}
       {error ? (
@@ -226,12 +238,12 @@ function MissingLeg({
         {quote ? (
           <Button onClick={send} disabled={busy || !size}>
             {busy ? <Spinner className="mr-2" /> : null}
-            Send {label.toLowerCase()}
+            {t('orderLegs.sendLeg', { leg: labelInSentence })}
           </Button>
         ) : (
           <Button variant="outline" onClick={getPrice} disabled={busy || !size}>
             {busy ? <Spinner className="mr-2" /> : null}
-            Retry: get a price
+            {t('orderLegs.retryGetPrice')}
           </Button>
         )}
       </div>

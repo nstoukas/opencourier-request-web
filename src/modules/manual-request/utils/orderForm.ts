@@ -9,12 +9,13 @@ export const ORDER_TOTAL_MAX = 1000
 // No thousands separators, no "€", no sign, no ".5" and no "12.".
 const EURO_AMOUNT = /^\d{1,4}([.,]\d{1,2})?$/
 
-// Why a typed total is refused, or null when it is fine.
+// Why a typed total is refused, as the translation key of the words (the form translates it), or
+// null when it is fine.
 export function orderTotalProblem(text: string): string | null {
   const trimmed = text.trim()
-  if (trimmed === '') return 'Enter the order total (0 if it is free)'
-  if (!EURO_AMOUNT.test(trimmed)) return 'Use an amount like 12,50'
-  if (Number(trimmed.replace(',', '.')) > ORDER_TOTAL_MAX) return 'That is over 1000 €, check the amount'
+  if (trimmed === '') return 'form.totalMissing'
+  if (!EURO_AMOUNT.test(trimmed)) return 'form.totalNotAmount'
+  if (Number(trimmed.replace(',', '.')) > ORDER_TOTAL_MAX) return 'form.totalTooHigh'
   return null
 }
 

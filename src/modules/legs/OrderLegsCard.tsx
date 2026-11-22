@@ -1,8 +1,10 @@
 import React, { useState } from 'react'
 import Link from 'next/link'
+// Trans renders a translated sentence that holds a React element, here a link inside the words.
+import { Trans, useTranslation } from 'react-i18next'
 import { Button, Card, CardContent, CardHeader, CardTitle, Separator, StatusBadge } from '../../admin-web-components'
 import { HistoryItem, absentLegNumbers, legLabel, legsToCancel } from '../manual-request/utils/legs'
-import { formatDateTime, formatMoney } from '../../utils/format'
+import { useFormat } from '../../i18n/useFormat'
 import { ReadyControls } from '../ready/ReadyControls'
 import { CancelOrderLegsDialog } from './CancelOrderLegsDialog'
 import { LEFT_UNSPLIT_TEXT, SPLIT_CHARGE_NOTE, splitOutcomeLine } from './splitOutcome'
@@ -23,6 +25,8 @@ export function OrderLegsCard({
   order: Extract<HistoryItem, { kind: 'order' }>
   onChanged: () => void
 }) {
+  const { t } = useTranslation()
+  const format = useFormat()
   const [cancelOpen, setCancelOpen] = useState(false)
   const first = order.legs[0]
   const open = order.legs.filter((leg) => !ENDED.has(leg.status))
@@ -31,13 +35,13 @@ export function OrderLegsCard({
   const missing = absentLegNumbers(order.legCount, order.legs)
   // Spec 0047 (AC-10): an order a rider found too big for one box, split by dispatch at pickup.
   const splitLine = order.legs.some((leg) => leg.splitOutcome === 'SPLIT')
-    ? splitOutcomeLine({ splitOutcome: 'SPLIT', legCount: order.legCount })
+    ? splitOutcomeLine({ splitOutcome: 'SPLIT', legCount: order.legCount }, t)
     : null
 
   return (
     <Card data-testid="order-legs-card">
       <CardHeader className="pb-2">
-        <CardTitle className="text-base">Order in {order.legCount} deliveries</CardTitle>
+        <CardTitle className="text-base">{t('orderLegs.cardTitle', { count: order.legCount })}</CardTitle>
         {splitLine ? (
           <>
             <p className="text-sm font-medium" data-testid="split-outcome">
@@ -45,7 +49,7 @@ export function OrderLegsCard({
             </p>
             {/* Decision 11.10: what the split costs the restaurant (the order's cost below leaves it out). */}
             <p className="text-xs text-muted-foreground" data-testid="split-charge-note">
-              {SPLIT_CHARGE_NOTE}
+              {t(SPLIT_CHARGE_NOTE)}
             </p>
           </>
         ) : null}
@@ -59,32 +63,32 @@ export function OrderLegsCard({
         <ul className="space-y-2">
           {order.legs.map((leg) => (
             <li key={leg.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
-              <span className="font-medium">{legLabel(leg.legNumber ?? 0, order.legCount)}</span>
+              <span className="font-medium">{legLabel(leg.legNumber ?? 0, order.legCount, t)}</span>
               <StatusBadge status={leg.status} />
               <Link href={`/manual-request/${leg.id}/status`} className="underline">
-                View status
+                {t('orderLegs.viewStatus')}
               </Link>
               {/* Row 11 review: a leg the rider left because it didn't fit one box says so on its own line. */}
               {leg.splitOutcome === 'LEFT' ? (
                 <span className="basis-full text-muted-foreground" data-testid="split-outcome-left">
-                  {LEFT_UNSPLIT_TEXT}
+                  {t(LEFT_UNSPLIT_TEXT)}
                 </span>
               ) : null}
             </li>
           ))}
           {missing.map((legNumber) => (
             <li key={`missing-${legNumber}`} className="text-sm text-muted-foreground">
-              {legLabel(legNumber, order.legCount)} is not in this list.{' '}
+              {t('orderLegs.notInList', { leg: legLabel(legNumber, order.legCount, t) })}{' '}
               <Link href={`/manual-request/${first.id}/status`} className="underline">
-                Open the order
+                {t('orderLegs.openTheOrder')}
               </Link>
             </li>
           ))}
         </ul>
 
         <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-          <span>Cost: {formatMoney(total, first.currencyCode)}</span>
-          <span>Created: {formatDateTime(first.createdAt)}</span>
+          <span>{t('orders.cost', { amount: format.money(total, first.currencyCode) })}</span>
+          <span>{t('orders.created', { time: format.dateTime(first.createdAt) })}</span>
         </div>
 
         {/* agy's review of row 10: with a leg missing from this list (it may be on another page of it), the
@@ -93,11 +97,11 @@ export function OrderLegsCard({
             order page reads every leg, so both are offered there instead. */}
         {missing.length > 0 && (open.length > 0 || toCancel.length > 0) ? (
           <p className="text-sm" data-testid="order-legs-open-order">
-            To change the ready time or cancel,{' '}
-            <Link href={`/manual-request/${first.id}/status`} className="underline">
-              open the order
-            </Link>
-            .
+            {/* <link>…</link> in the translation becomes this Link, so each language places it in its own words. */}
+            <Trans
+              i18nKey="orderLegs.openOrderToChange"
+              components={{ link: <Link href={`/manual-request/${first.id}/status`} className="underline" /> }}
+            />
           </p>
         ) : null}
 
@@ -109,7 +113,7 @@ export function OrderLegsCard({
             otherLegs={open.slice(1).map((leg) => ({
               id: leg.id,
               readyAt: leg.readyAt,
-              legLabel: legLabel(leg.legNumber ?? 0, order.legCount),
+              legLabel: legLabel(leg.legNumber ?? 0, order.legCount, t),
             }))}
           />
         ) : null}
@@ -118,7 +122,7 @@ export function OrderLegsCard({
           <>
             <Separator />
             <Button variant="destructive" size="sm" onClick={() => setCancelOpen(true)}>
-              Cancel all legs
+              {t('orderLegs.cancelAll')}
             </Button>
           </>
         ) : null}

@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -13,10 +14,12 @@ import {
 import { cancelDelivery, type PartnerCancelledBy } from '../../api/manualRequestApi'
 import { PartnerDeliveryDto } from '../manual-request/types'
 import { legLabel } from '../manual-request/utils/legs'
+import { serverMessage } from '../../i18n/serverText'
 
-const CHOICES: { value: PartnerCancelledBy; label: string }[] = [
-  { value: 'RESTAURANT', label: 'We need to cancel it' },
-  { value: 'CUSTOMER', label: 'The customer asked to cancel' },
+// Who wants to cancel, each with its label's translation key (the same two as a single delivery's dialog).
+const CHOICES: { value: PartnerCancelledBy; labelKey: string }[] = [
+  { value: 'RESTAURANT', labelKey: 'cancel.byRestaurant' },
+  { value: 'CUSTOMER', labelKey: 'cancel.byCustomer' },
 ]
 
 type Props = {
@@ -33,6 +36,7 @@ type Props = {
  * a restaurant's own cancellation is charged per accepted leg). Each leg's answer is shown.
  */
 export function CancelOrderLegsDialog({ legs, onClose, onDone }: Props) {
+  const { t } = useTranslation()
   const [cancelledBy, setCancelledBy] = useState<PartnerCancelledBy>('RESTAURANT')
   // The legs as the dialog opened: the page reads the legs again after the cancels (row 10 review).
   const [openedWith] = useState(legs)
@@ -43,12 +47,12 @@ export function CancelOrderLegsDialog({ legs, onClose, onDone }: Props) {
     setRunning(true)
     const answers: { label: string; ok: boolean; message: string }[] = []
     for (const leg of openedWith) {
-      const label = legLabel(leg.legNumber ?? 0, leg.legCount ?? 0)
+      const label = legLabel(leg.legNumber ?? 0, leg.legCount ?? 0, t)
       try {
         await cancelDelivery(leg.id, cancelledBy)
-        answers.push({ label, ok: true, message: 'Cancelled' })
+        answers.push({ label, ok: true, message: t('cancelLegs.cancelled') })
       } catch (err: any) {
-        answers.push({ label, ok: false, message: err?.message ?? 'Could not be cancelled. Try again in a moment.' })
+        answers.push({ label, ok: false, message: serverMessage(err) ?? t('cancelLegs.failed') })
       }
     }
     setResults(answers)
@@ -60,12 +64,8 @@ export function CancelOrderLegsDialog({ legs, onClose, onDone }: Props) {
     <AlertDialog open onOpenChange={(open) => !open && !running && onClose()}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Cancel all {openedWith.length} legs of this order?</AlertDialogTitle>
-          <AlertDialogDescription>
-            Each leg is cancelled on its own. A rider who already accepted a leg is still paid for it. A
-            cancellation you make after a rider accepted is charged to you for that leg; one your customer asked
-            for is not.
-          </AlertDialogDescription>
+          <AlertDialogTitle>{t('cancelLegs.title', { count: openedWith.length })}</AlertDialogTitle>
+          <AlertDialogDescription>{t('cancelLegs.description')}</AlertDialogDescription>
         </AlertDialogHeader>
         {results ? (
           <ul className="space-y-1 text-sm" data-testid="cancel-results">
@@ -77,7 +77,7 @@ export function CancelOrderLegsDialog({ legs, onClose, onDone }: Props) {
           </ul>
         ) : (
           <fieldset className="space-y-2">
-            <legend className="mb-1 text-sm font-medium">Who wants to cancel?</legend>
+            <legend className="mb-1 text-sm font-medium">{t('cancel.whoWants')}</legend>
             {CHOICES.map((choice) => (
               <label key={choice.value} className="flex items-center gap-2 text-sm">
                 <input
@@ -87,21 +87,21 @@ export function CancelOrderLegsDialog({ legs, onClose, onDone }: Props) {
                   checked={cancelledBy === choice.value}
                   onChange={() => setCancelledBy(choice.value)}
                 />
-                {choice.label}
+                {t(choice.labelKey)}
               </label>
             ))}
           </fieldset>
         )}
         <AlertDialogFooter>
           {results ? (
-            <Button onClick={onClose}>Close</Button>
+            <Button onClick={onClose}>{t('common.close')}</Button>
           ) : (
             <>
-              <AlertDialogCancel disabled={running}>Keep them</AlertDialogCancel>
+              <AlertDialogCancel disabled={running}>{t('cancelLegs.keepThem')}</AlertDialogCancel>
               {/* A plain Button, so the dialog stays open until every leg has answered. */}
               <Button variant="destructive" onClick={confirm} disabled={running}>
-                {running ? <Spinner className="mr-2" label="Cancelling" /> : null}
-                Cancel all legs
+                {running ? <Spinner className="mr-2" label={t('cancelLegs.cancelling')} /> : null}
+                {t('orderLegs.cancelAll')}
               </Button>
             </>
           )}
