@@ -13,7 +13,8 @@ const ENDED = new Set(['DROPPED_OFF', 'CANCELED', 'FAILED'])
  * Spec 0046 (AC-6): one order sent as legs, as one card in the order history. Each leg with its status and a
  * link to its page; a leg this page does not hold says so and points to the order page, which knows whether
  * it was never sent (it may only be on another page of the list) and offers Retry there (cross check 4);
- * the ready buttons apply to every open leg (cross check 9); Cancel all cancels each leg.
+ * the ready buttons apply to every open leg (cross check 9); Cancel all cancels each leg. Both only when
+ * every leg is here; otherwise the order page offers them.
  */
 export function OrderLegsCard({
   order,
@@ -86,7 +87,21 @@ export function OrderLegsCard({
           <span>Created: {formatDateTime(first.createdAt)}</span>
         </div>
 
-        {open.length > 0 ? (
+        {/* agy's review of row 10: with a leg missing from this list (it may be on another page of it), the
+            ready buttons and Cancel all would act on the legs here only, and a live leg left out would still
+            be dispatched, paying its rider and charging the restaurant for an order it meant to cancel. The
+            order page reads every leg, so both are offered there instead. */}
+        {missing.length > 0 && (open.length > 0 || toCancel.length > 0) ? (
+          <p className="text-sm" data-testid="order-legs-open-order">
+            To change the ready time or cancel,{' '}
+            <Link href={`/manual-request/${first.id}/status`} className="underline">
+              open the order
+            </Link>
+            .
+          </p>
+        ) : null}
+
+        {missing.length === 0 && open.length > 0 ? (
           <ReadyControls
             deliveryId={open[0].id}
             order={{ status: open[0].status, readyAt: open[0].readyAt, foodReadyAt: open[0].foodReadyAt }}
@@ -99,7 +114,7 @@ export function OrderLegsCard({
           />
         ) : null}
 
-        {toCancel.length > 0 ? (
+        {missing.length === 0 && toCancel.length > 0 ? (
           <>
             <Separator />
             <Button variant="destructive" size="sm" onClick={() => setCancelOpen(true)}>
