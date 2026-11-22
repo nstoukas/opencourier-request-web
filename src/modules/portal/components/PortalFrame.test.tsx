@@ -1,6 +1,7 @@
 import React from 'react'
 import '@testing-library/jest-dom'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { I18nextProvider } from 'react-i18next'
 import {
   PortalFrame,
   PageHeader,
@@ -12,6 +13,11 @@ import { createI18n } from '../../../i18n/createI18n'
 import { usePartnerSession } from '../../../hooks/usePartnerSession'
 import * as api from '../../../api/manualRequestApi'
 import { notifyPartnerUnauthorized } from '../../../api/partnerSessionEvents'
+import {
+  forgetChosenBeforeSignIn,
+  markChosenBeforeSignIn,
+  wasChosenBeforeSignIn,
+} from '../../../i18n/languageChoice'
 
 const t = createI18n('en').t
 
@@ -53,6 +59,7 @@ jest.mock('../../../api/manualRequestApi', () => {
     loginPartner: jest.fn(),
     logoutPartner: jest.fn(),
     fetchPartnerSession: jest.fn(),
+    saveAccountLanguage: jest.fn().mockResolvedValue(undefined),
   }
 })
 
@@ -346,6 +353,68 @@ describe('PortalFrame gate and frame layout', () => {
     // PINNED: Sign Out keeps the address (does not router.push or router.replace)
     expect(mockRouter.push).not.toHaveBeenCalled()
     expect(mockRouter.replace).not.toHaveBeenCalled()
+  })
+
+  it('sign out clears any pre-sign-in language choice via forgetChosenBeforeSignIn (decision 47.55)', async () => {
+    ;(api.logoutPartner as jest.Mock).mockResolvedValue(undefined)
+    const signedOutMock = jest.fn()
+
+    ;(usePartnerSession as jest.Mock).mockReturnValue({
+      isSignedIn: true,
+      email: 'restaurant@volos.test',
+      isLoading: false,
+      signedOut: signedOutMock,
+      refresh: refreshMock,
+    })
+
+    // Simulate language marked before sign in
+    markChosenBeforeSignIn()
+    expect(wasChosenBeforeSignIn()).toBe(true)
+
+    render(
+      <PortalFrame>
+        <div>Deliveries content</div>
+      </PortalFrame>,
+    )
+
+    const signOutBtn = screen.getByRole('button', { name: /Sign Out/i })
+    fireEvent.click(signOutBtn)
+
+    await waitFor(() => {
+      expect(signedOutMock).toHaveBeenCalledTimes(1)
+    })
+
+    // Choice is cleared so the next person on this computer starts clean
+    expect(wasChosenBeforeSignIn()).toBe(false)
+  })
+
+  it('PortalHeader LanguageSwitch calls saveAccountLanguage when switched while signed in (decision 47.55)', async () => {
+    ;(api.saveAccountLanguage as jest.Mock).mockResolvedValue(undefined)
+
+    ;(usePartnerSession as jest.Mock).mockReturnValue({
+      isSignedIn: true,
+      email: 'restaurant@volos.test',
+      isLoading: false,
+      signedOut: jest.fn(),
+      refresh: refreshMock,
+    })
+
+    const i18n = createI18n('el')
+    render(
+      <I18nextProvider i18n={i18n}>
+        <PortalFrame>
+          <div>Deliveries content</div>
+        </PortalFrame>
+      </I18nextProvider>,
+    )
+
+    // Language switch is present in header; clicking English saves choice to the user's account
+    const enBtn = screen.getByRole('button', { name: 'English' })
+    fireEvent.click(enBtn)
+
+    await waitFor(() => {
+      expect(api.saveAccountLanguage).toHaveBeenCalledWith('en')
+    })
   })
 
   it('failed sign out keeps restaurant signed in and shows error alert under header (spec 0017, AC-6)', async () => {

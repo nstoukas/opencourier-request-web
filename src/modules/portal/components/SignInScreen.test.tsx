@@ -1,9 +1,15 @@
 import React from 'react'
 import '@testing-library/jest-dom'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { I18nextProvider } from 'react-i18next'
 import { SignInScreen, signInErrorMessage } from './SignInScreen'
 import * as api from '../../../api/manualRequestApi'
 import { createI18n } from '../../../i18n/createI18n'
+import {
+  forgetChosenBeforeSignIn,
+  markChosenBeforeSignIn,
+  wasChosenBeforeSignIn,
+} from '../../../i18n/languageChoice'
 
 // Mock next/head so head title tags render safely in jsdom
 jest.mock('next/head', () => ({
@@ -11,12 +17,23 @@ jest.mock('next/head', () => ({
   default: ({ children }: { children: Array<React.ReactElement> }) => <>{children}</>,
 }))
 
-// Mock API login call
+// Mock toast notifications
+const mockToast = jest.fn()
+jest.mock('../../../admin-web-components', () => {
+  const actual = jest.requireActual('../../../admin-web-components')
+  return {
+    ...actual,
+    toast: (...args: any[]) => mockToast(...args),
+  }
+})
+
+// Mock API login and language calls
 jest.mock('../../../api/manualRequestApi', () => {
   const actual = jest.requireActual('../../../api/manualRequestApi')
   return {
     ...actual,
     loginPartner: jest.fn(),
+    saveAccountLanguage: jest.fn().mockResolvedValue(undefined),
   }
 })
 
@@ -76,10 +93,20 @@ describe('signInErrorMessage() helper', () => {
 describe('SignInScreen component', () => {
   const onSignedInMock = jest.fn()
 
+  const originalCookie = document.cookie
+  const originalLang = document.documentElement.lang
+
   beforeEach(() => {
     jest.clearAllMocks()
+    forgetChosenBeforeSignIn()
     localStorage.clear()
     sessionStorage.clear()
+  })
+
+  afterEach(() => {
+    document.cookie = originalCookie
+    document.documentElement.lang = originalLang
+    forgetChosenBeforeSignIn()
   })
 
   it('renders sign in card matching redesign notes: logo, title, email, password, and full width button', () => {
@@ -309,5 +336,142 @@ describe('SignInScreen component', () => {
     const noticeAlert = screen.getByRole('status')
     expect(noticeAlert).toBeInTheDocument()
     expect(noticeAlert).toHaveTextContent('Your session ended. Sign in again.')
+  })
+
+  describe('language handling on sign in (spec 0054, cross check 2, decision 47.55)', () => {
+    it('applies account language at sign in when card switch was not used beforehand', async () => {
+      // Backend says user account language is English ('en')
+      ;(api.loginPartner as jest.Mock).mockResolvedValue({
+        email: 'restaurant@volos.test',
+        language: 'en',
+      })
+
+      const i18n = createI18n('el')
+      document.documentElement.lang = 'el'
+
+      render(
+        <I18nextProvider i18n={i18n}>
+          <SignInScreen onSignedIn={onSignedInMock} />
+        </I18nextProvider>,
+      )
+
+      fireEvent.change(screen.getByLabelText(/^Email/i), { target: { value: 'restaurant@volos.test' } })
+      fireEvent.change(screen.getByLabelText(/Password|Κωδικός/i), { target: { value: 'secretpass' } })
+      fireEvent.click(screen.getByRole('button', { name: /Σύνδεση|Sign In/i }))
+
+      await waitFor(() => {
+        expect(onSignedInMock).toHaveBeenCalledTimes(1)
+      })
+
+      // The account's language wins: switched to 'en'
+      expect(i18n.language).toBe('en')
+      expect(document.cookie).toContain('oc_lang=en')
+      expect(document.documentElement.lang).toBe('en')
+
+      // Since user did not override on the card, saveAccountLanguage is NOT called
+      expect(api.saveAccountLanguage).not.toHaveBeenCalled()
+      expect(wasChosenBeforeSignIn()).toBe(false)
+    })
+
+    it('saves user choice to account when switch on the sign in card was used first', async () => {
+      // Backend says user account language is Greek ('el')
+      ;(api.loginPartner as jest.Mock).mockResolvedValue({
+        email: 'restaurant@volos.test',
+        language: 'el',
+      })
+
+      const i18n = createI18n('el')
+      render(
+        <I18nextProvider i18n={i18n}>
+          <SignInScreen onSignedIn={onSignedInMock} />
+        </I18nextProvider>,
+      )
+
+      // User interacts with language switch on card, picking English ('en')
+      const enBtn = screen.getByRole('button', { name: 'English' })
+      fireEvent.click(enBtn)
+      expect(wasChosenBeforeSignIn()).toBe(true)
+
+      // Now signs in
+      fireEvent.change(screen.getByLabelText(/^Email/i), { target: { value: 'restaurant@volos.test' } })
+      fireEvent.change(screen.getByLabelText(/^Password/i), { target: { value: 'secretpass' } })
+      fireEvent.click(screen.getByRole('button', { name: /^Sign In$/i }))
+
+      await waitFor(() => {
+        expect(onSignedInMock).toHaveBeenCalledTimes(1)
+      })
+
+      // Card choice ('en') wins and is saved to the account
+      expect(api.saveAccountLanguage).toHaveBeenCalledWith('en')
+      expect(i18n.language).toBe('en')
+      expect(document.documentElement.lang).toBe('en')
+      // Choice is forgotten after sign in completes
+      expect(wasChosenBeforeSignIn()).toBe(false)
+    })
+
+    it('shows destructive toast when saving card choice to account fails, still completing sign in', async () => {
+      ;(api.loginPartner as jest.Mock).mockResolvedValue({
+        email: 'restaurant@volos.test',
+        language: 'el',
+      })
+      ;(api.saveAccountLanguage as jest.Mock).mockRejectedValueOnce(new Error('Save failed'))
+
+      const i18n = createI18n('el')
+      render(
+        <I18nextProvider i18n={i18n}>
+          <SignInScreen onSignedIn={onSignedInMock} />
+        </I18nextProvider>,
+      )
+
+      // User chooses English on card
+      const enBtn = screen.getByRole('button', { name: 'English' })
+      fireEvent.click(enBtn)
+
+      // User signs in
+      fireEvent.change(screen.getByLabelText(/^Email/i), { target: { value: 'restaurant@volos.test' } })
+      fireEvent.change(screen.getByLabelText(/^Password/i), { target: { value: 'secretpass' } })
+      fireEvent.click(screen.getByRole('button', { name: /^Sign In$/i }))
+
+      await waitFor(() => {
+        expect(onSignedInMock).toHaveBeenCalledTimes(1)
+      })
+
+      // Shows failure toast
+      await waitFor(() => {
+        expect(mockToast).toHaveBeenCalledWith({
+          title: i18n.t('language.saveFailed'),
+          variant: 'destructive',
+        })
+      })
+
+      // Page stays in chosen language and choice is forgotten
+      expect(i18n.language).toBe('en')
+      expect(wasChosenBeforeSignIn()).toBe(false)
+    })
+
+    it('keeps current language when account language is null and card switch was not used', async () => {
+      ;(api.loginPartner as jest.Mock).mockResolvedValue({
+        email: 'restaurant@volos.test',
+        language: null,
+      })
+
+      const i18n = createI18n('el')
+      render(
+        <I18nextProvider i18n={i18n}>
+          <SignInScreen onSignedIn={onSignedInMock} />
+        </I18nextProvider>,
+      )
+
+      fireEvent.change(screen.getByLabelText(/^Email/i), { target: { value: 'restaurant@volos.test' } })
+      fireEvent.change(screen.getByLabelText(/Password|Κωδικός/i), { target: { value: 'secretpass' } })
+      fireEvent.click(screen.getByRole('button', { name: /Σύνδεση|Sign In/i }))
+
+      await waitFor(() => {
+        expect(onSignedInMock).toHaveBeenCalledTimes(1)
+      })
+
+      expect(i18n.language).toBe('el')
+      expect(api.saveAccountLanguage).not.toHaveBeenCalled()
+    })
   })
 })

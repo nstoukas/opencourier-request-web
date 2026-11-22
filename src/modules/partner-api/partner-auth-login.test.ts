@@ -117,14 +117,84 @@ describe('/api/partner-auth/login API Route', () => {
     expect(cookieHeader).toContain('Max-Age=3153600')
     expect(cookieHeader).not.toContain('Max-Age=3153600000')
 
-    // CRITICAL SECURITY REGRESSION ASSERTION: Response body MUST contain ONLY email
-    expect(resState.jsonBody).toEqual({ email: 'restaurant@volos.test' })
+    // Spec 0054 (cross check 2) / Decision 47.55: Response body MUST contain ONLY email and language
+    // (language is null when upstream returns none).
+    expect(resState.jsonBody).toEqual({ email: 'restaurant@volos.test', language: null })
     const serializedBody = JSON.stringify(resState.jsonBody)
     expect(serializedBody).not.toContain('accessToken')
     expect(serializedBody).not.toContain('apiKey')
     expect(serializedBody).not.toContain('session')
     expect(serializedBody).not.toContain('JWT_ACCESS_TOKEN_SECRET')
     expect(serializedBody).not.toContain('SECRET_API_KEY_DO_NOT_EXPOSE')
+  })
+
+  it('returns language next to email when upstream response contains a supported language (spec 0054, AC-2)', async () => {
+    // When backend returns language 'el' on the user account
+    const mockUpstreamResponse = {
+      result: {
+        id: 'partner-123',
+        email: 'restaurant@volos.test',
+        language: 'el',
+        session: {
+          accessToken: 'JWT_ACCESS_TOKEN_SECRET',
+          tokenType: 'Bearer',
+          expiresIn: 3600,
+        },
+      },
+    }
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: jest.fn().mockResolvedValue(mockUpstreamResponse),
+    } as any)
+
+    const { req, res, resState } = createMockReqRes({
+      method: 'POST',
+      body: { email: 'restaurant@volos.test', password: 'correctpassword' },
+    })
+
+    await handler(req, res)
+
+    expect(resState.statusCode).toBe(200)
+    // Response body carries email and account language
+    expect(resState.jsonBody).toEqual({ email: 'restaurant@volos.test', language: 'el' })
+    const serializedBody = JSON.stringify(resState.jsonBody)
+    expect(serializedBody).not.toContain('accessToken')
+    expect(serializedBody).not.toContain('session')
+  })
+
+  it('normalizes unsupported upstream language to null (spec 0054, AC-2)', async () => {
+    // When backend returns an unknown language (e.g. 'fr')
+    const mockUpstreamResponse = {
+      result: {
+        id: 'partner-123',
+        email: 'restaurant@volos.test',
+        language: 'fr',
+        session: {
+          accessToken: 'JWT_ACCESS_TOKEN_SECRET',
+          tokenType: 'Bearer',
+          expiresIn: 3600,
+        },
+      },
+    }
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: jest.fn().mockResolvedValue(mockUpstreamResponse),
+    } as any)
+
+    const { req, res, resState } = createMockReqRes({
+      method: 'POST',
+      body: { email: 'restaurant@volos.test', password: 'correctpassword' },
+    })
+
+    await handler(req, res)
+
+    expect(resState.statusCode).toBe(200)
+    // Unsupported language is sanitized to null
+    expect(resState.jsonBody).toEqual({ email: 'restaurant@volos.test', language: null })
   })
 
   it('relays upstream 401 Unauthorized status and error message without setting a cookie', async () => {

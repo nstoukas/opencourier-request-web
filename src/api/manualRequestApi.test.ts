@@ -2,6 +2,7 @@ import { renderHook, act } from '@testing-library/react'
 import {
   loginPartner,
   logoutPartner,
+  saveAccountLanguage,
   fetchPartnerSession,
   fetchPartnerDelivery,
   fetchPartnerProfile,
@@ -41,10 +42,10 @@ describe('manualRequestApi helper functions', () => {
   })
 
   describe('loginPartner', () => {
-    it('calls /api/partner-auth/login and returns email on success', async () => {
+    it('calls /api/partner-auth/login and returns email and account language on success (spec 0054, cross check 2)', async () => {
       global.fetch = jest.fn().mockResolvedValue({
         ok: true,
-        json: jest.fn().mockResolvedValue({ email: 'test@example.com' }),
+        json: jest.fn().mockResolvedValue({ email: 'test@example.com', language: 'el' }),
       } as any)
 
       const res = await loginPartner('test@example.com', 'secret123')
@@ -53,7 +54,17 @@ describe('manualRequestApi helper functions', () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: 'test@example.com', password: 'secret123' }),
       })
-      expect(res).toEqual({ email: 'test@example.com' })
+      expect(res).toEqual({ email: 'test@example.com', language: 'el' })
+    })
+
+    it('returns null language when server response omits language or sends invalid value', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: jest.fn().mockResolvedValue({ email: 'test@example.com', language: 'fr' }),
+      } as any)
+
+      const res = await loginPartner('test@example.com', 'secret123')
+      expect(res).toEqual({ email: 'test@example.com', language: null })
     })
 
     it('throws error with server message and sets error.status when sign-in fails', async () => {
@@ -109,6 +120,40 @@ describe('manualRequestApi helper functions', () => {
       global.fetch = jest.fn().mockRejectedValue(new Error('Network offline'))
 
       await expect(logoutPartner()).rejects.toThrow('Network offline')
+    })
+  })
+
+  describe('saveAccountLanguage (spec 0054, AC-2, decision 47.55)', () => {
+    it('sends PUT /api/partner-proxy/auth/language with language JSON payload', async () => {
+      // Backend returns wrapped result with the saved language
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: jest.fn().mockResolvedValue(JSON.stringify({ result: { language: 'el' } })),
+      } as any)
+
+      await saveAccountLanguage('el')
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/partner-proxy/auth/language',
+        expect.objectContaining({
+          method: 'PUT',
+          headers: expect.objectContaining({
+            'Content-Type': 'application/json',
+          }),
+          body: JSON.stringify({ language: 'el' }),
+        })
+      )
+    })
+
+    it('propagates error when backend refuses language with 400 Bad Request', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: false,
+        status: 400,
+        json: jest.fn().mockResolvedValue({ message: 'Language not supported' }),
+      } as any)
+
+      await expect(saveAccountLanguage('en')).rejects.toThrow('Language not supported')
     })
   })
 
