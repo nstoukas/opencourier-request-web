@@ -64,11 +64,15 @@ function PartnerDeliveryDetails({
   data,
   onChanged,
   otherLegs = [],
+  legsLoaded = true,
 }: {
   data: PartnerDeliveryDto
   onChanged?: () => void
   // Spec 0046 (cross check 9): the order's other legs, so Food ready and "+ minutes" apply to all of them.
   otherLegs?: PartnerDeliveryDto[]
+  // False on a leg's page until its order's legs were read once: a tap before then would move this leg
+  // alone (agy's review of row 10). Always true for a single delivery.
+  legsLoaded?: boolean
 }) {
   const tips = data.tips ?? 0
   const orderItems = data.orderItems ?? []
@@ -84,16 +88,22 @@ function PartnerDeliveryDetails({
         <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Schedule</h2>
         {/* Spec 0023 (AC-8): the ready promise and its buttons, in place of "Pickup ready", which showed
             pickupReadyAt (the pickup moment once the rider has the food). */}
-        <ReadyControls
-          deliveryId={data.id}
-          order={{ status: data.status, readyAt: data.readyAt, foodReadyAt: data.foodReadyAt }}
-          onChanged={onChanged}
-          otherLegs={otherLegs.map((leg) => ({
-            id: leg.id,
-            readyAt: leg.readyAt,
-            legLabel: legLabel(leg.legNumber ?? 0, leg.legCount ?? 0),
-          }))}
-        />
+        {legsLoaded ? (
+          <ReadyControls
+            deliveryId={data.id}
+            order={{ status: data.status, readyAt: data.readyAt, foodReadyAt: data.foodReadyAt }}
+            onChanged={onChanged}
+            otherLegs={otherLegs.map((leg) => ({
+              id: leg.id,
+              readyAt: leg.readyAt,
+              legLabel: legLabel(leg.legNumber ?? 0, leg.legCount ?? 0),
+            }))}
+          />
+        ) : (
+          <p className="text-sm text-muted-foreground" data-testid="ready-waiting-for-legs">
+            The ready time shows once the order&apos;s legs are loaded.
+          </p>
+        )}
         <DetailList
           items={[
             { label: 'Pickup deadline', value: formatDateTime(data.pickupDeadlineAt) },
@@ -353,9 +363,14 @@ export default function ManualRequestStatusPage() {
   const [cancelOpen, setCancelOpen] = useState(false)
   // Spec 0046: the order's other legs, read by OrderLegsSection, and a counter that asks it to read again.
   const [otherLegs, setOtherLegs] = useState<PartnerDeliveryDto[]>([])
+  // Which delivery's legs `otherLegs` holds, so the ready buttons wait for this page's order (null: none yet).
+  const [legsLoadedFor, setLegsLoadedFor] = useState<string | null>(null)
   const [legsVersion, setLegsVersion] = useState(0)
   const handleLegs = useCallback(
-    (legs: PartnerDeliveryDto[]) => setOtherLegs(legs.filter((leg) => leg.id !== deliveryId)),
+    (legs: PartnerDeliveryDto[]) => {
+      setOtherLegs(legs.filter((leg) => leg.id !== deliveryId))
+      setLegsLoadedFor(deliveryId)
+    },
     [deliveryId],
   )
   const partnerData = partnerMode ? (data as PartnerDeliveryDto | undefined) : undefined
@@ -450,6 +465,7 @@ export default function ManualRequestStatusPage() {
                   setLegsVersion((value) => value + 1)
                 }}
                 otherLegs={otherLegs.filter((leg) => !TERMINAL_STATUSES.has(leg.status))}
+                legsLoaded={!isLeg || legsLoadedFor === deliveryId}
               />
             ) : null}
             {isLeg && deliveryId ? (

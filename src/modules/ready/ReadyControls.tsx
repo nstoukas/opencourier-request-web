@@ -22,6 +22,18 @@ export function ReadyControls({ deliveryId, order, onChanged, otherLegs = [] }: 
   const [shown, setShown] = useState<ReadyFields>(order)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
+  // agy's review of row 10: each other leg's ready time as our last tap left it, with the time the page
+  // showed for that leg then. Until the page reads the legs again, the next tap sends the answer, not the
+  // old time (which the backend refuses, so the legs' times drift apart and a leg rider waits, charged to
+  // the restaurant as wait pay). A `Record<string, X>` is an object keyed by the leg's id.
+  const [legAnswers, setLegAnswers] = useState<Record<string, { pageHad: string | null; readyAt: string | null }>>({})
+
+  // The time to send for a leg: our own last answer while the page still shows what it showed at that tap
+  // (a reread that has not landed, or a slow poll that started before it); the page's time once it moved.
+  const readyAtToSend = (leg: { id: string; readyAt: string | null }): string | null => {
+    const answer = legAnswers[leg.id]
+    return answer && answer.pageHad === leg.readyAt ? answer.readyAt : leg.readyAt
+  }
 
   // The page's own copy moved on (a poll, another tab): show that.
   useEffect(() => {
@@ -42,13 +54,17 @@ export function ReadyControls({ deliveryId, order, onChanged, otherLegs = [] }: 
     // Spec 0046: then each other leg, so the whole order moves together, even when the first refused (row 10
     // review). A leg that refuses (already picked up, say) is named; the others still go.
     const refused: string[] = []
+    const answers: Record<string, { pageHad: string | null; readyAt: string | null }> = {}
     for (const leg of otherLegs) {
       try {
-        await action(leg.id, leg.readyAt)
+        const updated = await action(leg.id, readyAtToSend(leg))
+        answers[leg.id] = { pageHad: leg.readyAt, readyAt: updated.readyAt }
       } catch (legError: any) {
         refused.push(`${leg.legLabel}: ${legError?.message || 'not changed'}`)
       }
     }
+    // `{ ...a, ...b }` copies both objects into a new one, b's entries winning.
+    setLegAnswers((before) => ({ ...before, ...answers }))
     setError([ownError, ...refused].filter(Boolean).join(' · '))
     // A fresh copy at once, so "look again" shows the current time rather than waiting for the next poll.
     onChanged?.()
