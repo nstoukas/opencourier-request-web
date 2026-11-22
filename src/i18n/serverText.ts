@@ -22,9 +22,14 @@
 //   {{name, when}}      an ISO time as HH:mm, and its day when that is not today ("09:00 tomorrow")
 //   $t(server.enum.x.{{name}})   another key, looked up after the value is filled in
 //
-// A failure the server never answered (no `statusCode`: a timeout, a dropped connection, the proxy's
-// "Backend unreachable.") gives undefined, so the caller shows its own translated sentence rather than
-// our developer English (row 47 review, finding 4, the gap this comment used to list).
+// KNOWN GAP, left as it was (row 47 review, finding 4, ruled pre-existing; decision 124.2): a failure
+// the server never answered (a timeout, "Request failed (HTTP 500)", the proxy's "Backend unreachable.")
+// has no code, so its message, our developer English, still comes back from serverMessage, and the places
+// that call `serverMessage(err, i18n) ?? t(...)` with no status check show it: deliveries/index.tsx (edit
+// save, edit load, list load), AvailabilityStrip, ReadyControls, OrderLegsSection, CancelOrderLegsDialog,
+// CancelDeliveryDialog, ReportProductCard and CreateDeliveryForm's profile load line. adminweb returns
+// undefined for an error with no `statusCode` (its serverErrorText); doing the same here changes what a
+// dozen existing tests expect, so it is its own small change.
 // ─────────────────────────────────────────────────────────────────────────────────────────────
 import type { i18n as I18n } from 'i18next'
 import { formatMoney, formatTime } from '../utils/format'
@@ -173,13 +178,12 @@ export interface ServerError {
 
 /**
  * The words for a server's refusal in the reader's language, or undefined when it carried none (then
- * the caller shows its own sentence). A code with a template here wins; otherwise the server's own
- * sentence, which is English. A failure the server never answered (no statusCode) gives undefined.
+ * the caller shows its own sentence). A code with a template here wins; otherwise the error's own
+ * message, which is the server's English (see KNOWN GAP above for errors the server never answered).
  * `i18n` is the page's i18next instance: `const { t, i18n } = useTranslation()` in a component.
  */
 export function serverMessage(error: ServerError | null | undefined, i18n: I18n): string | undefined {
   if (typeof error !== 'object' || error === null) return undefined
-  if (typeof error.statusCode !== 'number') return undefined
   if (typeof error.code === 'string' && hasServerText(i18n, `server.error.${error.code}`)) {
     return render(i18n, toLanguage(i18n.language), `server.error.${error.code}`, asParams(error.params))
   }
