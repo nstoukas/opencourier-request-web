@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import Head from 'next/head'
 import { XCircle } from '@phosphor-icons/react'
+import { useTranslation } from 'react-i18next'
 import {
   Alert,
   AlertDescription,
@@ -18,9 +19,11 @@ import {
   Spinner,
 } from '../../../admin-web-components'
 import { loginPartner, type SignInError } from '../../../api/manualRequestApi'
+import { LanguageSwitch } from '../../../i18n/LanguageSwitch'
 
 /**
- * Turns a failed sign in into plain words for the restaurant. Never an HTTP code and never
+ * Turns a failed sign in into plain words for the restaurant, as the translation key of the words
+ * (the screen translates it with `t`, so this stays a plain function). Never an HTTP code and never
  * the server's own text, which is written for developers ("password must be longer than or
  * equal to 8 characters", "These credentials are incorrect").
  */
@@ -29,13 +32,13 @@ export function signInErrorMessage(error: unknown): string {
   // before reading `.status` from it.
   const status = typeof error === 'object' && error !== null ? (error as SignInError).status : undefined
   if (status === 400 || status === 401 || status === 403 || status === 404) {
-    return "That email and password don't match. Check for typos and try again."
+    return 'signIn.wrongCredentials'
   }
   if (status === 429) {
-    return 'Too many tries in a row. Wait a minute, then try again.'
+    return 'signIn.tooManyTries'
   }
   // A 5xx, or no status at all (the network failed before the server answered).
-  return "The co-op's server didn't answer. Check your internet connection and try again in a minute."
+  return 'signIn.serverDown'
 }
 
 interface SignInScreenProps {
@@ -50,6 +53,7 @@ interface SignInScreenProps {
  * after the admin "Sign in" board. The error Alert appears only after a failed attempt.
  */
 export function SignInScreen({ onSignedIn, notice }: SignInScreenProps) {
+  const { t } = useTranslation()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -60,7 +64,7 @@ export function SignInScreen({ onSignedIn, notice }: SignInScreenProps) {
     // Stop the browser's own form post (a full page reload); we send the request ourselves.
     event.preventDefault()
     if (!email.trim() || !password) {
-      setError('Enter your email and password, then press Sign In.')
+      setError(t('signIn.missingFields'))
       return
     }
 
@@ -72,7 +76,7 @@ export function SignInScreen({ onSignedIn, notice }: SignInScreenProps) {
       setIsSigningIn(false)
       onSignedIn()
     } catch (err) {
-      setError(signInErrorMessage(err))
+      setError(t(signInErrorMessage(err)))
       setIsSigningIn(false)
     }
   }
@@ -80,16 +84,20 @@ export function SignInScreen({ onSignedIn, notice }: SignInScreenProps) {
   return (
     <>
       <Head>
-        <title>Sign In · OpenCourier</title>
+        <title>{t('signIn.title')}</title>
       </Head>
       <main className="flex min-h-dvh items-center justify-center bg-muted px-4 py-10">
         <Card className="w-full max-w-sm rounded-xl">
           <CardHeader className="space-y-2 p-4 sm:p-6">
-            {/* The design system's mark: black ink, for white or muted grounds, 48px tall or more. */}
-            <img src="/opencourier-sign.png" alt="OpenCourier" width={42} height={48} className="h-12 w-auto self-start" />
-            <h1 className="pt-2 text-2xl font-semibold tracking-tight">Restaurant Portal</h1>
+            {/* The design system's mark (black ink, for white or muted grounds, 48px tall or more), and the
+                language switch, so a restaurant can read the sign in in English before signing in. */}
+            <div className="flex items-start justify-between gap-4">
+              <img src="/opencourier-sign.png" alt={t('common.appName')} width={42} height={48} className="h-12 w-auto" />
+              <LanguageSwitch />
+            </div>
+            <h1 className="pt-2 text-2xl font-semibold tracking-tight">{t('signIn.heading')}</h1>
             <CardDescription className="text-base sm:text-sm">
-              Sign in with the email and password the co-op gave your restaurant.
+              {t('signIn.intro')}
             </CardDescription>
           </CardHeader>
           <CardContent className="p-4 pt-0 sm:p-6 sm:pt-0">
@@ -103,7 +111,7 @@ export function SignInScreen({ onSignedIn, notice }: SignInScreenProps) {
             <form onSubmit={handleSubmit} noValidate className="space-y-6">
               <FieldGroup>
                 <Field>
-                  <FieldLabel htmlFor="partner-email">Email</FieldLabel>
+                  <FieldLabel htmlFor="partner-email">{t('signIn.email')}</FieldLabel>
                   <Input
                     id="partner-email"
                     type="email"
@@ -117,7 +125,7 @@ export function SignInScreen({ onSignedIn, notice }: SignInScreenProps) {
                   />
                 </Field>
                 <Field>
-                  <FieldLabel htmlFor="partner-password">Password</FieldLabel>
+                  <FieldLabel htmlFor="partner-password">{t('signIn.password')}</FieldLabel>
                   <Input
                     id="partner-password"
                     type="password"
@@ -129,7 +137,7 @@ export function SignInScreen({ onSignedIn, notice }: SignInScreenProps) {
                     className="h-12 text-base"
                   />
                   <FieldDescription id="partner-password-hint">
-                    Forgotten it? Ask the co-op to set a new one.
+                    {t('signIn.passwordHint')}
                   </FieldDescription>
                 </Field>
               </FieldGroup>
@@ -137,7 +145,7 @@ export function SignInScreen({ onSignedIn, notice }: SignInScreenProps) {
               {error ? (
                 <Alert variant="destructive">
                   <XCircle className="size-4" />
-                  <AlertTitle>Could not sign in</AlertTitle>
+                  <AlertTitle>{t('signIn.failedTitle')}</AlertTitle>
                   <AlertDescription>{error}</AlertDescription>
                 </Alert>
               ) : null}
@@ -147,10 +155,10 @@ export function SignInScreen({ onSignedIn, notice }: SignInScreenProps) {
                   <>
                     {/* The button's own words say "Signing in…", so the spinner stays silent here. */}
                     <Spinner className="mr-2" aria-hidden />
-                    Signing in…
+                    {t('signIn.signingIn')}
                   </>
                 ) : (
-                  'Sign In'
+                  t('signIn.submit')
                 )}
               </Button>
             </form>

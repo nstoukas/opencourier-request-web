@@ -2,6 +2,8 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/router'
 import { SignOut } from '@phosphor-icons/react'
+// useTranslation gives `t`, which turns a key such as 'frame.signOut' into the reader's language.
+import { useTranslation } from 'react-i18next'
 import { Button, Spinner } from '../../../admin-web-components'
 import { cn } from '../../../ui-shared-utils'
 import { logoutPartner } from '../../../api/manualRequestApi'
@@ -9,12 +11,14 @@ import { onPartnerUnauthorized } from '../../../api/partnerSessionEvents'
 import { usePartnerSession } from '../../../hooks/usePartnerSession'
 import { SignInScreen } from './SignInScreen'
 import { MessageDispatch } from '../../chat/MessageDispatch'
+import { LanguageSwitch } from '../../../i18n/LanguageSwitch'
 
-// The three places a restaurant goes. `as const` keeps the strings exact instead of widening them to `string`.
+// The three places a restaurant goes, each with its label's translation key.
+// `as const` keeps the strings exact instead of widening them to `string`.
 const NAV_LINKS = [
-  { href: '/manual-request', label: 'New Delivery' },
-  { href: '/manual-request/deliveries', label: 'My Orders' },
-  { href: '/manual-request/customers', label: 'Customers' },
+  { href: '/manual-request', labelKey: 'frame.navNewDelivery' },
+  { href: '/manual-request/deliveries', labelKey: 'frame.navMyOrders' },
+  { href: '/manual-request/customers', labelKey: 'frame.navCustomers' },
 ] as const
 
 interface PortalHeaderProps {
@@ -22,8 +26,9 @@ interface PortalHeaderProps {
   onSignOut: () => void
 }
 
-/** The sticky 56px header: the co-op's mark, the three pages, and Sign Out. */
+/** The sticky 56px header: the co-op's mark, the three pages, the language switch, and Sign Out. */
 function PortalHeader({ email, onSignOut }: PortalHeaderProps) {
+  const { t } = useTranslation()
   const router = useRouter()
   const navRef = useRef<HTMLElement>(null)
 
@@ -42,12 +47,12 @@ function PortalHeader({ email, onSignOut }: PortalHeaderProps) {
           {/* The app icon (the sign mark needs 48px, more than a 56px header can give it). */}
           <img src="/icon-192.png" alt="" width={28} height={28} className="size-7 rounded-md" />
           {/* On a phone the icon stands alone, so the name is still read out. */}
-          <span className="sr-only sm:not-sr-only">OpenCourier</span>
+          <span className="sr-only sm:not-sr-only">{t('common.appName')}</span>
         </Link>
 
         {/* Three links do not fit beside the mark on a phone: the row scrolls sideways inside the
             header (never the page), and each link stays on one line. */}
-        <nav ref={navRef} aria-label="Main" className="flex min-w-0 items-center gap-1 overflow-x-auto [scrollbar-width:none] md:shrink-0">
+        <nav ref={navRef} aria-label={t('frame.navLabel')} className="flex min-w-0 items-center gap-1 overflow-x-auto [scrollbar-width:none] md:shrink-0">
           {NAV_LINKS.map((link) => {
             const isCurrent = router.pathname === link.href
             return (
@@ -60,7 +65,7 @@ function PortalHeader({ email, onSignOut }: PortalHeaderProps) {
                 className={cn('shrink-0 whitespace-nowrap px-3', isCurrent && 'bg-secondary text-secondary-foreground')}
               >
                 <Link href={link.href} aria-current={isCurrent ? 'page' : undefined}>
-                  {link.label}
+                  {t(link.labelKey)}
                 </Link>
               </Button>
             )
@@ -70,6 +75,8 @@ function PortalHeader({ email, onSignOut }: PortalHeaderProps) {
         <div className="ml-auto flex min-w-0 items-center gap-2">
           {/* The restaurant's chat with the co-op's dispatch (spec 0034, AC-14). */}
           <MessageDispatch email={email} />
+          {/* Greek or English (spec 0054, AC-2). */}
+          <LanguageSwitch />
           {email ? (
             <span className="hidden max-w-[14rem] truncate text-sm text-muted-foreground md:inline" title={email}>
               {email}
@@ -77,7 +84,7 @@ function PortalHeader({ email, onSignOut }: PortalHeaderProps) {
           ) : null}
           <Button type="button" variant="ghost" className="shrink-0 px-3" onClick={onSignOut}>
             <SignOut className="size-5 sm:mr-2 sm:size-4" />
-            <span className="sr-only sm:not-sr-only">Sign Out</span>
+            <span className="sr-only sm:not-sr-only">{t('frame.signOut')}</span>
           </Button>
         </div>
       </div>
@@ -111,13 +118,16 @@ export function PageHeader({ title, description, actions }: PageHeaderProps) {
  * the same address (so after signing in you land on the page you asked for); signed in,
  * the sticky header and one centered column, at most 768px wide, with the page inside.
  */
-export const SESSION_ENDED_NOTICE = 'Your session ended. Sign in again.'
-export const SIGN_OUT_FAILED = 'Could not sign out. Check your connection and try again.'
-export const SESSION_CHECK_FAILED = 'Could not check your sign in. Check your connection and try again.'
+// The translation keys of the frame's three messages (spec 0017), exported for the tests.
+export const SESSION_ENDED_NOTICE = 'frame.sessionEnded'
+export const SIGN_OUT_FAILED = 'frame.signOutFailed'
+export const SESSION_CHECK_FAILED = 'frame.sessionCheckFailed'
 
 export function PortalFrame({ children }: { children: ReactNode }) {
   const { isSignedIn, email, isLoading, checkFailed, sessionEnded, refresh, recheck, signedIn, signedOut } =
     usePartnerSession()
+  const { t } = useTranslation()
+  // The key of a failed sign out's message, translated where it is shown.
   const [signOutError, setSignOutError] = useState<string | null>(null)
 
   // A 401 from any partner call: check the session again, quietly (spec 0017, AC-5).
@@ -138,7 +148,7 @@ export function PortalFrame({ children }: { children: ReactNode }) {
   if (isLoading) {
     return (
       <div className="flex min-h-dvh items-center justify-center bg-muted">
-        <Spinner className="size-6 text-muted-foreground" label="Checking your sign in" />
+        <Spinner className="size-6 text-muted-foreground" label={t('frame.checkingSignIn')} />
       </div>
     )
   }
@@ -147,17 +157,17 @@ export function PortalFrame({ children }: { children: ReactNode }) {
     return (
       <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-muted px-4 text-center">
         <p role="alert" className="max-w-sm text-base">
-          {SESSION_CHECK_FAILED}
+          {t(SESSION_CHECK_FAILED)}
         </p>
         <Button type="button" className="h-12 px-6 text-base" onClick={() => void refresh()}>
-          Try again
+          {t('common.tryAgain')}
         </Button>
       </div>
     )
   }
 
   if (!isSignedIn) {
-    return <SignInScreen onSignedIn={signedIn} notice={sessionEnded ? SESSION_ENDED_NOTICE : undefined} />
+    return <SignInScreen onSignedIn={signedIn} notice={sessionEnded ? t(SESSION_ENDED_NOTICE) : undefined} />
   }
 
   return (
@@ -167,13 +177,13 @@ export function PortalFrame({ children }: { children: ReactNode }) {
         href="#main"
         className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-2 focus:z-30 focus:rounded-md focus:bg-background focus:px-3 focus:py-2 focus:shadow-sm"
       >
-        Skip to content
+        {t('frame.skipToContent')}
       </a>
       <PortalHeader email={email} onSignOut={handleSignOut} />
       {/* A sign out that failed, said in words right under the header (spec 0017, AC-6). */}
       {signOutError ? (
         <p role="alert" className="border-b bg-destructive/10 px-4 py-2 text-center text-sm text-destructive">
-          {signOutError}
+          {t(signOutError)}
         </p>
       ) : null}
       {/* tabIndex -1 lets the skip link move keyboard focus here, not only the scroll. */}
