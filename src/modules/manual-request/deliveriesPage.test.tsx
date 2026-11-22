@@ -2,6 +2,8 @@ import React from 'react'
 import '@testing-library/jest-dom'
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import DeliveriesPage from '../../pages/manual-request/deliveries/index'
+import { I18nextProvider } from 'react-i18next'
+import { createI18n } from '../../i18n/createI18n'
 import { usePartnerSession } from '../../hooks/usePartnerSession'
 import {
   fetchPartnerDelivery,
@@ -642,5 +644,48 @@ describe('DeliveriesPage (/manual-request/deliveries/index.tsx)', () => {
       await waitFor(() => expect(mockUpdate).toHaveBeenCalledTimes(1))
       expect(mockUpdate.mock.calls[0][0].pickupReadyAt).toBeNull()
     })
+  })
+
+  it('renders "Ακύρωση" (orders.cancel, not common.cancel "Άκυρο") on the row cancel button in Greek (Finding 2, decision 47.14)', () => {
+    ;(usePartnerSession as jest.Mock).mockReturnValue({
+      isSignedIn: true,
+      isLoading: false,
+    })
+    ;(useListManualRequestDeliveriesQuery as jest.Mock).mockReturnValue({
+      data: {
+        data: [
+          {
+            id: 'del-001',
+            status: 'ACCEPTED',
+            orderReference: 'ORD-999',
+            totalCost: 500,
+            currencyCode: 'EUR',
+            createdAt: '2026-07-29T10:00:00Z',
+            pickup: { pickupName: 'Nosh', city: 'Volos' },
+            dropoff: { dropoffName: 'Customer A', city: 'Volos' },
+          },
+        ],
+        pagination: { currentPage: 1, totalPages: 1 },
+      },
+      isLoading: false,
+      error: undefined,
+      refetch: mockRefetch,
+    })
+
+    const i18n = createI18n('el')
+    render(
+      <I18nextProvider i18n={i18n}>
+        <DeliveriesPage />
+      </I18nextProvider>,
+    )
+
+    // Row action button must be "Ακύρωση", NOT "Άκυρο"
+    const cancelBtn = screen.getByRole('button', { name: 'Ακύρωση' })
+    expect(cancelBtn).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Άκυρο' })).not.toBeInTheDocument()
+
+    // Clicking it opens the cancel dialog
+    fireEvent.click(cancelBtn)
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument()
   })
 })

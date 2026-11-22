@@ -3,6 +3,8 @@
 import React from 'react'
 import '@testing-library/jest-dom'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { I18nextProvider } from 'react-i18next'
+import { createI18n } from '../../i18n/createI18n'
 import { ReadyControls } from './ReadyControls'
 import { delayDeliveryReady, markDeliveryFoodReady } from '../../api/manualRequestApi'
 import { READY_ACTION_STATUSES } from './readyState'
@@ -250,5 +252,47 @@ describe('ReadyControls (spec 0023, AC-8)', () => {
 
     rerender(<ReadyControls deliveryId="del-1" order={{ status: 'PICKED_UP', readyAt: READY_AT, foodReadyAt: null }} />)
     expect(screen.queryAllByRole('button')).toHaveLength(0)
+  })
+
+  describe('Greek time preposition rules (Finding 5, decision 47.16)', () => {
+    it('uses "στη" for 01:00-01:59 on Athens time and "στις" for other hours in Greek', () => {
+      const elI18n = createI18n('el')
+      // 22:05 UTC summer = 01:05 in Athens
+      const { rerender } = render(
+        <I18nextProvider i18n={elI18n}>
+          <ReadyControls
+            deliveryId="del-1"
+            order={{ status: 'ACCEPTED', readyAt: '2026-09-30T22:05:00.000Z', foodReadyAt: null }}
+          />
+        </I18nextProvider>,
+      )
+      expect(screen.getByText('Έτοιμο στη 01:05')).toBeInTheDocument()
+
+      // 12:32 UTC = 14:32 Athens
+      rerender(
+        <I18nextProvider i18n={elI18n}>
+          <ReadyControls
+            deliveryId="del-1"
+            order={{ status: 'ACCEPTED', readyAt: '2026-11-03T12:32:00.000Z', foodReadyAt: null }}
+          />
+        </I18nextProvider>,
+      )
+      expect(screen.getByText('Έτοιμο στις 14:32')).toBeInTheDocument()
+
+      // foodReadyAt at 01:05
+      rerender(
+        <I18nextProvider i18n={elI18n}>
+          <ReadyControls
+            deliveryId="del-1"
+            order={{
+              status: 'ACCEPTED',
+              readyAt: '2026-09-30T22:05:00.000Z',
+              foodReadyAt: '2026-09-30T22:05:00.000Z',
+            }}
+          />
+        </I18nextProvider>,
+      )
+      expect(screen.getByText('Φαγητό έτοιμο στη 01:05')).toBeInTheDocument()
+    })
   })
 })

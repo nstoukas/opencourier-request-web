@@ -1,6 +1,8 @@
 import React from 'react'
 import '@testing-library/jest-dom'
-import { render, act } from '@testing-library/react'
+import { render, act, screen } from '@testing-library/react'
+import { I18nextProvider } from 'react-i18next'
+import { createI18n } from '../../../i18n/createI18n'
 import { PinMapCanvas } from './PinMapCanvas'
 
 const mockMap = {
@@ -16,7 +18,13 @@ jest.mock('react-leaflet', () => ({
     <div data-testid="mock-map-container">{children}</div>
   ),
   TileLayer: () => <div data-testid="mock-tile-layer" />,
-  ZoomControl: () => <div data-testid="mock-zoom-control" />,
+  ZoomControl: (props: any) => (
+    <div
+      data-testid="mock-zoom-control"
+      data-zoom-in={props.zoomInTitle}
+      data-zoom-out={props.zoomOutTitle}
+    />
+  ),
   useMap: () => mockMap,
   useMapEvents: (handlers: { moveend?: () => void }) => {
     if (handlers.moveend) {
@@ -98,5 +106,29 @@ describe('PinMapCanvas (/src/modules/manual-request/components/PinMapCanvas.tsx)
     )
 
     expect(mockMap.setView).toHaveBeenCalledTimes(1)
+  })
+
+  it('passes translated tooltips to ZoomControl in Greek and English (nit finding)', () => {
+    const elI18n = createI18n('el')
+    const { rerender } = render(
+      <I18nextProvider i18n={elI18n}>
+        <PinMapCanvas center={initialCenter} zoom={17} onUserMove={jest.fn()} />
+      </I18nextProvider>,
+    )
+
+    let zoomControl = screen.getByTestId('mock-zoom-control')
+    expect(zoomControl).toHaveAttribute('data-zoom-in', 'Μεγέθυνση')
+    expect(zoomControl).toHaveAttribute('data-zoom-out', 'Σμίκρυνση')
+
+    const enI18n = createI18n('en')
+    rerender(
+      <I18nextProvider i18n={enI18n}>
+        <PinMapCanvas center={initialCenter} zoom={17} onUserMove={jest.fn()} />
+      </I18nextProvider>,
+    )
+
+    zoomControl = screen.getByTestId('mock-zoom-control')
+    expect(zoomControl).toHaveAttribute('data-zoom-in', 'Zoom in')
+    expect(zoomControl).toHaveAttribute('data-zoom-out', 'Zoom out')
   })
 })

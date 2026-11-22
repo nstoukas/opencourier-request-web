@@ -68,7 +68,7 @@ describe('partnerProfilePickup utils', () => {
       houseNumber: '',
     })
     expect(mapped?.pickupAddress.formattedAddress).toBe(expectedFormatted)
-    expect(mapped?.pickupAddress.formattedAddress).toBe('Ermou 120, 38221 Volos, Thessaly')
+    expect(mapped?.pickupAddress.formattedAddress).toBe('Ermou 120, Volos, Thessaly, 38221 GR')
   })
 
   // Test Plan case 3: pickupAddress: null -> returns null and flags unusable with reason

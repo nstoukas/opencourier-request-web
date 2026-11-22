@@ -22,6 +22,9 @@ describe('useFormat hook (spec 0054, AC-3)', () => {
     expect(result.current.dateTime('2026-09-30T20:25:00Z')).toBe('30/09/2026, 23:25')
     expect(result.current.time('2026-09-30T20:25:00Z')).toBe('23:25')
     expect(result.current.date('2026-09-30T20:25:00Z')).toBe('30/09/2026')
+    // Greek atTime (Finding 5, decision 47.16): "στη" at 01:00-01:59 (22:05 UTC summer = 01:05 Athens), "στις" otherwise
+    expect(result.current.atTime('2026-09-30T22:05:00Z')).toBe('στη 01:05')
+    expect(result.current.atTime('2026-09-30T20:25:00Z')).toBe('στις 23:25')
   })
 
   it('formats values in English when language is en', () => {
@@ -41,6 +44,9 @@ describe('useFormat hook (spec 0054, AC-3)', () => {
     expect(result.current.dateTime('2026-09-30T20:25:00Z')).toBe('30/09/2026, 23:25')
     expect(result.current.time('2026-09-30T20:25:00Z')).toBe('23:25')
     expect(result.current.date('2026-09-30T20:25:00Z')).toBe('30/09/2026')
+    // English atTime: always "at"
+    expect(result.current.atTime('2026-09-30T22:05:00Z')).toBe('at 01:05')
+    expect(result.current.atTime('2026-09-30T20:25:00Z')).toBe('at 23:25')
   })
 
   it('returns em dash for missing or null values in both languages', () => {

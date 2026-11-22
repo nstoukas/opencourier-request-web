@@ -1,4 +1,4 @@
-import { formatMoney, formatDateTime, formatTime, formatDistance, formatDate } from './format'
+import { formatMoney, formatDateTime, formatTime, formatDistance, formatDate, isOneOClock } from './format'
 
 describe('format utilities (Greek and English formats per spec 0054 AC-3 and decision 47.5)', () => {
   describe('formatMoney', () => {
@@ -131,6 +131,37 @@ describe('format utilities (Greek and English formats per spec 0054 AC-3 and dec
     it('returns an em dash when distance is null or undefined', () => {
       expect(formatDistance(null, 'KM')).toBe('—')
       expect(formatDistance(undefined, 'KM')).toBe('—')
+    })
+  })
+
+  describe('isOneOClock (Finding 5, decision 47.16)', () => {
+    it('returns true when time is 01:00-01:59 on Greek time in summer (UTC+3)', () => {
+      // 22:05 UTC in summer -> 01:05 in Athens
+      expect(isOneOClock('2026-09-30T22:05:00Z')).toBe(true)
+      // 22:00 UTC in summer -> 01:00 in Athens
+      expect(isOneOClock('2026-09-30T22:00:00Z')).toBe(true)
+      // 22:59 UTC in summer -> 01:59 in Athens
+      expect(isOneOClock('2026-09-30T22:59:00Z')).toBe(true)
+    })
+
+    it('returns true when time is 01:00-01:59 on Greek time in winter (UTC+2)', () => {
+      // 23:05 UTC in winter -> 01:05 in Athens
+      expect(isOneOClock('2026-01-15T23:05:00Z')).toBe(true)
+    })
+
+    it('returns false for hours other than 01:00-01:59 in Athens time', () => {
+      // 21:59 UTC in summer -> 00:59 in Athens
+      expect(isOneOClock('2026-09-30T21:59:00Z')).toBe(false)
+      // 23:00 UTC in summer -> 02:00 in Athens
+      expect(isOneOClock('2026-09-30T23:00:00Z')).toBe(false)
+      // 10:05 UTC in summer -> 13:05 in Athens
+      expect(isOneOClock('2026-09-30T10:05:00Z')).toBe(false)
+    })
+
+    it('returns false for null, undefined, or empty string', () => {
+      expect(isOneOClock(null)).toBe(false)
+      expect(isOneOClock(undefined)).toBe(false)
+      expect(isOneOClock('')).toBe(false)
     })
   })
 })

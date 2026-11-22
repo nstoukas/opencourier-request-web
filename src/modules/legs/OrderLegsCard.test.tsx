@@ -2,6 +2,8 @@
 import React from 'react'
 import '@testing-library/jest-dom'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { I18nextProvider } from 'react-i18next'
+import { createI18n } from '../../i18n/createI18n'
 import { OrderLegsCard } from './OrderLegsCard'
 import { cancelDelivery, delayDeliveryReady, markDeliveryFoodReady } from '../../api/manualRequestApi'
 import { groupHistory } from '../manual-request/utils/legs'
@@ -100,6 +102,27 @@ describe('OrderLegsCard (spec 0046, AC-6)', () => {
         'href',
         '/manual-request/del-1/status',
       )
+    })
+
+    it('in Greek, preserves link words by splitting at [link] marker (later fix, decision 47.30)', () => {
+      const i18n = createI18n('el')
+      const items = groupHistory([legFixture('del-1', 1)])
+      const order = items.find((item) => item.kind === 'order')
+      if (!order || order.kind !== 'order') throw new Error('not multi leg')
+
+      render(
+        <I18nextProvider i18n={i18n}>
+          <OrderLegsCard order={order} onChanged={jest.fn()} />
+        </I18nextProvider>,
+      )
+
+      const prompt = screen.getByTestId('order-legs-open-order')
+      // Greek sentence splits at [link] and uses orderLegs.openOrderLink for the link text
+      expect(prompt).toHaveTextContent(
+        'Για να αλλάξετε την ώρα ετοιμότητας ή να ακυρώσετε, ανοίξτε την παραγγελία.',
+      )
+      const link = within(prompt).getByRole('link', { name: 'ανοίξτε την παραγγελία' })
+      expect(link).toHaveAttribute('href', '/manual-request/del-1/status')
     })
 
     it('when a leg is missing but the present legs are already ended, the prompt and action controls are not shown', () => {

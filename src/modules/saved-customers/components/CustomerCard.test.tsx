@@ -1,6 +1,8 @@
 import React from 'react'
 import '@testing-library/jest-dom'
 import { render, screen } from '@testing-library/react'
+import { I18nextProvider } from 'react-i18next'
+import { createI18n } from '../../../i18n/createI18n'
 import { CustomerCard } from './CustomerCard'
 import { formatDateTime } from '../../../utils/format'
 import type { SavedCustomer } from '../types'
@@ -66,5 +68,20 @@ describe('CustomerCard pin moved by a rider (row 99, spec 0016)', () => {
     expect(screen.getByRole('heading', { name: 'Eleni Volou' })).toBeInTheDocument()
     expect(screen.getByText('+306912340099')).toBeInTheDocument()
     expect(screen.getByText(/^used /)).toBeInTheDocument()
+  })
+
+  it('in Greek, says "Η πινέζα μετακινήθηκε από διανομέα:" ending in a colon without "στις" (Finding 5, decision 47.16)', () => {
+    const elI18n = createI18n('el')
+    const movedAt = '2026-11-03T12:32:00.000Z'
+
+    render(
+      <I18nextProvider i18n={elI18n}>
+        <CustomerCard customer={{ ...baseCustomer, pinMovedByRiderAt: movedAt }} onEdit={jest.fn()} onDelete={jest.fn()} />
+      </I18nextProvider>,
+    )
+
+    const line = screen.getByTestId('pin-moved-by-rider')
+    expect(line).toHaveTextContent('Η πινέζα μετακινήθηκε από διανομέα: 03/11/2026, 14:32')
+    expect(line).not.toHaveTextContent('στις')
   })
 })

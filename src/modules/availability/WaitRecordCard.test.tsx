@@ -4,6 +4,8 @@
 import React from 'react'
 import '@testing-library/jest-dom'
 import { fireEvent, render, screen } from '@testing-library/react'
+import { I18nextProvider } from 'react-i18next'
+import { createI18n } from '../../i18n/createI18n'
 import { WaitRecordCard } from './WaitRecordCard'
 import { useWaitRecordQuery } from '../../api/manualRequestApi'
 import { WaitRecord } from '../manual-request/types'
@@ -404,5 +406,38 @@ describe('WaitRecordCard (spec 0030, AC-8)', () => {
     // No rider id or courier fields
     expect(container.textContent).not.toMatch(/courier/i)
     expect(container.textContent).not.toMatch(/rider\s+[a-z0-9]/i)
+  })
+
+  it('formats fractional minutes with the language number format (0,3 in Greek, 0.3 in English, later fix)', () => {
+    const fractionalRecord: WaitRecord = {
+      days: 30,
+      orderCount: 15,
+      waitSamples: 12,
+      averageWaitMinutes: 0.3,
+      lateShare: 0.05,
+      prepSamples: 15,
+      medianPrepMinutes: 10,
+      usualPrepMinutes: 10,
+    }
+    mockUseWaitRecordQuery.mockReturnValue({
+      data: fractionalRecord,
+      error: undefined,
+      isLoading: false,
+      refetch: jest.fn(),
+    })
+
+    // English rendering uses decimal dot
+    const { unmount } = render(<WaitRecordCard />)
+    expect(screen.getByText('0.3 min on average')).toBeInTheDocument()
+    unmount()
+
+    // Greek rendering uses decimal comma via {{count, number}}
+    const elI18n = createI18n('el')
+    render(
+      <I18nextProvider i18n={elI18n}>
+        <WaitRecordCard />
+      </I18nextProvider>,
+    )
+    expect(screen.getByText('0,3 λεπτά κατά μέσο όρο')).toBeInTheDocument()
   })
 })

@@ -1,6 +1,7 @@
 import React from 'react'
 import '@testing-library/jest-dom'
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
+import { I18nextProvider } from 'react-i18next'
 import {
   CreateDeliveryForm,
   CONFIRM_PIN_MESSAGE,
@@ -787,6 +788,56 @@ describe('CreateDeliveryForm (spec 0006 & spec 0016)', () => {
       expect(mockCreateQuote).not.toHaveBeenCalled()
     })
 
+    it('Finding 3 / decision 47.17: confirming the pin clears the pin refusal even if language switched after Get price', async () => {
+      ;(lookUpPinForAddress as jest.Mock).mockResolvedValueOnce({
+        point: { latitude: 39.36, longitude: 22.94 },
+        formattedAddress: 'Iasonos 10, Volos',
+        message: null,
+      })
+
+      const formI18n = createI18n('en')
+      render(
+        <I18nextProvider i18n={formI18n}>
+          <CreateDeliveryForm />
+        </I18nextProvider>,
+      )
+
+      fireEvent.change(screen.getByLabelText(/Customer name/i), { target: { value: 'Kostas' } })
+      fireEvent.change(screen.getByLabelText(/Phone/i), { target: { value: '6912345678' } })
+      fireEvent.click(screen.getByRole('button', { name: "Can't find it? Type it" }))
+      fireEvent.change(screen.getByLabelText(/Street and number/i), { target: { value: 'Iasonos 10' } })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Show on map' }))
+      expect(await screen.findByRole('button', { name: 'Pin is on the entrance' })).toBeInTheDocument()
+
+      fireEvent.click(screen.getByRole('radio', { name: 'Now' }))
+      fireEvent.click(screen.getByRole('radio', { name: 'Small' }))
+      fireEvent.change(screen.getByLabelText(/Order total/i), { target: { value: '15' } })
+
+      // Click Get price without confirming pin
+      fireEvent.click(screen.getByRole('button', { name: 'Get price' }))
+
+      // Shows English error message
+      expect(await screen.findByText('Confirm the pin on the map')).toBeInTheDocument()
+
+      // Switch language to Greek while the error is displayed
+      act(() => {
+        formI18n.changeLanguage('el')
+      })
+
+      // The error message on screen updates immediately to Greek!
+      expect(screen.getByText('Επιβεβαιώστε την πινέζα στον χάρτη')).toBeInTheDocument()
+
+      // Now confirm the pin on map (Greek button title)
+      fireEvent.click(screen.getByRole('button', { name: 'Η πινέζα είναι στην είσοδο' }))
+
+      // Because barError is compared by key (isMessageKey), confirming the pin clears it!
+      await waitFor(() => {
+        expect(screen.queryByText('Confirm the pin on the map')).not.toBeInTheDocument()
+        expect(screen.queryByText('Επιβεβαιώστε την πινέζα στον χάρτη')).not.toBeInTheDocument()
+      })
+    })
+
     it('AC-5: after confirm, Get price makes quote with exactly confirmed point and no Nominatim call for dropoff', async () => {
       mockCreateQuote.mockResolvedValueOnce({
         id: 'quote-confirmed-1',
@@ -1003,12 +1054,12 @@ describe('CreateDeliveryForm (spec 0006 & spec 0016)', () => {
 
       const deliveryPayload = mockConfirmDelivery.mock.calls[0][0]
       // Formatted address is built from the new typed street, NEVER carrying the old "Iasonos 10" text!
-      expect(deliveryPayload.dropoffAddress.formattedAddress).toBe('Kartali 5, Volos')
+      expect(deliveryPayload.dropoffAddress.formattedAddress).toBe('Kartali 5, Volos, GR')
       expect(deliveryPayload.dropoffAddress.formattedAddress).not.toContain('Iasonos 10')
       expect(deliveryPayload.dropoffAddress.streetAddress[0]).toBe('Kartali 5')
 
       const savedFields = (saveCustomerAfterOrder as jest.Mock).mock.calls[0][0].fields
-      expect(savedFields.formattedAddress).toBe('Kartali 5, Volos')
+      expect(savedFields.formattedAddress).toBe('Kartali 5, Volos, GR')
       expect(savedFields.formattedAddress).not.toContain('Iasonos 10')
       expect(savedFields.addressLine1).toBe('Kartali 5')
     })

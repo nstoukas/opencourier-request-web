@@ -58,6 +58,14 @@ describe('language utilities (spec 0054, AC-2, cross check 2)', () => {
     it('handles URI-encoded cookie values properly', () => {
       expect(languageFromCookies('oc_lang=%65%6e')).toBe('en')
     })
+
+    it('falls back to Greek and does not throw on malformed URI percent sequence (Finding 1, decision 47.14)', () => {
+      // Malformed sequence %E0%A4%A or trailing % must not throw URIError (which would 500 every page)
+      expect(languageFromCookies('oc_lang=%E0%A4%A')).toBe('el')
+      expect(languageFromCookies('oc_lang=%')).toBe('el')
+      expect(languageFromCookies('oc_lang=%ZZ')).toBe('el')
+      expect(languageFromCookies('session=123; oc_lang=%E0%A4%A; user=abc')).toBe('el')
+    })
   })
 
   describe('saveLanguageCookie', () => {
@@ -139,6 +147,24 @@ describe('language utilities (spec 0054, AC-2, cross check 2)', () => {
         ctx: {
           req: {
             headers: {},
+          },
+        },
+        Component: () => null,
+        router: {} as any,
+        AppTree: () => null,
+      } as unknown as AppContext
+
+      const result = await App.getInitialProps(mockContext)
+      expect(result.language).toBe('el')
+    })
+
+    it('falls back to Greek without throwing when server Cookie header has malformed percent encoding (Finding 1, decision 47.14)', async () => {
+      const mockContext = {
+        ctx: {
+          req: {
+            headers: {
+              cookie: 'session=abc; oc_lang=%E0%A4%A',
+            },
           },
         },
         Component: () => null,
