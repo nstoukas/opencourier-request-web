@@ -10,6 +10,7 @@ import {
 import { formatDateTime } from '../../utils/format'
 import { restaurantErrorText } from '../../utils/restaurantError'
 import { COMPLAINT_TEXT, complaintCategoryLabel } from './complaintText'
+import { ChoicePills } from '../manual-request/components/ChoicePills'
 
 // The backend keeps a complaint to 1000 characters.
 export const COMPLAINT_TEXT_MAX_LENGTH = 1000
@@ -156,23 +157,14 @@ export function RiderComplaintSection({ deliveryId, status }: Props) {
         ) : null}
         {open ? (
           <div className="space-y-3">
-            <p className="text-sm font-medium">{COMPLAINT_TEXT.whatHappened}</p>
-            {/* role="radiogroup" tells a screen reader these buttons are one choice. */}
-            <div className="flex flex-wrap gap-2" role="radiogroup" aria-label={COMPLAINT_TEXT.whatHappened}>
-              {RIDER_COMPLAINT_CATEGORIES.map((value) => (
-                <Button
-                  key={value}
-                  type="button"
-                  size="sm"
-                  role="radio"
-                  aria-checked={category === value}
-                  variant={category === value ? 'default' : 'outline'}
-                  onClick={() => setCategory(value)}
-                >
-                  {complaintCategoryLabel(value)}
-                </Button>
-              ))}
-            </div>
+            {/* The order form's radio group (arrow keys move between choices, one tab stop), rather than
+                buttons that only claimed the radio role (row 83 review). */}
+            <ChoicePills
+              label={COMPLAINT_TEXT.whatHappened}
+              options={RIDER_COMPLAINT_CATEGORIES.map((value) => ({ value, label: complaintCategoryLabel(value) }))}
+              value={category ?? ''}
+              onValueChange={(value) => setCategory(value as RiderComplaintCategory)}
+            />
             <Textarea
               aria-label={COMPLAINT_TEXT.textLabel}
               placeholder={COMPLAINT_TEXT.textPlaceholder}
