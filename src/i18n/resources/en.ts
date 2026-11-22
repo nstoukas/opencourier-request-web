@@ -27,6 +27,7 @@ export const en = {
   },
   language: {
     label: 'Language',
+    saveFailed: 'The language was not saved to your account. Your next sign in will start in the previous one.',
   },
   // The frame around every page: the header, the sign in gate, the session messages.
   frame: {

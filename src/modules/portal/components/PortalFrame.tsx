@@ -12,6 +12,7 @@ import { usePartnerSession } from '../../../hooks/usePartnerSession'
 import { SignInScreen } from './SignInScreen'
 import { MessageDispatch } from '../../chat/MessageDispatch'
 import { LanguageSwitch } from '../../../i18n/LanguageSwitch'
+import { forgetChosenBeforeSignIn } from '../../../i18n/languageChoice'
 
 // The three places a restaurant goes, each with its label's translation key.
 // `as const` keeps the strings exact instead of widening them to `string`.
@@ -76,7 +77,8 @@ function PortalHeader({ email, onSignOut }: PortalHeaderProps) {
           {/* The restaurant's chat with the co-op's dispatch (spec 0034, AC-14). */}
           <MessageDispatch email={email} />
           {/* Greek or English (spec 0054, AC-2). */}
-          <LanguageSwitch />
+          {/* Signed in (the header only shows then): each switch also saves to the account. */}
+          <LanguageSwitch signedIn />
           {email ? (
             <span className="hidden max-w-[14rem] truncate text-sm text-muted-foreground md:inline" title={email}>
               {email}
@@ -142,6 +144,8 @@ export function PortalFrame({ children }: { children: ReactNode }) {
       setSignOutError(SIGN_OUT_FAILED)
       return
     }
+    // A language picked on the sign in card belongs to the person who signed in with it, not the next one.
+    forgetChosenBeforeSignIn()
     await signedOut()
   }
 

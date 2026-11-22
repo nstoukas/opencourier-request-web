@@ -25,6 +25,7 @@ export const el: Translations = {
   },
   language: {
     label: 'Γλώσσα',
+    saveFailed: 'Η γλώσσα δεν αποθηκεύτηκε στον λογαριασμό σας. Η επόμενη σύνδεση θα ξεκινήσει στην προηγούμενη.',
   },
   frame: {
     navNewDelivery: 'Νέα διανομή',

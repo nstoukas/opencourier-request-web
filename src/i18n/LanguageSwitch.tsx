@@ -1,25 +1,33 @@
 import { useTranslation } from 'react-i18next'
+import { toast } from '../admin-web-components'
+import { saveAccountLanguage } from '../api/manualRequestApi'
 import { cn } from '../ui-shared-utils'
-import { LANGUAGES, LANGUAGE_NAMES, saveLanguageCookie, toLanguage, type Language } from './language'
+import { applyLanguage, markChosenBeforeSignIn } from './languageChoice'
+import { LANGUAGES, LANGUAGE_NAMES, toLanguage, type Language } from './language'
 
 /**
  * The language switch (spec 0054, AC-2): "ΕΛ" and "EN" side by side, the current one pressed.
- * A tap saves the choice in the `oc_lang` cookie (so the next page load renders in it on the
- * server) and switches this page at once, with no reload.
- * Before the backend part of row 47 there is no `User.language` yet, so the cookie is the only
- * place the choice is kept (decision 47.2).
+ * A tap switches this page at once with no reload, saves the choice in the `oc_lang` cookie (so the
+ * next page load renders in it on the server) and, when signed in, on the restaurant user's own account
+ * (`User.language`, through `PUT partner/v1/auth/language`), so the next sign in on any computer and the
+ * mails start in it. The same behaviour as adminweb's switch (decision 47.32).
+ * `signedIn` is false on the sign in card: there the choice waits for the sign in, which saves it.
  */
-export function LanguageSwitch({ className }: { className?: string }) {
+export function LanguageSwitch({ className, signedIn = false }: { className?: string; signedIn?: boolean }) {
   // useTranslation gives the page's i18next instance; `i18n.language` is the language on show.
   const { t, i18n } = useTranslation()
   const current = toLanguage(i18n.language)
 
   const choose = (language: Language) => {
     if (language === current) return
-    saveLanguageCookie(language)
-    void i18n.changeLanguage(language)
-    // Screen readers and the browser's own spell check read the page's language from <html lang>.
-    document.documentElement.lang = language
+    applyLanguage(i18n, language)
+    if (!signedIn) {
+      // On the sign in card: sign in will save this choice to the account.
+      markChosenBeforeSignIn()
+      return
+    }
+    // The page has already switched; a failed save only means the next sign in starts in the old one.
+    saveAccountLanguage(language).catch(() => toast({ title: t('language.saveFailed'), variant: 'destructive' }))
   }
 
   return (

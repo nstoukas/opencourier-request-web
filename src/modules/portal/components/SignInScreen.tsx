@@ -17,9 +17,12 @@ import {
   FieldLabel,
   Input,
   Spinner,
+  toast,
 } from '../../../admin-web-components'
-import { loginPartner, type SignInError } from '../../../api/manualRequestApi'
+import { loginPartner, saveAccountLanguage, type SignInError } from '../../../api/manualRequestApi'
 import { LanguageSwitch } from '../../../i18n/LanguageSwitch'
+import { toLanguage } from '../../../i18n/language'
+import { applyLanguage, forgetChosenBeforeSignIn, wasChosenBeforeSignIn } from '../../../i18n/languageChoice'
 
 /**
  * Turns a failed sign in into plain words for the restaurant, as the translation key of the words
@@ -53,7 +56,7 @@ interface SignInScreenProps {
  * after the admin "Sign in" board. The error Alert appears only after a failed attempt.
  */
 export function SignInScreen({ onSignedIn, notice }: SignInScreenProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   // The error's translation key, not its words: translated where it is shown, so the language switch
@@ -73,7 +76,19 @@ export function SignInScreen({ onSignedIn, notice }: SignInScreenProps) {
     setIsSigningIn(true)
     setErrorKey('')
     try {
-      await loginPartner(email.trim(), password)
+      const account = await loginPartner(email.trim(), password)
+      // The language (spec 0054, cross check 2): the one stored on the account wins at sign in, unless the
+      // restaurant picked one on this card just now, which is then saved to the account (the same rule as
+      // adminweb, decision 47.32). A failed save is told; the page keeps the chosen language (it is in the
+      // cookie), only the account keeps its old one.
+      if (wasChosenBeforeSignIn()) {
+        saveAccountLanguage(toLanguage(i18n.language)).catch(() =>
+          toast({ title: t('language.saveFailed'), variant: 'destructive' }),
+        )
+      } else if (account.language) {
+        applyLanguage(i18n, account.language)
+      }
+      forgetChosenBeforeSignIn()
       setPassword('')
       setIsSigningIn(false)
       onSignedIn()
