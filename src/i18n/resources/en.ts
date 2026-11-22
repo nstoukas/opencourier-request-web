@@ -374,6 +374,9 @@ export const en = {
     created: 'Created: {{time}}',
     viewStatus: 'View Status',
     edit: 'Edit',
+    // The red button on a row that cancels the delivery. Not common.cancel, which backs out of a dialog:
+    // in Greek those are two different words.
+    cancel: 'Cancel',
     previous: 'Previous',
     next: 'Next',
     pageOf: 'Page {{page}} of {{total}}',

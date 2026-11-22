@@ -385,7 +385,7 @@ export default function DeliveriesPage() {
                             onClick={() => handleCancel(delivery.id)}
                             disabled={isCancelingThis}
                           >
-                            {t('common.cancel')}
+                            {t('orders.cancel')}
                           </Button>
                         </>
                       ) : null}

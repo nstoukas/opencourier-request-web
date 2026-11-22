@@ -358,6 +358,7 @@ export const el: Translations = {
     created: 'Δημιουργία: {{time}}',
     viewStatus: 'Προβολή κατάστασης',
     edit: 'Επεξεργασία',
+    cancel: 'Ακύρωση',
     previous: 'Προηγούμενη',
     next: 'Επόμενη',
     pageOf: 'Σελίδα {{page}} από {{total}}',
