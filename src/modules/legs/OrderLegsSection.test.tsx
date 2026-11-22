@@ -3,7 +3,7 @@
 // again, then a fresh price, then sends it with a new key); and Cancel all.
 import React from 'react'
 import '@testing-library/jest-dom'
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { OrderLegsSection } from './OrderLegsSection'
 import { cancelDelivery, createDelivery, fetchOrderLegs, requestQuote } from '../../api/manualRequestApi'
 import { legFixture } from './legFixtures'
@@ -319,6 +319,97 @@ describe('OrderLegsSection (spec 0046)', () => {
       })
 
       expect(within(section).queryByRole('button', { name: 'Cancel all legs' })).not.toBeInTheDocument()
+    })
+  })
+
+  // Row 10 review (decision OR.9): the order page reads the other legs through usePolledFetch every 30 s
+  // while the tab is visible, and hands the page each answer only if it holds this page's own leg.
+  describe('row 10 review (decision OR.9): 30 s polling of other legs and deliveryId guarding', () => {
+    beforeEach(() => {
+      jest.useFakeTimers()
+    })
+
+    afterEach(() => {
+      jest.clearAllTimers()
+      jest.useRealTimers()
+    })
+
+    it('polls fetchOrderLegs every 30 s, updating leg status and rider on screen', async () => {
+      const initialLegs = [
+        legFixture('del-1', 1, {
+          status: 'ACCEPTED',
+          courier: { id: 'c-1', firstName: 'Maria', lastName: 'Papadopoulou' },
+        }),
+        legFixture('del-2', 2, { status: 'ASSIGNING_COURIER' }),
+      ]
+      const updatedLegs = [
+        legFixture('del-1', 1, {
+          status: 'ACCEPTED',
+          courier: { id: 'c-1', firstName: 'Maria', lastName: 'Papadopoulou' },
+        }),
+        legFixture('del-2', 2, {
+          status: 'ACCEPTED',
+          courier: { id: 'c-2', firstName: 'Nikos', lastName: 'Galiss' },
+        }),
+      ]
+
+      ;(fetchOrderLegs as jest.Mock)
+        .mockResolvedValueOnce({ legs: initialLegs, missingLegNumbers: [] })
+        .mockResolvedValueOnce({ legs: updatedLegs, missingLegNumbers: [] })
+
+      render(<OrderLegsSection deliveryId="del-1" version={0} onChanged={onChanged} onLegs={onLegs} />)
+
+      // Initial load
+      await act(async () => {
+        await Promise.resolve()
+      })
+
+      expect(fetchOrderLegs).toHaveBeenCalledTimes(1)
+      expect(screen.getByText('Maria Papadopoulou')).toBeInTheDocument()
+      expect(screen.getByText('No rider yet')).toBeInTheDocument()
+      expect(onLegs).toHaveBeenCalledWith(initialLegs)
+
+      // Advance timers by 30 seconds to trigger polled fetch
+      await act(async () => {
+        jest.advanceTimersByTime(30_000)
+        await Promise.resolve()
+      })
+
+      expect(fetchOrderLegs).toHaveBeenCalledTimes(2)
+      // Screen now shows updated rider and status from the poll for leg 2
+      expect(screen.getByText('Nikos Galiss')).toBeInTheDocument()
+      expect(screen.queryByText('No rider yet')).not.toBeInTheDocument()
+      expect(onLegs).toHaveBeenCalledWith(updatedLegs)
+    })
+
+    it('does not call onLegs when the polled response does not hold the current deliveryId', async () => {
+      const initialLegs = [legFixture('del-1', 1), legFixture('del-2', 2)]
+      // A different order's legs that does not hold del-1 (e.g. race when switching legs)
+      const otherOrderLegs = [legFixture('del-other-1', 1), legFixture('del-other-2', 2)]
+
+      ;(fetchOrderLegs as jest.Mock)
+        .mockResolvedValueOnce({ legs: initialLegs, missingLegNumbers: [] })
+        .mockResolvedValueOnce({ legs: otherOrderLegs, missingLegNumbers: [] })
+
+      render(<OrderLegsSection deliveryId="del-1" version={0} onChanged={onChanged} onLegs={onLegs} />)
+
+      await act(async () => {
+        await Promise.resolve()
+      })
+
+      expect(fetchOrderLegs).toHaveBeenCalledTimes(1)
+      expect(onLegs).toHaveBeenCalledTimes(1)
+      expect(onLegs).toHaveBeenCalledWith(initialLegs)
+
+      // Poll lands with other order legs (not containing del-1)
+      await act(async () => {
+        jest.advanceTimersByTime(30_000)
+        await Promise.resolve()
+      })
+
+      expect(fetchOrderLegs).toHaveBeenCalledTimes(2)
+      // onLegs was NOT called with the foreign order
+      expect(onLegs).toHaveBeenCalledTimes(1)
     })
   })
 })

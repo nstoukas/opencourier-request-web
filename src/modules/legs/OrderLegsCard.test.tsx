@@ -81,6 +81,45 @@ describe('OrderLegsCard (spec 0046, AC-6)', () => {
     expect(screen.queryByText(/was never sent/)).not.toBeInTheDocument()
   })
 
+  // Row 10 review (decision OR.7): with a leg missing from the list, ready controls and Cancel all are
+  // omitted from the card to prevent partial cancel/ready actions that leave unlisted legs behind.
+  describe('missing legs and action controls on the card (decision OR.7)', () => {
+    it('when a leg is missing from this list, ready controls and Cancel all are hidden, and a prompt links to the order page', () => {
+      // Order with leg 1 present and open, but leg 2 missing from this list
+      renderOrder([legFixture('del-1', 1)])
+
+      // Ready controls and Cancel all are not offered on the card
+      expect(screen.queryByRole('button', { name: 'Cancel all legs' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Food ready' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: '+10' })).not.toBeInTheDocument()
+
+      // A prompt directs the restaurant to open the order page
+      const prompt = screen.getByTestId('order-legs-open-order')
+      expect(prompt).toHaveTextContent('To change the ready time or cancel, open the order.')
+      expect(within(prompt).getByRole('link', { name: 'open the order' })).toHaveAttribute(
+        'href',
+        '/manual-request/del-1/status',
+      )
+    })
+
+    it('when a leg is missing but the present legs are already ended, the prompt and action controls are not shown', () => {
+      // Order where leg 1 is already dropped off and leg 2 is missing
+      renderOrder([legFixture('del-1', 1, { status: 'DROPPED_OFF' })])
+
+      expect(screen.queryByTestId('order-legs-open-order')).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Cancel all legs' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Food ready' })).not.toBeInTheDocument()
+    })
+
+    it('when all legs are present, ready controls and Cancel all show normally', () => {
+      renderOrder([legFixture('del-1', 1), legFixture('del-2', 2)])
+
+      expect(screen.queryByTestId('order-legs-open-order')).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Food ready' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Cancel all legs' })).toBeInTheDocument()
+    })
+  })
+
   it('a complete order says nothing about a leg not in the list', () => {
     renderOrder([legFixture('del-1', 1), legFixture('del-2', 2)])
 
