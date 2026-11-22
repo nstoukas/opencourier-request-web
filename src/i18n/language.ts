@@ -17,7 +17,7 @@ export const LANGUAGE_COOKIE = 'oc_lang'
 const ONE_YEAR_SECONDS = 60 * 60 * 24 * 365
 
 // Each language's own name, written in that language, so a reader who cannot read the other one
-// still finds theirs. Deliberately not translated (decision 47.4).
+// still finds theirs. Deliberately not translated (decision 47.2).
 export const LANGUAGE_NAMES: Record<Language, string> = {
   el: 'Ελληνικά',
   en: 'English',
@@ -43,9 +43,22 @@ export function languageFromCookies(cookieHeader: string | undefined | null): La
   if (!cookieHeader) return DEFAULT_LANGUAGE
   for (const part of cookieHeader.split(';')) {
     const [name, ...rest] = part.trim().split('=')
-    if (name === LANGUAGE_COOKIE) return toLanguage(decodeURIComponent(rest.join('=')))
+    if (name === LANGUAGE_COOKIE) return toLanguage(decodeCookieValue(rest.join('=')))
   }
   return DEFAULT_LANGUAGE
+}
+
+/**
+ * Undoes the cookie's percent encoding. A broken value such as "%E0%A4%A" makes decodeURIComponent
+ * throw, and this runs on the server for every page, so a throw would answer 500 on every page until
+ * the cookie is cleared. Any broken value is simply not a language we know, so it reads as Greek.
+ */
+function decodeCookieValue(raw: string): string {
+  try {
+    return decodeURIComponent(raw)
+  } catch {
+    return DEFAULT_LANGUAGE
+  }
 }
 
 /** Saves the choice in the browser for a year, readable by the server on the next page load. */
