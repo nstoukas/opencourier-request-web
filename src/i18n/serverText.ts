@@ -13,6 +13,15 @@
 // and the dialogs, cards and sections that show a refusal), so that change is made in this file, plus
 // the `serverErrors` keys in both language files (decision 47.3). The function will then need `t`: its
 // callers all have one at hand.
+//
+// KNOWN GAP, wired with the codes (row 47 review, finding 4, ruled pre-existing): several places call
+// `serverMessage(err) ?? t(...)` with no status check, so a failure the server never answered (a
+// timeout, "Request failed (HTTP 500)", the proxy's "Backend unreachable.") shows our developer English
+// and the Greek fallback never appears. They are: deliveries/index.tsx (edit save, edit load, list
+// load), AvailabilityStrip, ReadyControls, OrderLegsSection, CancelOrderLegsDialog,
+// CancelDeliveryDialog, ReportProductCard, and CreateDeliveryForm's profile load line. When the codes land,
+// this function should return undefined for an error with no `statusCode` (or those places should use
+// restaurantErrorText, which already does), so only a real refusal's words reach the page.
 // ─────────────────────────────────────────────────────────────────────────────────────────────
 
 /** The shape a failed partner call throws (manualRequestFetch sets these). */
