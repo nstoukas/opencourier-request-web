@@ -82,8 +82,8 @@ export function ReadyControls({ deliveryId, order, onChanged, otherLegs = [] }: 
     <div className="space-y-2" data-testid="ready-controls">
       <p className="text-sm font-medium">
         {view === 'ready'
-          ? t('ready.foodReadyAt', { time: format.time(shown.foodReadyAt) })
-          : t('ready.readyAt', { time: format.time(shown.readyAt) })}
+          ? t('ready.foodReadyAt', { atTime: format.atTime(shown.foodReadyAt) })
+          : t('ready.readyAt', { atTime: format.atTime(shown.readyAt) })}
       </p>
       {view === 'actions' ? (
         <div className="flex flex-wrap gap-2">

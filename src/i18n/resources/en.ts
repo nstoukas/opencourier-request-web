@@ -20,6 +20,10 @@ export const en = {
     notifications: 'Notifications ({hotkey})',
     minutes_one: '{{count}} min',
     minutes_other: '{{count}} min',
+    // "at" before a time of day, through useFormat().atTime. Two keys because Greek uses another word at
+    // one o'clock ("στη 01:05", "στις 13:05"); English says "at" for both.
+    atTime: 'at {{time}}',
+    atOneOClock: 'at {{time}}',
   },
   language: {
     label: 'Language',
@@ -490,8 +494,8 @@ export const en = {
   ready: {
     changeFailed: 'The ready time could not be changed.',
     notChanged: 'not changed',
-    foodReadyAt: 'Food ready at {{time}}',
-    readyAt: 'Ready at {{time}}',
+    foodReadyAt: 'Food ready {{atTime}}',
+    readyAt: 'Ready {{atTime}}',
     foodReady: 'Food ready',
   },
   // A complaint about the rider on an order (spec 0052).

@@ -20,6 +20,8 @@ export const el: Translations = {
     notifications: 'Ειδοποιήσεις ({hotkey})',
     minutes_one: '{{count}} λεπτό',
     minutes_other: '{{count}} λεπτά',
+    atTime: 'στις {{time}}',
+    atOneOClock: 'στη {{time}}',
   },
   language: {
     label: 'Γλώσσα',
@@ -341,7 +343,7 @@ export const el: Translations = {
     editOrderReferencePlaceholder: 'π.χ. ORD-12345',
     editPickupNotesPlaceholder: 'Οδηγίες για τον διανομέα στην παραλαβή',
     editDropoffNotesPlaceholder: 'Οδηγίες για τον διανομέα στην παράδοση',
-    editReadyAt: 'Έτοιμο στις',
+    editReadyAt: 'Ώρα ετοιμότητας',
     saveChanges: 'Αποθήκευση αλλαγών',
     editLoadFailed: 'Τα στοιχεία της διανομής δεν φόρτωσαν.',
     documentTitle: 'Οι παραγγελίες μου · OpenCourier',
@@ -377,7 +379,7 @@ export const el: Translations = {
     retentionMonths_other: 'Τον βλέπει μόνο το κατάστημά σας. Διαγράφεται αν μείνει αχρησιμοποίητος {{count}} μήνες.',
     saveTick: 'Αποθήκευση του πελάτη για την επόμενη φορά (συμφώνησε)',
     usedAgo: 'χρησιμοποιήθηκε {{ago}}',
-    pinMovedByRider: 'Η πινέζα μετακινήθηκε από διανομέα στις',
+    pinMovedByRider: 'Η πινέζα μετακινήθηκε από διανομέα:',
     editNamed: 'Επεξεργασία: {{name}}',
     edit: 'Επεξεργασία',
     deleteNamed: 'Διαγραφή: {{name}}',
@@ -465,8 +467,8 @@ export const el: Translations = {
   ready: {
     changeFailed: 'Η ώρα ετοιμότητας δεν άλλαξε.',
     notChanged: 'δεν άλλαξε',
-    foodReadyAt: 'Φαγητό έτοιμο στις {{time}}',
-    readyAt: 'Έτοιμο στις {{time}}',
+    foodReadyAt: 'Φαγητό έτοιμο {{atTime}}',
+    readyAt: 'Έτοιμο {{atTime}}',
     foodReady: 'Φαγητό έτοιμο',
   },
   complaints: {
