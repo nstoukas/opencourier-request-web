@@ -7,7 +7,8 @@ import {
   fetchOrderComplaints,
   fileRiderComplaint,
 } from '../../api/complaintsApi'
-import { formatDateTime } from '../../utils/format'
+import { useTranslation } from 'react-i18next'
+import { useFormat } from '../../i18n/useFormat'
 import { restaurantErrorText } from '../../utils/restaurantError'
 import { COMPLAINT_TEXT, complaintCategoryLabel } from './complaintText'
 import { ChoicePills } from '../manual-request/components/ChoicePills'
@@ -26,24 +27,26 @@ type Props = {
 // One complaint the restaurant filed, with its outcome once there is one (AC-7). Never the rider's
 // reply and never who decided: the server does not send them.
 function ComplaintLine({ complaint }: { complaint: PartnerComplaint }) {
+  const { t } = useTranslation()
+  const format = useFormat()
   return (
     <li className="space-y-1 rounded-md border p-3" data-testid="order-complaint">
       <p className="text-sm font-medium">
-        {complaintCategoryLabel(complaint.category)}
+        {t(complaintCategoryLabel(complaint.category))}
         <span className="font-normal text-muted-foreground">
           {' · '}
-          {COMPLAINT_TEXT.filedOn} {formatDateTime(complaint.createdAt)}
+          {t(COMPLAINT_TEXT.filedOn)} {format.dateTime(complaint.createdAt)}
         </span>
       </p>
       <p className="whitespace-pre-wrap text-sm">{complaint.text}</p>
       {complaint.status === 'OPEN' ? (
-        <p className="text-sm text-muted-foreground">{COMPLAINT_TEXT.statusOpen}</p>
+        <p className="text-sm text-muted-foreground">{t(COMPLAINT_TEXT.statusOpen)}</p>
       ) : null}
       {complaint.status === 'DECIDED' ? (
         <div className="border-l-2 pl-3">
           <p className="text-sm font-medium">
-            {COMPLAINT_TEXT.statusDecided}
-            <span className="font-normal text-muted-foreground"> · {formatDateTime(complaint.decidedAt)}</span>
+            {t(COMPLAINT_TEXT.statusDecided)}
+            <span className="font-normal text-muted-foreground"> · {format.dateTime(complaint.decidedAt)}</span>
           </p>
           {complaint.outcome ? <p className="whitespace-pre-wrap text-sm">{complaint.outcome}</p> : null}
         </div>
@@ -51,8 +54,8 @@ function ComplaintLine({ complaint }: { complaint: PartnerComplaint }) {
       {complaint.status === 'WITHDRAWN' ? (
         <div className="border-l-2 pl-3">
           <p className="text-sm font-medium">
-            {COMPLAINT_TEXT.statusWithdrawn}
-            <span className="font-normal text-muted-foreground"> · {formatDateTime(complaint.withdrawnAt)}</span>
+            {t(COMPLAINT_TEXT.statusWithdrawn)}
+            <span className="font-normal text-muted-foreground"> · {format.dateTime(complaint.withdrawnAt)}</span>
           </p>
           {complaint.withdrawnReason ? (
             <p className="whitespace-pre-wrap text-sm">{complaint.withdrawnReason}</p>
@@ -67,6 +70,7 @@ function ComplaintLine({ complaint }: { complaint: PartnerComplaint }) {
 // order's rider and their outcomes, and the form to file one. The server decides whether one may be
 // filed (an order that never had a rider, an open complaint already), so a refusal shows its sentence.
 export function RiderComplaintSection({ deliveryId, status }: Props) {
+  const { t } = useTranslation()
   const [complaints, setComplaints] = useState<PartnerComplaint[] | null>(null)
   const [listError, setListError] = useState('')
   const [open, setOpen] = useState(false)
@@ -82,7 +86,7 @@ export function RiderComplaintSection({ deliveryId, status }: Props) {
       setListError('')
     } catch (err) {
       // A refusal's own sentence, else a plain one: never a timeout's or a 5xx's words (row 83 review).
-      setListError(restaurantErrorText(err, COMPLAINT_TEXT.listFailed))
+      setListError(restaurantErrorText(err, t(COMPLAINT_TEXT.listFailed)))
     }
   }, [deliveryId])
 
@@ -110,7 +114,7 @@ export function RiderComplaintSection({ deliveryId, status }: Props) {
       setText('')
       await load()
     } catch (err) {
-      setError(restaurantErrorText(err, COMPLAINT_TEXT.sendFailed))
+      setError(restaurantErrorText(err, t(COMPLAINT_TEXT.sendFailed)))
       // Row 83 review: the complaint may have been saved even so (a timeout after the server stored it,
       // or a 409 for one already open), so read the list again; an open one then hides the form.
       await load()
@@ -124,7 +128,7 @@ export function RiderComplaintSection({ deliveryId, status }: Props) {
       <Separator />
       <section className="space-y-3" data-testid="rider-complaint">
         <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          {COMPLAINT_TEXT.sectionTitle}
+          {t(COMPLAINT_TEXT.sectionTitle)}
         </h2>
         {listError ? <p className="text-sm text-muted-foreground">{listError}</p> : null}
         {complaints && complaints.length > 0 ? (
@@ -136,12 +140,12 @@ export function RiderComplaintSection({ deliveryId, status }: Props) {
         ) : null}
         {sent ? (
           <p role="status" className="text-sm font-medium">
-            {COMPLAINT_TEXT.sent}
+            {t(COMPLAINT_TEXT.sent)}
           </p>
         ) : null}
         {canFileNow && !hasOpen && !open ? (
           <div className="space-y-2">
-            <p className="text-sm text-muted-foreground">{COMPLAINT_TEXT.intro}</p>
+            <p className="text-sm text-muted-foreground">{t(COMPLAINT_TEXT.intro)}</p>
             <Button
               type="button"
               variant="outline"
@@ -151,7 +155,7 @@ export function RiderComplaintSection({ deliveryId, status }: Props) {
                 setSent(false)
               }}
             >
-              {COMPLAINT_TEXT.open}
+              {t(COMPLAINT_TEXT.open)}
             </Button>
           </div>
         ) : null}
@@ -160,14 +164,14 @@ export function RiderComplaintSection({ deliveryId, status }: Props) {
             {/* The order form's radio group (arrow keys move between choices, one tab stop), rather than
                 buttons that only claimed the radio role (row 83 review). */}
             <ChoicePills
-              label={COMPLAINT_TEXT.whatHappened}
-              options={RIDER_COMPLAINT_CATEGORIES.map((value) => ({ value, label: complaintCategoryLabel(value) }))}
+              label={t(COMPLAINT_TEXT.whatHappened)}
+              options={RIDER_COMPLAINT_CATEGORIES.map((value) => ({ value, label: t(complaintCategoryLabel(value)) }))}
               value={category ?? ''}
               onValueChange={(value) => setCategory(value as RiderComplaintCategory)}
             />
             <Textarea
-              aria-label={COMPLAINT_TEXT.textLabel}
-              placeholder={COMPLAINT_TEXT.textPlaceholder}
+              aria-label={t(COMPLAINT_TEXT.textLabel)}
+              placeholder={t(COMPLAINT_TEXT.textPlaceholder)}
               value={text}
               maxLength={COMPLAINT_TEXT_MAX_LENGTH}
               onChange={(event) => setText(event.target.value)}
@@ -182,7 +186,7 @@ export function RiderComplaintSection({ deliveryId, status }: Props) {
             ) : null}
             <div className="flex flex-wrap gap-2">
               <Button type="button" size="sm" disabled={!canSend} onClick={send}>
-                {COMPLAINT_TEXT.send}
+                {t(COMPLAINT_TEXT.send)}
               </Button>
               <Button
                 type="button"
@@ -194,7 +198,7 @@ export function RiderComplaintSection({ deliveryId, status }: Props) {
                   setError('')
                 }}
               >
-                {COMPLAINT_TEXT.cancel}
+                {t(COMPLAINT_TEXT.cancel)}
               </Button>
             </div>
           </div>

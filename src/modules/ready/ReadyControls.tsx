@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Button } from '../../admin-web-components'
 import { delayDeliveryReady, markDeliveryFoodReady } from '../../api/manualRequestApi'
-import { formatTime } from '../../utils/format'
+import { useFormat } from '../../i18n/useFormat'
+import { serverMessage } from '../../i18n/serverText'
 import { READY_DELAY_OPTIONS, ReadyFields, readyView } from './readyState'
 
 type Props = {
@@ -19,6 +21,8 @@ type ReadyAction = (deliveryId: string, readyAt: string | null) => Promise<Ready
 // Spec 0023 (AC-8): the ready time with "+5", "+10", "+15" and "Food ready". The answer of a tap is
 // shown at once, not at the next 30 s poll; a newer order from the page (a poll) replaces it.
 export function ReadyControls({ deliveryId, order, onChanged, otherLegs = [] }: Props) {
+  const { t } = useTranslation()
+  const format = useFormat()
   const [shown, setShown] = useState<ReadyFields>(order)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
@@ -49,7 +53,7 @@ export function ReadyControls({ deliveryId, order, onChanged, otherLegs = [] }: 
       const updated = await action(deliveryId, shown.readyAt)
       setShown({ status: updated.status, readyAt: updated.readyAt, foodReadyAt: updated.foodReadyAt })
     } catch (err: any) {
-      ownError = err?.message || 'The ready time could not be changed.'
+      ownError = serverMessage(err) || t('ready.changeFailed')
     }
     // Spec 0046: then each other leg, so the whole order moves together, even when the first refused (row 10
     // review). A leg that refuses (already picked up, say) is named; the others still go.
@@ -60,7 +64,7 @@ export function ReadyControls({ deliveryId, order, onChanged, otherLegs = [] }: 
         const updated = await action(leg.id, readyAtToSend(leg))
         answers[leg.id] = { pageHad: leg.readyAt, readyAt: updated.readyAt }
       } catch (legError: any) {
-        refused.push(`${leg.legLabel}: ${legError?.message || 'not changed'}`)
+        refused.push(`${leg.legLabel}: ${serverMessage(legError) || t('ready.notChanged')}`)
       }
     }
     // `{ ...a, ...b }` copies both objects into a new one, b's entries winning.
@@ -78,8 +82,8 @@ export function ReadyControls({ deliveryId, order, onChanged, otherLegs = [] }: 
     <div className="space-y-2" data-testid="ready-controls">
       <p className="text-sm font-medium">
         {view === 'ready'
-          ? `Food ready at ${formatTime(shown.foodReadyAt)}`
-          : `Ready at ${formatTime(shown.readyAt)}`}
+          ? t('ready.foodReadyAt', { time: format.time(shown.foodReadyAt) })
+          : t('ready.readyAt', { time: format.time(shown.readyAt) })}
       </p>
       {view === 'actions' ? (
         <div className="flex flex-wrap gap-2">
@@ -96,7 +100,7 @@ export function ReadyControls({ deliveryId, order, onChanged, otherLegs = [] }: 
             </Button>
           ))}
           <Button type="button" size="sm" disabled={sending} onClick={() => run((id) => markDeliveryFoodReady(id))}>
-            Food ready
+            {t('ready.foodReady')}
           </Button>
         </div>
       ) : null}

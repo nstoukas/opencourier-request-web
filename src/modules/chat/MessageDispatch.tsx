@@ -12,7 +12,11 @@ import {
   SheetTrigger,
   Textarea,
 } from '../../admin-web-components'
+import { useTranslation } from 'react-i18next'
 import { formatDateTime, formatTime } from '../../utils/format'
+import { useFormat } from '../../i18n/useFormat'
+import type { Language } from '../../i18n/language'
+import { serverMessage } from '../../i18n/serverText'
 import { orderCodeOf } from '../../utils/orderCode'
 import { chatSeenKey, hasUnseen, markSeen, newestFromDispatch, readChatSeen, type ChatSeen } from './chatSeen'
 
@@ -31,9 +35,9 @@ const MESSAGE_BOX_ID = 'dispatch-message'
 const athensDay = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Athens', year: 'numeric', month: '2-digit', day: '2-digit' })
 
 // Today's messages show the time; older ones the date too, since a thread lasts up to 90 days (AC-18).
-function stampOf(iso: string): string {
+function stampOf(iso: string, language: Language): string {
   const sameDay = athensDay.format(new Date(iso)) === athensDay.format(new Date())
-  return sameDay ? formatTime(iso) : formatDateTime(iso)
+  return sameDay ? formatTime(iso, language) : formatDateTime(iso, language)
 }
 
 function newClientMessageId(): string {
@@ -47,13 +51,14 @@ function newClientMessageId(): string {
 function refusalOf(error: unknown): string | undefined {
   const status = (error as { statusCode?: number } | null)?.statusCode
   if (typeof status !== 'number' || status < 400 || status >= 500 || status === 401) return undefined
-  return error instanceof Error && error.message ? error.message : undefined
+  return error instanceof Error ? serverMessage(error) : undefined
 }
 
 // Spec 0034 (chat), AC-14: Message Dispatch, in the signed in header. A side sheet with the restaurant's
 // one conversation with the co-op's dispatch. No presets: those are for riders on the road.
 // What is being sent lives here, not in the sheet, so closing the sheet never loses it (AC-19).
 export function MessageDispatch({ email = null }: { email?: string | null }) {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const seenKey = chatSeenKey(email)
   const [seen, setSeen] = useState<ChatSeen | null>(null)
@@ -82,7 +87,7 @@ export function MessageDispatch({ email = null }: { email?: string | null }) {
   const lastDispatchId = useRef<string | null>(null)
   useEffect(() => {
     if (open && lastDispatchId.current && newestDispatchId && newestDispatchId !== lastDispatchId.current) {
-      setAnnouncement('New message from Dispatch')
+      setAnnouncement(t('chat.newMessageAnnouncement'))
     }
     lastDispatchId.current = newestDispatchId
   }, [open, newestDispatchId])
@@ -128,10 +133,10 @@ export function MessageDispatch({ email = null }: { email?: string | null }) {
   const unseen = !open && hasUnseen(data, seen)
   const showDot = !open && (unseen || notSent)
   const buttonName = !open && notSent
-    ? 'Message Dispatch, a message was not sent'
+    ? t('chat.buttonNotSent')
     : unseen
-      ? 'Message Dispatch, new message'
-      : 'Message Dispatch'
+      ? t('chat.buttonNewMessage')
+      : t('chat.button')
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -139,7 +144,7 @@ export function MessageDispatch({ email = null }: { email?: string | null }) {
       <SheetTrigger asChild>
         <Button type="button" variant="ghost" className="relative shrink-0 px-3" aria-label={buttonName}>
           <ChatCircle aria-hidden="true" className="size-5 sm:mr-2 sm:size-4" />
-          <span className="hidden sm:inline">Message Dispatch</span>
+          <span className="hidden sm:inline">{t('chat.button')}</span>
           {showDot ? (
             <span aria-hidden="true" className="absolute right-1.5 top-1.5 size-2.5 rounded-full bg-destructive" />
           ) : null}
@@ -155,8 +160,8 @@ export function MessageDispatch({ email = null }: { email?: string | null }) {
         }}
       >
         <SheetHeader className="border-b p-4 text-left">
-          <SheetTitle>Dispatch</SheetTitle>
-          <SheetDescription>Write to the co-op&apos;s dispatch about an order or anything else.</SheetDescription>
+          <SheetTitle>{t('chat.dispatch')}</SheetTitle>
+          <SheetDescription>{t('chat.description')}</SheetDescription>
         </SheetHeader>
         <p role="status" aria-live="polite" className="sr-only">
           {announcement}
@@ -195,6 +200,7 @@ function Conversation({
   onSubmit: () => void
   onRetry: (item: Outgoing) => void
 }) {
+  const { t } = useTranslation()
   const endRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -211,14 +217,14 @@ function Conversation({
   return (
     <>
       <div className="flex-1 space-y-4 overflow-y-auto p-4">
-        {loading && !messages ? <p className="text-sm text-muted-foreground">Loading messages…</p> : null}
+        {loading && !messages ? <p className="text-sm text-muted-foreground">{t('chat.loading')}</p> : null}
         {failedToLoad ? (
           <p role="status" className="text-sm text-destructive">
-            Messages can&apos;t be reached right now. They will load again on their own.
+            {t('chat.unreachable')}
           </p>
         ) : null}
         {messages && messages.length === 0 && pending.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No messages yet. Dispatch reads every message here.</p>
+          <p className="text-sm text-muted-foreground">{t('chat.empty')}</p>
         ) : null}
         <ol className="space-y-4">
           {(messages ?? []).map((message) => (
@@ -237,11 +243,11 @@ function Conversation({
                     onClick={() => onRetry(item)}
                     className="min-h-8 px-1 text-xs font-medium text-destructive underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
-                    Not sent, tap to retry
+                    {t('chat.notSentRetry')}
                   </button>
                 </>
               ) : (
-                <span className="text-xs text-muted-foreground">Sending…</span>
+                <span className="text-xs text-muted-foreground">{t('bar.sending')}</span>
               )}
             </li>
           ))}
@@ -256,21 +262,21 @@ function Conversation({
         }}
       >
         <label htmlFor={MESSAGE_BOX_ID} className="sr-only">
-          Message to Dispatch
+          {t('chat.messageLabel')}
         </label>
         <Textarea
           id={MESSAGE_BOX_ID}
           value={text}
           onChange={(event) => onTextChange(event.target.value)}
           onKeyDown={onKeyDown}
-          placeholder="Write to Dispatch"
+          placeholder={t('chat.placeholder')}
           maxLength={CHAT_MESSAGE_MAX_LENGTH}
           rows={3}
           className="resize-none"
         />
         <div className="flex justify-end">
           <Button type="submit" disabled={text.trim().length === 0}>
-            Send
+            {t('chat.send')}
           </Button>
         </div>
       </form>
@@ -279,7 +285,9 @@ function Conversation({
 }
 
 function MessageItem({ message }: { message: ChatMessage }) {
-  const stamp = stampOf(message.createdAt)
+  const { t } = useTranslation()
+  const format = useFormat()
+  const stamp = stampOf(message.createdAt, format.language)
   // The order code the rider and dispatch also read (spec 0021), not the restaurant's free text reference.
   const code = orderCodeOf(message.deliveryId)
   const order = code ? ` · #${code}` : ''
@@ -297,12 +305,12 @@ function MessageItem({ message }: { message: ChatMessage }) {
       </p>
       <span className="text-xs text-muted-foreground">
         {/* "You" for a screen reader, so it can tell the restaurant's messages from dispatch's. */}
-        {mine ? <span className="sr-only">You, </span> : null}
+        {mine ? <span className="sr-only">{t('chat.you')}</span> : null}
         {/* AC-5: a restaurant sees dispatch as "Dispatch", never a person, whatever senderName says. */}
-        {mine ? stamp : `Dispatch · ${stamp}`}
+        {mine ? stamp : t('chat.fromDispatch', { stamp })}
         {order}
         {/* AC-6: "read" once any dispatcher opened the thread after it. */}
-        {mine && message.readByDispatch ? ' · read' : ''}
+        {mine && message.readByDispatch ? ` · ${t('chat.read')}` : ''}
       </span>
     </li>
   )

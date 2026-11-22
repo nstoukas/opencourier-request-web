@@ -1,14 +1,17 @@
 import React, { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Alert, AlertDescription, AlertTitle, Button } from '../../admin-web-components'
 import { clearPartnerBusy, pausePartner, resumePartner, setPartnerBusy } from '../../api/manualRequestApi'
 import { PartnerAvailability } from '../manual-request/types'
+import { serverMessage } from '../../i18n/serverText'
 
 const BUSY_OPTIONS = [5, 10, 15, 20, 30]
+// Each pause length with its label's translation key and the number it shows.
 const PAUSE_OPTIONS = [
-  { minutes: 15, label: '15 min' },
-  { minutes: 30, label: '30 min' },
-  { minutes: 60, label: '1 h' },
-  { minutes: 120, label: '2 h' },
+  { minutes: 15, labelKey: 'availability.pauseMinutes', count: 15 },
+  { minutes: 30, labelKey: 'availability.pauseMinutes', count: 30 },
+  { minutes: 60, labelKey: 'availability.pauseHours', count: 1 },
+  { minutes: 120, labelKey: 'availability.pauseHours', count: 2 },
 ]
 
 type Props = {
@@ -20,6 +23,7 @@ type Props = {
 // Spec 0029 (AC-8): busy mode and pause, on the order form page and on My Orders. The sentence why
 // ordering is off comes from the server, so it is the same words the refusal uses.
 export function AvailabilityStrip({ availability, onChanged }: Props) {
+  const { t } = useTranslation()
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
 
@@ -31,7 +35,7 @@ export function AvailabilityStrip({ availability, onChanged }: Props) {
     try {
       await request()
     } catch (err: any) {
-      setError(err?.message || 'That could not be changed.')
+      setError(serverMessage(err) || t('availability.changeFailed'))
     } finally {
       // Wait for the fresh availability before the buttons come back, so a second tap meets the new
       // state and does not record a second pause (Fable's review).
@@ -51,7 +55,7 @@ export function AvailabilityStrip({ availability, onChanged }: Props) {
     <div className="space-y-3" data-testid="availability-strip">
       {!availability.acceptingOrders && availability.notAcceptingReason ? (
         <Alert variant="destructive" role="status">
-          <AlertTitle>{disabled ? 'This restaurant is disabled' : 'Ordering is paused'}</AlertTitle>
+          <AlertTitle>{disabled ? t('availability.disabled') : t('availability.paused')}</AlertTitle>
           <AlertDescription>{availability.notAcceptingReason}</AlertDescription>
         </Alert>
       ) : null}
@@ -60,14 +64,14 @@ export function AvailabilityStrip({ availability, onChanged }: Props) {
         <div className="flex flex-wrap items-center gap-2">
           {busyOn ? (
             <>
-              <span className="text-sm font-medium">Busy mode: +{availability.busyExtraMinutes} min on new orders</span>
+              <span className="text-sm font-medium">{t('availability.busyOn', { minutes: availability.busyExtraMinutes })}</span>
               <Button type="button" variant="outline" size="sm" disabled={sending} onClick={() => run(clearPartnerBusy)}>
-                Stop busy
+                {t('availability.stopBusy')}
               </Button>
             </>
           ) : (
             <>
-              <span className="text-sm font-medium">Busy</span>
+              <span className="text-sm font-medium">{t('availability.busy')}</span>
               {BUSY_OPTIONS.map((minutes) => (
                 <Button
                   key={minutes}
@@ -89,11 +93,11 @@ export function AvailabilityStrip({ availability, onChanged }: Props) {
         <div className="flex flex-wrap items-center gap-2">
           {paused ? (
             <Button type="button" size="sm" disabled={sending} onClick={() => run(resumePartner)}>
-              Resume
+              {t('availability.resume')}
             </Button>
           ) : (
             <>
-              <span className="text-sm font-medium">Pause</span>
+              <span className="text-sm font-medium">{t('availability.pause')}</span>
               {PAUSE_OPTIONS.map((option) => (
                 <Button
                   key={option.minutes}
@@ -103,7 +107,7 @@ export function AvailabilityStrip({ availability, onChanged }: Props) {
                   disabled={sending}
                   onClick={() => run(() => pausePartner(option.minutes))}
                 >
-                  {option.label}
+                  {t(option.labelKey, { count: option.count })}
                 </Button>
               ))}
             </>

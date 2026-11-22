@@ -3,6 +3,7 @@ import * as ToastPrimitives from '@radix-ui/react-toast'
 import { cva, type VariantProps } from 'class-variance-authority'
 import { X } from '@phosphor-icons/react'
 import { cn } from '../../../../ui-shared-utils'
+import { SrOnlyClose } from '../../../../i18n/SrOnlyClose'
 
 const ToastProvider = ToastPrimitives.Provider
 
@@ -74,7 +75,7 @@ const ToastClose = React.forwardRef<
   >
     <X className="h-4 w-4" />
     {/* The icon is hidden from screen readers, so the button needs words of its own. */}
-    <span className="sr-only">Close</span>
+    <SrOnlyClose />
   </ToastPrimitives.Close>
 ))
 ToastClose.displayName = ToastPrimitives.Close.displayName
