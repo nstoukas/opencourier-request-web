@@ -1,5 +1,6 @@
 import { ReadyControls } from '../../../modules/ready/ReadyControls'
 import { ReportProductCard } from '../../../modules/product-report/ReportProductCard'
+import { RiderComplaintSection } from '../../../modules/complaints/RiderComplaintSection'
 import { useCallback, useState } from 'react'
 import { OrderLegsSection } from '../../../modules/legs/OrderLegsSection'
 import { legLabel } from '../../../modules/manual-request/utils/legs'
@@ -122,6 +123,10 @@ function PartnerDeliveryDetails({
           ]}
         />
       </section>
+
+      {/* Spec 0052 (row 83): the restaurant's complaints about this order's rider, with their outcomes, and the
+          form to file one once the order is delivered or cancelled. */}
+      <RiderComplaintSection deliveryId={data.id} status={data.status} />
 
       <Separator />
 
