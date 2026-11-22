@@ -56,7 +56,9 @@ export function SignInScreen({ onSignedIn, notice }: SignInScreenProps) {
   const { t } = useTranslation()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
+  // The error's translation key, not its words: translated where it is shown, so the language switch
+  // right above the card reaches an error already on screen.
+  const [errorKey, setErrorKey] = useState('')
   const [isSigningIn, setIsSigningIn] = useState(false)
 
   // `FormEvent` is the type of the event a <form> passes to onSubmit.
@@ -64,19 +66,19 @@ export function SignInScreen({ onSignedIn, notice }: SignInScreenProps) {
     // Stop the browser's own form post (a full page reload); we send the request ourselves.
     event.preventDefault()
     if (!email.trim() || !password) {
-      setError(t('signIn.missingFields'))
+      setErrorKey('signIn.missingFields')
       return
     }
 
     setIsSigningIn(true)
-    setError('')
+    setErrorKey('')
     try {
       await loginPartner(email.trim(), password)
       setPassword('')
       setIsSigningIn(false)
       onSignedIn()
     } catch (err) {
-      setError(t(signInErrorMessage(err)))
+      setErrorKey(signInErrorMessage(err))
       setIsSigningIn(false)
     }
   }
@@ -142,11 +144,11 @@ export function SignInScreen({ onSignedIn, notice }: SignInScreenProps) {
                 </Field>
               </FieldGroup>
 
-              {error ? (
+              {errorKey ? (
                 <Alert variant="destructive">
                   <XCircle className="size-4" />
                   <AlertTitle>{t('signIn.failedTitle')}</AlertTitle>
-                  <AlertDescription>{error}</AlertDescription>
+                  <AlertDescription>{t(errorKey)}</AlertDescription>
                 </Alert>
               ) : null}
 

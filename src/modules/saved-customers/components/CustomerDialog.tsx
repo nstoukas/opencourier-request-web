@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { WarningCircle } from '@phosphor-icons/react'
 import { useTranslation } from 'react-i18next'
 import { serverMessage } from '../../../i18n/serverText'
+import { isMessageKey, keyMessage, showMessage, textMessage, type ShownMessage } from '../../../i18n/shownMessage'
 import type { TFunction } from 'i18next'
 import {
   Alert,
@@ -138,7 +139,8 @@ export function CustomerDialog({ customer, onClose, onSaved, onGone }: CustomerD
   })
   const [isSaving, setIsSaving] = useState(false)
   // The dialog's refusal, already in words (a server sentence or a translated one).
-  const [error, setError] = useState<string | null>(null)
+  // A key or the server's words, translated where the alert shows it (src/i18n/shownMessage.ts).
+  const [error, setError] = useState<ShownMessage | null>(null)
 
   // The pin (spec 0016, AC-6): confirmed only while the form holds exactly the confirmed point and address.
   const latitude = form.watch('dropoffLatitude')
@@ -207,7 +209,7 @@ export function CustomerDialog({ customer, onClose, onSaved, onGone }: CustomerD
     }
     setConfirmedPin({ latitude, longitude, pinKey: currentPinKey })
     setPinMessage(null)
-    if (error === t(CONFIRM_PIN_MESSAGE)) setError(null)
+    if (isMessageKey(error, CONFIRM_PIN_MESSAGE)) setError(null)
   }
 
   const initialQuery = useMemo(() => customer?.formattedAddress ?? '', [customer])
@@ -215,7 +217,7 @@ export function CustomerDialog({ customer, onClose, onSaved, onGone }: CustomerD
   const save = async (values: DialogValues) => {
     // No save for a pin nobody checked on the map (spec 0016, AC-6). Save never looks an address up.
     if (!pinConfirmed) {
-      setError(t(CONFIRM_PIN_MESSAGE))
+      setError(keyMessage(CONFIRM_PIN_MESSAGE))
       return
     }
     setError(null)
@@ -243,12 +245,12 @@ export function CustomerDialog({ customer, onClose, onSaved, onGone }: CustomerD
         return
       }
       if (failure.statusCode === 409) {
-        setError(await clashMessage(values.phone, failure.conflictingCustomerId, t))
+        setError(await clashMessage(values.phone, failure.conflictingCustomerId))
         return
       }
       // A 422's message is a plain sentence written for the restaurant; anything else gets a general one.
       const refusal = failure.statusCode === 422 ? serverMessage(failure) : undefined
-      setError(refusal ?? t('customerDialog.saveFailed'))
+      setError(refusal ? textMessage(refusal) : keyMessage('customerDialog.saveFailed'))
     } finally {
       setIsSaving(false)
     }
@@ -369,7 +371,7 @@ export function CustomerDialog({ customer, onClose, onSaved, onGone }: CustomerD
             {error ? (
               <Alert variant="destructive">
                 <WarningCircle className="size-4" aria-hidden="true" />
-                <AlertDescription>{error}</AlertDescription>
+                <AlertDescription>{showMessage(error, t)}</AlertDescription>
               </Alert>
             ) : null}
 
@@ -390,18 +392,14 @@ export function CustomerDialog({ customer, onClose, onSaved, onGone }: CustomerD
 }
 
 // The 409's sentence: the other customer by name and phone when the list can find them (spec 0005).
-async function clashMessage(
-  typedPhone: string,
-  conflictingCustomerId: string | undefined,
-  t: TFunction,
-): Promise<string> {
-  const plain = t('customerDialog.phoneClash')
+async function clashMessage(typedPhone: string, conflictingCustomerId: string | undefined): Promise<ShownMessage> {
+  const plain = keyMessage('customerDialog.phoneClash')
   const digits = phoneSearchDigits(typedPhone)
   if (!conflictingCustomerId || digits.length < 2) return plain
   try {
     const result = await listSavedCustomers({ q: digits, perPage: 50 })
     const other = result.items.find((item) => item.id === conflictingCustomerId)
-    return other ? t('customerDialog.phoneClashNamed', { name: other.name, phone: other.phone }) : plain
+    return other ? keyMessage('customerDialog.phoneClashNamed', { name: other.name, phone: other.phone }) : plain
   } catch {
     return plain
   }

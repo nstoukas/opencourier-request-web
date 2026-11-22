@@ -31,6 +31,7 @@ import {
 import { PartnerDeliveryDto } from '../../../modules/manual-request/types'
 import { useFormat } from '../../../i18n/useFormat'
 import { serverMessage } from '../../../i18n/serverText'
+import { keyMessage, showMessage, textMessage, type ShownMessage } from '../../../i18n/shownMessage'
 import { PageHeader } from '../../../modules/portal/components/PortalFrame'
 import { CancelDeliveryDialog } from '../../../modules/cancel/CancelDeliveryDialog'
 import { OrderLegsCard } from '../../../modules/legs/OrderLegsCard'
@@ -74,16 +75,17 @@ function EditDialog({ delivery, onClose, onSaved }: EditDialogProps) {
   const [dropoffNotes, setDropoffNotes] = useState(delivery.dropoff?.dropoffNotes ?? '')
   const [dropoffReadyAt, setDropoffReadyAt] = useState(toDatetimeLocal(delivery.dropoffReadyAt))
   const [dropoffDeadlineAt, setDropoffDeadlineAt] = useState(toDatetimeLocal(delivery.dropoffDeadlineAt) || defaultDeadline())
-  const [error, setError] = useState('')
+  // A key or the server's words, translated where it is shown (src/i18n/shownMessage.ts).
+  const [error, setError] = useState<ShownMessage | null>(null)
 
   const [updateDelivery, { isLoading }] = useUpdateManualRequestDeliveryMutation()
 
   const handleSave = async () => {
-    setError('')
+    setError(null)
     const dropoffLat = delivery.dropoff?.latitude
     const dropoffLon = delivery.dropoff?.longitude
     if (dropoffLat == null || dropoffLon == null) {
-      setError(t('orders.editNoCoordinates'))
+      setError(keyMessage('orders.editNoCoordinates'))
       return
     }
     try {
@@ -101,7 +103,8 @@ function EditDialog({ delivery, onClose, onSaved }: EditDialogProps) {
       })
       onSaved()
     } catch (err: any) {
-      setError(serverMessage(err) ?? t('orders.editFailed'))
+      const refusal = serverMessage(err)
+      setError(refusal ? textMessage(refusal) : keyMessage('orders.editFailed'))
     }
   }
 
@@ -192,7 +195,7 @@ function EditDialog({ delivery, onClose, onSaved }: EditDialogProps) {
             </div>
           </div>
 
-          {error ? <p className="text-sm text-destructive">{error}</p> : null}
+          {error ? <p className="text-sm text-destructive">{showMessage(error, t)}</p> : null}
         </div>
 
         <DialogFooter>
@@ -224,7 +227,8 @@ export default function DeliveriesPage() {
   const [cancelingId, setCancelingId] = useState<string | null>(null)
   const [editingDelivery, setEditingDelivery] = useState<PartnerDeliveryDto | null>(null)
   const [loadingEditId, setLoadingEditId] = useState<string | null>(null)
-  const [statusMessage, setStatusMessage] = useState('')
+  // A key or the server's words, translated where it is shown (src/i18n/shownMessage.ts).
+  const [statusMessage, setStatusMessage] = useState<ShownMessage | null>(null)
 
   const handleEdit = async (deliveryId: string) => {
     setLoadingEditId(deliveryId)
@@ -232,14 +236,15 @@ export default function DeliveriesPage() {
       const full = await fetchPartnerDelivery(deliveryId)
       setEditingDelivery(full)
     } catch (err: any) {
-      setStatusMessage(serverMessage(err) ?? t('orders.editLoadFailed'))
+      const refusal = serverMessage(err)
+      setStatusMessage(refusal ? textMessage(refusal) : keyMessage('orders.editLoadFailed'))
     } finally {
       setLoadingEditId(null)
     }
   }
 
   const handleCancel = (deliveryId: string) => {
-    setStatusMessage('')
+    setStatusMessage(null)
     setCancelingId(deliveryId)
   }
 
@@ -398,7 +403,7 @@ export default function DeliveriesPage() {
         )}
 
         {statusMessage ? (
-          <p className="text-sm text-muted-foreground">{statusMessage}</p>
+          <p className="text-sm text-muted-foreground">{showMessage(statusMessage, t)}</p>
         ) : null}
 
         {pagination && pagination.totalPages > 1 ? (
@@ -432,7 +437,7 @@ export default function DeliveriesPage() {
           onClose={() => setEditingDelivery(null)}
           onSaved={() => {
             setEditingDelivery(null)
-            setStatusMessage(t('orders.updated'))
+            setStatusMessage(keyMessage('orders.updated'))
             refetch()
           }}
         />
@@ -444,7 +449,7 @@ export default function DeliveriesPage() {
           onClose={() => setCancelingId(null)}
           onCancelled={() => {
             setCancelingId(null)
-            setStatusMessage(t('orders.cancelled'))
+            setStatusMessage(keyMessage('orders.cancelled'))
             refetch()
           }}
         />
