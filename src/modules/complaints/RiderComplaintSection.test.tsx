@@ -104,14 +104,32 @@ describe('RiderComplaintSection (spec 0052, AC-3, AC-7)', () => {
       expect(screen.getByText(COMPLAINT_TEXT.statusOpen)).toBeInTheDocument()
     })
 
-    it('shows list error message when loading complaints fails', async () => {
+    it('shows server refusal sentence when loading complaints fails with a 4xx error (Ruling 1)', async () => {
+      // 4xx client errors (e.g. 404 order past retention) display the server's specific message
+      mockFetchOrderComplaints.mockRejectedValue({
+        statusCode: 404,
+        message: 'This order is older than 30 days and can no longer be viewed.',
+      })
+
+      render(<RiderComplaintSection deliveryId="del-err" status="DROPPED_OFF" />)
+
+      await waitFor(() =>
+        expect(
+          screen.getByText('This order is older than 30 days and can no longer be viewed.'),
+        ).toBeInTheDocument(),
+      )
+    })
+
+    it('shows fallback listFailed message when loading complaints fails with a network or 5xx error (Ruling 1)', async () => {
+      // Raw network errors or timeouts must not leak internal transport words to the restaurant
       mockFetchOrderComplaints.mockRejectedValue(new Error('Backend history unreachable'))
 
       render(<RiderComplaintSection deliveryId="del-err" status="DROPPED_OFF" />)
 
       await waitFor(() =>
-        expect(screen.getByText('Backend history unreachable')).toBeInTheDocument(),
+        expect(screen.getByText(COMPLAINT_TEXT.listFailed)).toBeInTheDocument(),
       )
+      expect(screen.queryByText('Backend history unreachable')).not.toBeInTheDocument()
     })
   })
 
@@ -385,9 +403,11 @@ describe('RiderComplaintSection (spec 0052, AC-3, AC-7)', () => {
       expect(screen.getByText('The soup container opened in bag')).toBeInTheDocument()
     })
 
-    it('displays backend error sentence when filing is refused', async () => {
-      // AC-3: e.g. 409 "This order had no rider" or 409 "One open complaint per filer per delivery"
-      mockFileRiderComplaint.mockRejectedValue(new Error('This order had no rider'))
+    it('displays backend error sentence when filing is refused with 4xx (Ruling 1)', async () => {
+      // AC-3 / Ruling 1: 409 "This order had no rider" or 409 "One open complaint per filer per delivery"
+      mockFileRiderComplaint.mockRejectedValue(
+        Object.assign(new Error('This order had no rider'), { statusCode: 409 }),
+      )
 
       render(<RiderComplaintSection deliveryId="del-1" status="DROPPED_OFF" />)
       await waitFor(() => fireEvent.click(screen.getByRole('button', { name: COMPLAINT_TEXT.open })))
@@ -404,6 +424,49 @@ describe('RiderComplaintSection (spec 0052, AC-3, AC-7)', () => {
       expect(screen.getByLabelText(COMPLAINT_TEXT.textLabel)).toBeInTheDocument()
     })
 
+    it('masks 5xx server errors and displays fallback sendFailed sentence (Ruling 1)', async () => {
+      // Ruling 1: live 502 Bad Gateway should show "The complaint could not be sent.", not raw error
+      mockFileRiderComplaint.mockRejectedValue({
+        statusCode: 502,
+        message: 'Backend unreachable.',
+      })
+
+      render(<RiderComplaintSection deliveryId="del-1" status="DROPPED_OFF" />)
+      await waitFor(() => fireEvent.click(screen.getByRole('button', { name: COMPLAINT_TEXT.open })))
+
+      fireEvent.click(screen.getByRole('radio', { name: 'Late' }))
+      fireEvent.change(screen.getByLabelText(COMPLAINT_TEXT.textLabel), {
+        target: { value: 'Order took 2 hours' },
+      })
+      fireEvent.click(screen.getByRole('button', { name: COMPLAINT_TEXT.send }))
+
+      const alert = await screen.findByRole('alert')
+      expect(alert).toHaveTextContent(COMPLAINT_TEXT.sendFailed)
+      expect(screen.queryByText('Backend unreachable.')).not.toBeInTheDocument()
+    })
+
+    it('masks client timeout errors and displays fallback sendFailed sentence (Ruling 1)', async () => {
+      // Ruling 1: 12s client timeout should show "The complaint could not be sent.", not timeout words
+      mockFileRiderComplaint.mockRejectedValue(
+        new Error('Request timed out after 12s. Check backend availability and token.'),
+      )
+
+      render(<RiderComplaintSection deliveryId="del-1" status="DROPPED_OFF" />)
+      await waitFor(() => fireEvent.click(screen.getByRole('button', { name: COMPLAINT_TEXT.open })))
+
+      fireEvent.click(screen.getByRole('radio', { name: 'Late' }))
+      fireEvent.change(screen.getByLabelText(COMPLAINT_TEXT.textLabel), {
+        target: { value: 'Order took 2 hours' },
+      })
+      fireEvent.click(screen.getByRole('button', { name: COMPLAINT_TEXT.send }))
+
+      const alert = await screen.findByRole('alert')
+      expect(alert).toHaveTextContent(COMPLAINT_TEXT.sendFailed)
+      expect(
+        screen.queryByText(/Request timed out after 12s/),
+      ).not.toBeInTheDocument()
+    })
+
     it('falls back to default sendFailed message when backend error has no message', async () => {
       mockFileRiderComplaint.mockRejectedValue({})
 
@@ -418,6 +481,79 @@ describe('RiderComplaintSection (spec 0052, AC-3, AC-7)', () => {
 
       const alert = await screen.findByRole('alert')
       expect(alert).toHaveTextContent(COMPLAINT_TEXT.sendFailed)
+    })
+
+    it('rereads complaints list after a failed send (Ruling 2)', async () => {
+      // Initial load: 1 fetch. On failed send: load() is called in catch block -> 2 fetches total.
+      mockFileRiderComplaint.mockRejectedValue({
+        statusCode: 502,
+        message: 'Backend unreachable.',
+      })
+
+      render(<RiderComplaintSection deliveryId="del-1" status="DROPPED_OFF" />)
+      await waitFor(() => fireEvent.click(screen.getByRole('button', { name: COMPLAINT_TEXT.open })))
+      expect(mockFetchOrderComplaints).toHaveBeenCalledTimes(1)
+
+      fireEvent.click(screen.getByRole('radio', { name: 'Late' }))
+      fireEvent.change(screen.getByLabelText(COMPLAINT_TEXT.textLabel), {
+        target: { value: 'Delivery delayed' },
+      })
+      fireEvent.click(screen.getByRole('button', { name: COMPLAINT_TEXT.send }))
+
+      await screen.findByRole('alert')
+      // Ruling 2: fetchOrderComplaints must be called again in catch block
+      expect(mockFetchOrderComplaints).toHaveBeenCalledTimes(2)
+    })
+
+    it('updates complaints list when a failed send (e.g. timeout or 409) reloads a saved open complaint (Ruling 2)', async () => {
+      // Ruling 2: If POST timed out after the backend saved it, or returned 409 because one is open,
+      // rereading the list brings the open complaint into the list on screen.
+      const savedComplaint: PartnerComplaint = {
+        id: 'c-saved-1',
+        deliveryId: 'del-1',
+        category: 'LATE',
+        text: 'Courier arrived 40 min late',
+        status: 'OPEN',
+        createdAt: '2026-11-22T04:00:00Z',
+        outcome: null,
+        decidedAt: null,
+        withdrawnReason: null,
+        withdrawnAt: null,
+      }
+
+      mockFetchOrderComplaints
+        .mockResolvedValueOnce([]) // initial load: empty
+        .mockResolvedValueOnce([savedComplaint]) // reload in catch block: complaint was actually saved
+
+      mockFileRiderComplaint.mockRejectedValue(
+        new Error('Request timed out after 12s. Check backend availability and token.'),
+      )
+
+      render(<RiderComplaintSection deliveryId="del-1" status="DROPPED_OFF" />)
+      await waitFor(() => fireEvent.click(screen.getByRole('button', { name: COMPLAINT_TEXT.open })))
+
+      fireEvent.click(screen.getByRole('radio', { name: 'Late' }))
+      fireEvent.change(screen.getByLabelText(COMPLAINT_TEXT.textLabel), {
+        target: { value: 'Courier arrived 40 min late' },
+      })
+      fireEvent.click(screen.getByRole('button', { name: COMPLAINT_TEXT.send }))
+
+      // Shows fallback error message while form stays open so restaurant sees failure alert
+      const alert = await screen.findByRole('alert')
+      expect(alert).toHaveTextContent(COMPLAINT_TEXT.sendFailed)
+      expect(screen.getByLabelText(COMPLAINT_TEXT.textLabel)).toBeInTheDocument()
+
+      // Complaints list was reloaded and now renders the open complaint
+      expect(mockFetchOrderComplaints).toHaveBeenCalledTimes(2)
+      await waitFor(() => {
+        const item = screen.getByTestId('order-complaint')
+        expect(within(item).getByText('Courier arrived 40 min late')).toBeInTheDocument()
+      })
+
+      // Once user cancels form, hasOpen prevents the "Complain about the rider" button from re-appearing
+      fireEvent.click(screen.getByRole('button', { name: COMPLAINT_TEXT.cancel }))
+      expect(screen.queryByLabelText(COMPLAINT_TEXT.textLabel)).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: COMPLAINT_TEXT.open })).not.toBeInTheDocument()
     })
   })
 
