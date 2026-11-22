@@ -1,3 +1,4 @@
+import { createI18n } from '../../../i18n/createI18n'
 import {
   addressPinKey,
   hasValidCoordinates,
@@ -7,6 +8,8 @@ import {
   GEOCODE_TIMEOUT_MS,
   GeocodableAddress,
 } from './geocode'
+
+const t = createI18n('en').t
 
 describe('geocode utils', () => {
   const originalFetch = global.fetch
@@ -192,7 +195,8 @@ describe('geocode utils', () => {
         formattedAddress: null,
         message: ADDRESS_NOT_FOUND_ON_MAP,
       })
-      expect(ADDRESS_NOT_FOUND_ON_MAP).toBe("Address not found. Move the map to the customer's entrance.")
+      expect(ADDRESS_NOT_FOUND_ON_MAP).toBe('pin.notFound')
+      expect(t(ADDRESS_NOT_FOUND_ON_MAP)).toBe("Address not found. Move the map to the customer's entrance.")
     })
 
     it('on TimeoutError: returns the plain sentence "The address lookup did not answer. Try again, or search the address and pick a result."', async () => {
@@ -203,8 +207,11 @@ describe('geocode utils', () => {
       const result = await lookUpPinForAddress(address, nearPoint, fallbackPoint)
 
       expect(result).toEqual({
-        error: 'The address lookup did not answer. Try again, or search the address and pick a result.',
+        error: 'pin.lookupTimedOut',
       })
+      expect(t((result as { error: string }).error)).toBe(
+        'The address lookup did not answer. Try again, or search the address and pick a result.',
+      )
     })
 
     it('on another error: returns the plain sentence "The address lookup failed. Check your connection and try again."', async () => {
@@ -214,8 +221,11 @@ describe('geocode utils', () => {
       const result = await lookUpPinForAddress(address, nearPoint, fallbackPoint)
 
       expect(result).toEqual({
-        error: 'The address lookup failed. Check your connection and try again.',
+        error: 'pin.lookupFailed',
       })
+      expect(t((result as { error: string }).error)).toBe(
+        'The address lookup failed. Check your connection and try again.',
+      )
     })
   })
 })

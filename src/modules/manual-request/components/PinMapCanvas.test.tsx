@@ -16,6 +16,7 @@ jest.mock('react-leaflet', () => ({
     <div data-testid="mock-map-container">{children}</div>
   ),
   TileLayer: () => <div data-testid="mock-tile-layer" />,
+  ZoomControl: () => <div data-testid="mock-zoom-control" />,
   useMap: () => mockMap,
   useMapEvents: (handlers: { moveend?: () => void }) => {
     if (handlers.moveend) {

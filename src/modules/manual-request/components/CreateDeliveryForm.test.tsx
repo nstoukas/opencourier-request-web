@@ -26,6 +26,9 @@ import {
   RIDER_NOTE_MAX,
   VOLOS_CENTRE,
 } from '../utils/orderForm'
+import { createI18n } from '../../../i18n/createI18n'
+
+const t = createI18n('en').t
 
 const actualGeocode = jest.requireActual('../utils/geocode')
 
@@ -780,7 +783,7 @@ describe('CreateDeliveryForm (spec 0006 & spec 0016)', () => {
       // Do NOT confirm pin, click Get price
       fireEvent.click(screen.getByRole('button', { name: 'Get price' }))
 
-      expect(await screen.findByText(CONFIRM_PIN_MESSAGE)).toBeInTheDocument()
+      expect(await screen.findByText(t(CONFIRM_PIN_MESSAGE))).toBeInTheDocument()
       expect(mockCreateQuote).not.toHaveBeenCalled()
     })
 
@@ -879,7 +882,7 @@ describe('CreateDeliveryForm (spec 0006 & spec 0016)', () => {
 
       fireEvent.click(screen.getByRole('button', { name: 'Show on map' }))
 
-      expect(await screen.findByText(ADDRESS_NOT_FOUND_ON_MAP)).toBeInTheDocument()
+      expect(await screen.findByText(t(ADDRESS_NOT_FOUND_ON_MAP))).toBeInTheDocument()
       const canvas = screen.getByTestId('mock-pin-map-canvas')
       expect(canvas).toHaveAttribute(
         'data-center',
@@ -912,7 +915,7 @@ describe('CreateDeliveryForm (spec 0006 & spec 0016)', () => {
       fireEvent.change(screen.getByLabelText(/Town/i), { target: { value: 'Volos' } })
       fireEvent.click(screen.getByRole('button', { name: 'Show on map' }))
 
-      expect(await screen.findByText(ADDRESS_NOT_FOUND_ON_MAP)).toBeInTheDocument()
+      expect(await screen.findByText(t(ADDRESS_NOT_FOUND_ON_MAP))).toBeInTheDocument()
       expect(screen.getByTestId('mock-pin-map-canvas')).toHaveAttribute(
         'data-center',
         JSON.stringify(VOLOS_CENTRE),
@@ -983,7 +986,7 @@ describe('CreateDeliveryForm (spec 0006 & spec 0016)', () => {
       })
 
       fireEvent.click(screen.getByRole('button', { name: 'Show on map' }))
-      expect(await screen.findByText(ADDRESS_NOT_FOUND_ON_MAP)).toBeInTheDocument()
+      expect(await screen.findByText(t(ADDRESS_NOT_FOUND_ON_MAP))).toBeInTheDocument()
 
       // Move map and confirm
       fireEvent.click(screen.getByTestId('mock-pin-map-canvas'))
@@ -1000,12 +1003,12 @@ describe('CreateDeliveryForm (spec 0006 & spec 0016)', () => {
 
       const deliveryPayload = mockConfirmDelivery.mock.calls[0][0]
       // Formatted address is built from the new typed street, NEVER carrying the old "Iasonos 10" text!
-      expect(deliveryPayload.dropoffAddress.formattedAddress).toBe('Kartali 5, Volos, GR')
+      expect(deliveryPayload.dropoffAddress.formattedAddress).toBe('Kartali 5, Volos')
       expect(deliveryPayload.dropoffAddress.formattedAddress).not.toContain('Iasonos 10')
       expect(deliveryPayload.dropoffAddress.streetAddress[0]).toBe('Kartali 5')
 
       const savedFields = (saveCustomerAfterOrder as jest.Mock).mock.calls[0][0].fields
-      expect(savedFields.formattedAddress).toBe('Kartali 5, Volos, GR')
+      expect(savedFields.formattedAddress).toBe('Kartali 5, Volos')
       expect(savedFields.formattedAddress).not.toContain('Iasonos 10')
       expect(savedFields.addressLine1).toBe('Kartali 5')
     })
@@ -1071,7 +1074,7 @@ describe('CreateDeliveryForm (spec 0006 & spec 0016)', () => {
       // Tap confirm before moving map
       fireEvent.click(confirmBtn)
 
-      expect(await screen.findByText(MOVE_FALLBACK_FIRST)).toBeInTheDocument()
+      expect(await screen.findByText(t(MOVE_FALLBACK_FIRST))).toBeInTheDocument()
       expect(screen.queryByText('Pin confirmed')).not.toBeInTheDocument()
 
       // Move the map
@@ -1080,7 +1083,7 @@ describe('CreateDeliveryForm (spec 0006 & spec 0016)', () => {
       // Now tap confirm: succeeds
       fireEvent.click(confirmBtn)
       expect(await screen.findByText('Pin confirmed')).toBeInTheDocument()
-      expect(screen.queryByText(MOVE_FALLBACK_FIRST)).not.toBeInTheDocument()
+      expect(screen.queryByText(t(MOVE_FALLBACK_FIRST))).not.toBeInTheDocument()
     })
   })
 
@@ -1368,7 +1371,7 @@ describe('CreateDeliveryForm (spec 0006 & spec 0016)', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Send order' }))
 
       await waitFor(() => {
-        expect(screen.getByRole('alert')).toHaveTextContent('Network connection dropped')
+        expect(screen.getByRole('alert')).toHaveTextContent(t('form.sendFailed'))
       })
       expect(screen.getByRole('button', { name: 'Send order' })).toBeInTheDocument()
 

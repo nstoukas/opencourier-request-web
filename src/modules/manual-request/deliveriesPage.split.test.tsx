@@ -13,6 +13,9 @@ import {
 } from '../../api/manualRequestApi'
 import { legFixture } from '../legs/legFixtures'
 import { SPLIT_CHARGE_NOTE, SPLIT_LEG_COST_NOTE, SPLIT_LEG_ENDED_NOTE } from '../legs/splitOutcome'
+import { createI18n } from '../../i18n/createI18n'
+
+const t = createI18n('en').t
 
 jest.mock('next/head', () => ({
   __esModule: true,
@@ -124,9 +127,9 @@ describe('My Orders after a split at pickup (spec 0047, AC-8, AC-10)', () => {
   // delivery the split made shows no cost (spec 0047 cross check 5 for one that ended).
   describe('what the split costs the restaurant (decision 11.10)', () => {
     // The sentences are worded once, in splitOutcome.ts (its own test pins them); a page must show that one.
-    const CHARGE_NOTE = SPLIT_CHARGE_NOTE
-    const COST_0_NOTE = SPLIT_LEG_COST_NOTE
-    const ENDED_NOTE = SPLIT_LEG_ENDED_NOTE
+    const CHARGE_NOTE = t(SPLIT_CHARGE_NOTE)
+    const COST_0_NOTE = t(SPLIT_LEG_COST_NOTE)
+    const ENDED_NOTE = t(SPLIT_LEG_ENDED_NOTE)
 
     // A split delivery the list shows as a row of its own, not inside an order card: the list only makes a
     // card when a delivery carries its order's reference, so this one has none.

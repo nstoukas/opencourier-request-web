@@ -4,8 +4,8 @@ import { buildManualRequestFormattedAddress } from './index'
 // field is optional/nullable. These cases pin that: half-filled input must format what
 // is there rather than fail.
 
-describe('buildManualRequestFormattedAddress', () => {
-  it('builds a full line from all the parts', () => {
+describe('buildManualRequestFormattedAddress (Greek address order, row 47, decision 47.8)', () => {
+  it('builds a full line in Greek order (street and house, postcode town, state, omitting GR country)', () => {
     expect(
       buildManualRequestFormattedAddress({
         houseNumber: '12',
@@ -15,7 +15,20 @@ describe('buildManualRequestFormattedAddress', () => {
         zipCode: '38221',
         countryCode: 'GR',
       }),
-    ).toBe('12 Iasonos, Volos, Thessaly, 38221 GR')
+    ).toBe('12 Iasonos, 38221 Volos, Thessaly')
+  })
+
+  it('includes country when it is not GR', () => {
+    expect(
+      buildManualRequestFormattedAddress({
+        houseNumber: '12',
+        streetAddress: ['Iasonos'],
+        city: 'Volos',
+        state: 'Thessaly',
+        zipCode: '38221',
+        countryCode: 'CY',
+      }),
+    ).toBe('12 Iasonos, 38221 Volos, Thessaly, CY')
   })
 
   it('does not repeat the house number when the street already starts with it', () => {
@@ -31,7 +44,11 @@ describe('buildManualRequestFormattedAddress', () => {
   it('formats a half-filled address instead of failing', () => {
     expect(
       buildManualRequestFormattedAddress({ city: 'Volos', countryCode: 'GR' }),
-    ).toBe('Volos, GR')
+    ).toBe('Volos')
+
+    expect(
+      buildManualRequestFormattedAddress({ city: 'Volos', countryCode: 'FR' }),
+    ).toBe('Volos, FR')
   })
 
   it('accepts nulls for every field', () => {

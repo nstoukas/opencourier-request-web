@@ -99,7 +99,7 @@ describe('order page item marks (spec 0028 AC-6)', () => {
     const souvlaki = rowOf('Souvlaki')
     expect(within(souvlaki).queryByText('Drink')).not.toBeInTheDocument()
     expect(within(souvlaki).queryByText('Side')).not.toBeInTheDocument()
-    expect(souvlaki).toHaveTextContent('Souvlaki×2 · LARGE')
+    expect(souvlaki).toHaveTextContent('Souvlaki×2 · Large')
   })
 
   it("an old order (today's single Package item) looks as today: no badge anywhere", () => {
@@ -107,7 +107,7 @@ describe('order page item marks (spec 0028 AC-6)', () => {
 
     expect(screen.getByText('Items')).toBeInTheDocument()
     const row = rowOf('Package')
-    expect(row).toHaveTextContent('Package×1 · SMALL')
+    expect(row).toHaveTextContent('Package×1 · Small')
     expect(screen.queryByText('Drink')).not.toBeInTheDocument()
     expect(screen.queryByText('Side')).not.toBeInTheDocument()
     // The name span holds only the name.

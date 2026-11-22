@@ -7,6 +7,9 @@ import { groupHistory } from '../manual-request/utils/legs'
 import { PartnerDeliveryDto } from '../manual-request/types'
 import { legFixture } from './legFixtures'
 import { SPLIT_CHARGE_NOTE } from './splitOutcome'
+import { createI18n } from '../../i18n/createI18n'
+
+const t = createI18n('en').t
 
 jest.mock('../../api/manualRequestApi', () => ({
   cancelDelivery: jest.fn(),
@@ -142,14 +145,14 @@ describe('OrderLegsCard after a split at pickup (spec 0047, AC-10)', () => {
       legFixture('del-new', 2, { splitOutcome: 'SPLIT', totalCost: 0 }),
     ])
 
-    expect(screen.getByText(/Cost:/).textContent?.replace(/ /g, ' ')).toBe('Cost: 3,56 €')
+    expect(screen.getByText(/Cost:/).textContent?.replace(/ /g, ' ')).toBe('Cost: €3.56')
   })
 
   // Decision 11.10 (operator, 2026-11-21): the card says a split brings a charge. Cross check 11: the charge
   // itself stays on the co-op's statement, so the card shows the sentence and no amount.
   describe('what the split costs the restaurant (decision 11.10)', () => {
     // Worded once, in splitOutcome.ts (its own test pins the sentence).
-    const CHARGE_NOTE = SPLIT_CHARGE_NOTE
+    const CHARGE_NOTE = t(SPLIT_CHARGE_NOTE)
 
     it('says the charge note once, right under the split line', () => {
       renderOrder([

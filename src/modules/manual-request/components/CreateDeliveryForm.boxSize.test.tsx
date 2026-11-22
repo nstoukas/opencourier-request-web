@@ -20,6 +20,9 @@ import { useRequestPageNavigator } from '../../../hooks/useRequestPageNavigator'
 import { ManualRequestPackageSize, PartnerProfileDto } from '../types'
 import { saveCustomerAfterOrder } from '../../saved-customers/utils/saveAfterOrder'
 import { useSavedCustomerSearch } from '../../saved-customers/hooks/useSavedCustomerSearch'
+import { createI18n } from '../../../i18n/createI18n'
+
+const t = createI18n('en').t
 
 // Mock PinMapCanvas because react-leaflet ESM is not imported in JSDOM
 jest.mock('./PinMapCanvas', () => ({
@@ -156,7 +159,7 @@ describe('CreateDeliveryForm box size (spec 0043, row 9, AC-4)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Get price' }))
 
     // Refusal sentence shown
-    expect(await screen.findByText(BOX_SIZE_REQUIRED)).toBeInTheDocument()
+    expect(await screen.findByText(t(BOX_SIZE_REQUIRED))).toBeInTheDocument()
     expect(screen.getByText('Choose the box size')).toBeInTheDocument()
 
     // No quote requested
@@ -266,6 +269,11 @@ describe('CreateDeliveryForm box size (spec 0043, row 9, AC-4)', () => {
 
   it('BOX_SIZE_DESCRIPTIONS exports the fixed strings for all three sizes in order', () => {
     expect(BOX_SIZE_DESCRIPTIONS).toEqual([
+      { size: ManualRequestPackageSize.SMALL, text: 'form.sizeSmallHint' },
+      { size: ManualRequestPackageSize.MEDIUM, text: 'form.sizeMediumHint' },
+      { size: ManualRequestPackageSize.LARGE, text: 'form.sizeLargeHint' },
+    ])
+    expect(BOX_SIZE_DESCRIPTIONS.map((d) => ({ size: d.size, text: t(d.text) }))).toEqual([
       { size: ManualRequestPackageSize.SMALL, text: 'Small: one meal or a coffee' },
       { size: ManualRequestPackageSize.MEDIUM, text: 'Medium: a full bag' },
       { size: ManualRequestPackageSize.LARGE, text: 'Large: fills the box' },

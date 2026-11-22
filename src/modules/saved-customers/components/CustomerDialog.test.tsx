@@ -18,6 +18,9 @@ import {
 } from '../../../api/savedCustomersApi'
 import type { SavedCustomer } from '../types'
 import { FLOOR_MAX, DOORBELL_MAX } from '../../manual-request/utils/orderForm'
+import { createI18n } from '../../../i18n/createI18n'
+
+const t = createI18n('en').t
 
 // Mock geocode utilities
 jest.mock('../../manual-request/utils/geocode', () => {
@@ -94,7 +97,7 @@ describe('CustomerDialog (spec 0016, AC-1, AC-3, AC-6 & review fixes)', () => {
     // Save attempted without map pin
     fireEvent.click(screen.getByRole('button', { name: /^Save$/i }))
 
-    expect(await screen.findByText(CONFIRM_PIN_MESSAGE)).toBeInTheDocument()
+    expect(await screen.findByText(t(CONFIRM_PIN_MESSAGE))).toBeInTheDocument()
     expect(addSavedCustomer).not.toHaveBeenCalled()
     expect(geocodeCoordinatesFromAddress).not.toHaveBeenCalled()
 
@@ -113,7 +116,7 @@ describe('CustomerDialog (spec 0016, AC-1, AC-3, AC-6 & review fixes)', () => {
 
     // Save still refused before clicking confirm
     fireEvent.click(screen.getByRole('button', { name: /^Save$/i }))
-    expect(await screen.findByText(CONFIRM_PIN_MESSAGE)).toBeInTheDocument()
+    expect(await screen.findByText(t(CONFIRM_PIN_MESSAGE))).toBeInTheDocument()
     expect(addSavedCustomer).not.toHaveBeenCalled()
 
     // Confirm the pin
@@ -215,7 +218,7 @@ describe('CustomerDialog (spec 0016, AC-1, AC-3, AC-6 & review fixes)', () => {
 
     // Attempt Save: refused
     fireEvent.click(screen.getByRole('button', { name: /^Save$/i }))
-    expect(await screen.findByText(CONFIRM_PIN_MESSAGE)).toBeInTheDocument()
+    expect(await screen.findByText(t(CONFIRM_PIN_MESSAGE))).toBeInTheDocument()
     expect(updateSavedCustomer).not.toHaveBeenCalled()
 
     // Lookup not found path (item 8: stale address text cleared)
@@ -228,7 +231,7 @@ describe('CustomerDialog (spec 0016, AC-1, AC-3, AC-6 & review fixes)', () => {
     fireEvent.click(showOnMapBtn)
 
     // Map opens at fallback with ADDRESS_NOT_FOUND_ON_MAP
-    expect(await screen.findByText(ADDRESS_NOT_FOUND_ON_MAP)).toBeInTheDocument()
+    expect(await screen.findByText(t(ADDRESS_NOT_FOUND_ON_MAP))).toBeInTheDocument()
 
     // Move map
     fireEvent.click(screen.getByTestId('mock-pin-map-canvas'))
@@ -327,7 +330,7 @@ describe('CustomerDialog (spec 0016, AC-1, AC-3, AC-6 & review fixes)', () => {
     // Click confirm before moving the map
     fireEvent.click(confirmBtn)
 
-    expect(await screen.findByText(MOVE_FALLBACK_FIRST)).toBeInTheDocument()
+    expect(await screen.findByText(t(MOVE_FALLBACK_FIRST))).toBeInTheDocument()
     expect(screen.queryByText('Pin confirmed')).not.toBeInTheDocument()
 
     // Move the map
@@ -336,7 +339,7 @@ describe('CustomerDialog (spec 0016, AC-1, AC-3, AC-6 & review fixes)', () => {
     // Now confirm succeeds
     fireEvent.click(confirmBtn)
     expect(await screen.findByText('Pin confirmed')).toBeInTheDocument()
-    expect(screen.queryByText(MOVE_FALLBACK_FIRST)).not.toBeInTheDocument()
+    expect(screen.queryByText(t(MOVE_FALLBACK_FIRST))).not.toBeInTheDocument()
   })
 
   it('item 11: Floor and Name on the doorbell show LimitCounter and refuse lengths over limits', async () => {

@@ -1,6 +1,7 @@
 // Spec 0046 (row 10): multi leg orders, the pure rules the order form, the order page and the history share.
 // Written from the spec's acceptance criteria and its "Cross check" section (which wins where they differ),
 // by a Fable subagent standing in for agy (decision R.25).
+import { createI18n } from '../../../i18n/createI18n'
 import {
   BOX_COUNTS,
   MAX_BOXES,
@@ -63,29 +64,39 @@ describe('multi leg orders: the rules (spec 0046)', () => {
     })
   })
 
-  it('legLabel reads "Leg 1 of 2"', () => {
-    expect(legLabel(1, 2)).toBe('Leg 1 of 2')
-    expect(legLabel(3, 4)).toBe('Leg 3 of 4')
+  const i18nEn = createI18n('en')
+  const i18nEl = createI18n('el')
+
+  it('legLabel reads "Leg 1 of 2" in English and "Σκέλος 1 από 2" in Greek', () => {
+    expect(legLabel(1, 2, i18nEn.t)).toBe('Leg 1 of 2')
+    expect(legLabel(3, 4, i18nEn.t)).toBe('Leg 3 of 4')
+    expect(legLabel(1, 2, i18nEl.t)).toBe('Σκέλος 1 από 2')
+    expect(legLabel(3, 4, i18nEl.t)).toBe('Σκέλος 3 από 4')
   })
 
   describe('AC-2, cross check 7: the total before Confirm (legPriceLines)', () => {
     it('one box has no total line', () => {
-      expect(legPriceLines([])).toEqual([])
-      expect(legPriceLines([quote('q1', 380)])).toEqual([])
+      expect(legPriceLines([], i18nEn.t, 'en')).toEqual([])
+      expect(legPriceLines([quote('q1', 380)], i18nEn.t, 'en')).toEqual([])
+      expect(legPriceLines([], i18nEl.t, 'el')).toEqual([])
+      expect(legPriceLines([quote('q1', 380)], i18nEl.t, 'el')).toEqual([])
     })
 
-    it('two legs at the same price read "2 deliveries × 3,80 € = 7,60 €"', () => {
-      expect(legPriceLines([quote('q1', 380), quote('q2', 380)]).map(plain)).toEqual(['2 deliveries × 3,80 € = 7,60 €'])
+    it('two legs at the same price read "2 deliveries × €3.80 = €7.60" in English and "2 διανομές × 3,80 € = 7,60 €" in Greek', () => {
+      expect(legPriceLines([quote('q1', 380), quote('q2', 380)], i18nEn.t, 'en').map(plain)).toEqual(['2 deliveries × €3.80 = €7.60'])
+      expect(legPriceLines([quote('q1', 380), quote('q2', 380)], i18nEl.t, 'el').map(plain)).toEqual(['2 διανομές × 3,80 € = 7,60 €'])
     })
 
     it('four legs at the same price sum all four', () => {
-      const lines = legPriceLines([quote('q1', 356), quote('q2', 356), quote('q3', 356), quote('q4', 356)])
-      expect(lines.map(plain)).toEqual(['4 deliveries × 3,56 € = 14,24 €'])
+      const quotes = [quote('q1', 356), quote('q2', 356), quote('q3', 356), quote('q4', 356)]
+      expect(legPriceLines(quotes, i18nEn.t, 'en').map(plain)).toEqual(['4 deliveries × €3.56 = €14.24'])
+      expect(legPriceLines(quotes, i18nEl.t, 'el').map(plain)).toEqual(['4 διανομές × 3,56 € = 14,24 €'])
     })
 
     it('prices that differ get one line per leg, then the total', () => {
-      const lines = legPriceLines([quote('q1', 356), quote('q2', 392), quote('q3', 356)])
-      expect(lines.map(plain)).toEqual(['Leg 1 of 3: 3,56 €', 'Leg 2 of 3: 3,92 €', 'Leg 3 of 3: 3,56 €', 'Total 11,04 €'])
+      const quotes = [quote('q1', 356), quote('q2', 392), quote('q3', 356)]
+      expect(legPriceLines(quotes, i18nEn.t, 'en').map(plain)).toEqual(['Leg 1 of 3: €3.56', 'Leg 2 of 3: €3.92', 'Leg 3 of 3: €3.56', 'Total €11.04'])
+      expect(legPriceLines(quotes, i18nEl.t, 'el').map(plain)).toEqual(['Σκέλος 1 από 3: 3,56 €', 'Σκέλος 2 από 3: 3,92 €', 'Σκέλος 3 από 3: 3,56 €', 'Σύνολο 11,04 €'])
     })
   })
 

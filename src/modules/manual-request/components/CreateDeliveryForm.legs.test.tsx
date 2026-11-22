@@ -15,6 +15,9 @@ import { useRequestPageNavigator } from '../../../hooks/useRequestPageNavigator'
 import { PartnerProfileDto } from '../types'
 import { saveCustomerAfterOrder } from '../../saved-customers/utils/saveAfterOrder'
 import { useSavedCustomerSearch } from '../../saved-customers/hooks/useSavedCustomerSearch'
+import { createI18n } from '../../../i18n/createI18n'
+
+const t = createI18n('en').t
 
 // The toast is how the form says which leg was not sent; the real hook is kept for everything else.
 const mockToast = jest.fn()
@@ -215,7 +218,7 @@ describe('CreateDeliveryForm: multi leg orders (spec 0046)', () => {
 
       await getPrice()
 
-      expect(await screen.findByText(BOX_SIZE_REQUIRED)).toBeInTheDocument()
+      expect(await screen.findByText(t(BOX_SIZE_REQUIRED))).toBeInTheDocument()
       expect(mockCreateQuote).not.toHaveBeenCalled()
       expect(screen.queryByRole('button', { name: 'Send order' })).not.toBeInTheDocument()
     })
@@ -247,9 +250,9 @@ describe('CreateDeliveryForm: multi leg orders (spec 0046)', () => {
     it('shows "2 deliveries × 3,80 € = 7,60 €" before Send, and nothing is created yet', async () => {
       await twoBoxesPriced()
 
-      expect(plain(screen.getByTestId('leg-total').textContent)).toBe('2 deliveries × 3,80 € = 7,60 €')
+      expect(plain(screen.getByTestId('leg-total').textContent)).toBe('2 deliveries × €3.80 = €7.60')
       // Row 10 review: the big figure is what the customer pays, the legs' total.
-      expect(plain(document.querySelector('.text-2xl')?.textContent)).toBe('7,60 €')
+      expect(plain(document.querySelector('.text-2xl')?.textContent)).toBe('€7.60')
       expect(screen.getByRole('button', { name: 'Send order' })).toBeInTheDocument()
       expect(mockConfirmDelivery).not.toHaveBeenCalled()
     })
@@ -259,9 +262,9 @@ describe('CreateDeliveryForm: multi leg orders (spec 0046)', () => {
       await twoBoxesPriced()
 
       const total = plain(screen.getByTestId('leg-total').textContent)
-      expect(total).toContain('Leg 1 of 2: 3,56 €')
-      expect(total).toContain('Leg 2 of 2: 3,92 €')
-      expect(total).toContain('Total 7,48 €')
+      expect(total).toContain('Leg 1 of 2: €3.56')
+      expect(total).toContain('Leg 2 of 2: €3.92')
+      expect(total).toContain('Total €7.48')
     })
 
     it('one box asks one quote and shows no total line', async () => {
@@ -417,7 +420,11 @@ describe('CreateDeliveryForm: multi leg orders (spec 0046)', () => {
     // Row 10 review: the backend's own reason, so the restaurant knows why before it retries.
     it('the toast carries the backend\'s reason for the leg, then what to do', async () => {
       mockConfirmDelivery.mockImplementation(async (input: any) => {
-        if (input.legNumber === 2) throw new Error('No couriers are currently available')
+        if (input.legNumber === 2) {
+          const err = new Error('No couriers are currently available') as any
+          err.statusCode = 503
+          throw err
+        }
         return { id: `del-leg-${input.legNumber}`, status: 'CREATED' }
       })
       await twoBoxesPriced()

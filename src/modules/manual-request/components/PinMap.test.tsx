@@ -1,12 +1,15 @@
 import React from 'react'
 import '@testing-library/jest-dom'
 import { render, screen, fireEvent } from '@testing-library/react'
+import { createI18n } from '../../../i18n/createI18n'
 import {
   PinMap,
   CONFIRM_PIN_LABEL,
   PIN_CONFIRMED_TEXT,
   PIN_HELP_TEXT,
 } from './PinMap'
+
+const t = createI18n('en').t
 
 // Mock PinMapCanvas so react-leaflet ESM is not imported under jsdom
 jest.mock('./PinMapCanvas', () => ({
@@ -36,9 +39,9 @@ describe('PinMap (/src/modules/manual-request/components/PinMap.tsx)', () => {
       />,
     )
 
-    const confirmBtn = screen.getByRole('button', { name: CONFIRM_PIN_LABEL })
+    const confirmBtn = screen.getByRole('button', { name: t(CONFIRM_PIN_LABEL) })
     expect(confirmBtn).toBeInTheDocument()
-    expect(screen.queryByText(PIN_CONFIRMED_TEXT)).not.toBeInTheDocument()
+    expect(screen.queryByText(t(PIN_CONFIRMED_TEXT))).not.toBeInTheDocument()
 
     fireEvent.click(confirmBtn)
     expect(onConfirm).toHaveBeenCalledTimes(1)
@@ -57,8 +60,8 @@ describe('PinMap (/src/modules/manual-request/components/PinMap.tsx)', () => {
       />,
     )
 
-    expect(screen.getByText(PIN_CONFIRMED_TEXT)).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: CONFIRM_PIN_LABEL })).not.toBeInTheDocument()
+    expect(screen.getByText(t(PIN_CONFIRMED_TEXT))).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: t(CONFIRM_PIN_LABEL) })).not.toBeInTheDocument()
   })
 
   it('displays message when provided, and omits it when null or undefined', () => {
@@ -107,7 +110,7 @@ describe('PinMap (/src/modules/manual-request/components/PinMap.tsx)', () => {
       />,
     )
 
-    expect(screen.getByText(PIN_HELP_TEXT)).toBeInTheDocument()
+    expect(screen.getByText(t(PIN_HELP_TEXT))).toBeInTheDocument()
 
     fireEvent.click(screen.getByTestId('mock-pin-map-canvas'))
     expect(onMove).toHaveBeenCalledWith({ latitude: 39.363, longitude: 22.943 })

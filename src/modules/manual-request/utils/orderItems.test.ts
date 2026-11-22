@@ -1,3 +1,4 @@
+import { createI18n } from '../../../i18n/createI18n'
 import { ManualRequestPackageSize } from '../types'
 import {
   ITEM_LINES_MAX,
@@ -8,6 +9,8 @@ import {
   emptyItemLine,
   orderItemsPayload,
 } from './orderItems'
+
+const t = createI18n('en').t
 
 // Spec 0028 (row 103), AC-3: what the order form's item lines send.
 describe('orderItemsPayload (spec 0028 AC-3)', () => {
@@ -115,8 +118,10 @@ describe('item line rules (spec 0028 AC-2)', () => {
     expect(ITEM_LINES_MAX).toBe(20)
   })
 
-  it('uses the spec\'s sentences', () => {
-    expect(ITEM_NAME_REQUIRED).toBe('Name the item, or remove the line.')
-    expect(ITEM_NAME_TOO_LONG).toBe('Keep the item name to 60 characters.')
+  it("uses the spec's sentences via translation keys", () => {
+    expect(ITEM_NAME_REQUIRED).toBe('items.nameRequired')
+    expect(t(ITEM_NAME_REQUIRED)).toBe('Name the item, or remove the line.')
+    expect(ITEM_NAME_TOO_LONG).toBe('items.nameTooLong')
+    expect(t(ITEM_NAME_TOO_LONG, { max: 60 })).toBe('Keep the item name to 60 characters.')
   })
 })

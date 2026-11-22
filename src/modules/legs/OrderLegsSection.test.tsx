@@ -165,7 +165,7 @@ describe('OrderLegsSection (spec 0046)', () => {
       fireEvent.click(within(missing).getByRole('button', { name: 'Retry: get a price' }))
 
       const send = await within(missing).findByRole('button', { name: 'Send leg 2 of 2' })
-      expect(plain(missing.textContent)).toContain('Price for leg 2 of 2: 3,92 €')
+      expect(plain(missing.textContent)).toContain('Price for leg 2 of 2: €3.92')
       expect(send).toBeEnabled()
       expect(createDelivery).not.toHaveBeenCalled()
     })

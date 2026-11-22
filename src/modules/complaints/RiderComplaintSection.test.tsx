@@ -10,7 +10,16 @@ import {
   fileRiderComplaint,
   PartnerComplaint,
 } from '../../api/complaintsApi'
-import { COMPLAINT_TEXT } from './complaintText'
+import { createI18n } from '../../i18n/createI18n'
+import { COMPLAINT_TEXT as RAW_COMPLAINT_TEXT } from './complaintText'
+
+const t = createI18n('en').t
+const COMPLAINT_TEXT = new Proxy(RAW_COMPLAINT_TEXT, {
+  get(target: any, prop: string) {
+    const val = target[prop]
+    return typeof val === 'string' ? t(val) : val
+  },
+})
 
 jest.mock('../../api/complaintsApi', () => ({
   ...jest.requireActual('../../api/complaintsApi'),

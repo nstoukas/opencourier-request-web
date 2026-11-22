@@ -1,9 +1,12 @@
 import React from 'react'
 import '@testing-library/jest-dom'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { createI18n } from '../../../i18n/createI18n'
 import { SaveCustomerTick } from './SaveCustomerTick'
 import { retentionHelperText, useRetentionMonths } from '../hooks/useRetentionMonths'
 import { fetchRetentionMonths } from '../../../api/savedCustomersApi'
+
+const t = createI18n('en').t
 
 jest.mock('../../../api/savedCustomersApi', () => ({
   fetchRetentionMonths: jest.fn(),
@@ -16,22 +19,22 @@ describe('SaveCustomerTick and useRetentionMonths', () => {
 
   describe('retentionHelperText helper', () => {
     it('returns fallback sentence when months is null', () => {
-      expect(retentionHelperText(null)).toBe(
+      expect(retentionHelperText(null, t)).toBe(
         'Only your restaurant sees it. It is deleted after a period unused that the co-op sets.',
       )
     })
 
     it('returns singular month sentence when months is 1', () => {
-      expect(retentionHelperText(1)).toBe(
+      expect(retentionHelperText(1, t)).toBe(
         'Only your restaurant sees it. It is deleted after 1 month unused.',
       )
     })
 
     it('returns plural months sentence when months is greater than 1', () => {
-      expect(retentionHelperText(12)).toBe(
+      expect(retentionHelperText(12, t)).toBe(
         'Only your restaurant sees it. It is deleted after 12 months unused.',
       )
-      expect(retentionHelperText(24)).toBe(
+      expect(retentionHelperText(24, t)).toBe(
         'Only your restaurant sees it. It is deleted after 24 months unused.',
       )
     })

@@ -51,8 +51,8 @@ describe('Phosphor icon accessibility defaults and IconContext in _app.tsx (Ruli
     )
   }
 
-  function renderAppWithPage() {
-    return render(<App Component={SmallPage} pageProps={{}} router={{} as any} />)
+  function renderAppWithPage(language: 'en' | 'el' = 'en') {
+    return render(<App Component={SmallPage} pageProps={{}} router={{} as any} language={language} />)
   }
 
   it('marks decorative Phosphor icons as aria-hidden="true" by default', () => {
@@ -92,5 +92,11 @@ describe('Phosphor icon accessibility defaults and IconContext in _app.tsx (Ruli
     renderAppWithPage()
     const closeButton = screen.getByRole('button', { name: 'Close' })
     expect(closeButton).toBeInTheDocument()
+  })
+
+  it('renders Greek accessible names when language="el" (the app default)', () => {
+    render(<App Component={SmallPage} pageProps={{}} router={{} as any} />)
+    expect(screen.getByRole('status', { name: 'Φόρτωση' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Κλείσιμο' })).toBeInTheDocument()
   })
 })

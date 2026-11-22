@@ -1,7 +1,10 @@
 import React from 'react'
 import { renderHook, waitFor, act } from '@testing-library/react'
+import { createI18n } from '../../../i18n/createI18n'
 import { useRetentionMonths, retentionHelperText } from './useRetentionMonths'
 import { fetchRetentionMonths } from '../../../api/savedCustomersApi'
+
+const t = createI18n('en').t
 
 jest.mock('../../../api/savedCustomersApi', () => ({
   fetchRetentionMonths: jest.fn(),
@@ -15,19 +18,19 @@ describe('useRetentionMonths and retentionHelperText', () => {
 
   describe('retentionHelperText', () => {
     it('returns generic wording when months is null', () => {
-      expect(retentionHelperText(null)).toBe(
+      expect(retentionHelperText(null, t)).toBe(
         'Only your restaurant sees it. It is deleted after a period unused that the co-op sets.',
       )
     })
 
     it('uses singular "month" for 1 month', () => {
-      expect(retentionHelperText(1)).toBe(
+      expect(retentionHelperText(1, t)).toBe(
         'Only your restaurant sees it. It is deleted after 1 month unused.',
       )
     })
 
     it('uses plural "months" for N months', () => {
-      expect(retentionHelperText(12)).toBe(
+      expect(retentionHelperText(12, t)).toBe(
         'Only your restaurant sees it. It is deleted after 12 months unused.',
       )
     })

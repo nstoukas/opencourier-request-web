@@ -10,7 +10,16 @@ import {
 } from '../../api/manualRequestApi'
 import { getManualRequestApiMode } from '../../utils/manualRequestAuth'
 import { fetchOrderComplaints, PartnerComplaint } from '../../api/complaintsApi'
-import { COMPLAINT_TEXT } from '../complaints/complaintText'
+import { createI18n } from '../../i18n/createI18n'
+import { COMPLAINT_TEXT as RAW_COMPLAINT_TEXT } from '../complaints/complaintText'
+
+const t = createI18n('en').t
+const COMPLAINT_TEXT = new Proxy(RAW_COMPLAINT_TEXT, {
+  get(target: any, prop: string) {
+    const val = target[prop]
+    return typeof val === 'string' ? t(val) : val
+  },
+})
 
 // Mock next/router
 jest.mock('next/router', () => ({

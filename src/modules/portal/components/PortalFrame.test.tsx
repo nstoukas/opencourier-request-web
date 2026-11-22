@@ -8,9 +8,12 @@ import {
   SIGN_OUT_FAILED,
   SESSION_CHECK_FAILED,
 } from './PortalFrame'
+import { createI18n } from '../../../i18n/createI18n'
 import { usePartnerSession } from '../../../hooks/usePartnerSession'
 import * as api from '../../../api/manualRequestApi'
 import { notifyPartnerUnauthorized } from '../../../api/partnerSessionEvents'
+
+const t = createI18n('en').t
 
 // Mock next/router
 const mockRouter = {
@@ -378,7 +381,7 @@ describe('PortalFrame gate and frame layout', () => {
 
     // Error alert is displayed with SIGN_OUT_FAILED
     const alert = await screen.findByRole('alert')
-    expect(alert).toHaveTextContent(SIGN_OUT_FAILED)
+    expect(alert).toHaveTextContent(t(SIGN_OUT_FAILED))
   })
 
   it('subscribes to onPartnerUnauthorized and triggers recheck on 401 (spec 0017, AC-5)', () => {
@@ -420,7 +423,7 @@ describe('PortalFrame gate and frame layout', () => {
       </PortalFrame>
     )
 
-    expect(screen.getByRole('status')).toHaveTextContent(SESSION_ENDED_NOTICE)
+    expect(screen.getByRole('status')).toHaveTextContent(t(SESSION_ENDED_NOTICE))
   })
 
   it('shows SignInScreen without session ended notice on first visit signed out', () => {
@@ -438,7 +441,7 @@ describe('PortalFrame gate and frame layout', () => {
       </PortalFrame>
     )
 
-    expect(screen.queryByText(SESSION_ENDED_NOTICE)).not.toBeInTheDocument()
+    expect(screen.queryByText(t(SESSION_ENDED_NOTICE))).not.toBeInTheDocument()
   })
 
   it('renders check failed screen with Try again button when checkFailed is true and signed out (spec 0017, AC-6)', () => {
@@ -456,7 +459,7 @@ describe('PortalFrame gate and frame layout', () => {
       </PortalFrame>
     )
 
-    expect(screen.getByRole('alert')).toHaveTextContent(SESSION_CHECK_FAILED)
+    expect(screen.getByRole('alert')).toHaveTextContent(t(SESSION_CHECK_FAILED))
     const tryAgainBtn = screen.getByRole('button', { name: 'Try again' })
     expect(tryAgainBtn).toBeInTheDocument()
 

@@ -8,6 +8,9 @@ import { fetchOrderLegs, useCancelManualRequestDeliveryMutation, useGetManualReq
 import { getManualRequestApiMode } from '../../utils/manualRequestAuth'
 import { legFixture } from '../legs/legFixtures'
 import { SPLIT_CHARGE_NOTE, SPLIT_LEG_COST_NOTE, SPLIT_LEG_ENDED_NOTE } from '../legs/splitOutcome'
+import { createI18n } from '../../i18n/createI18n'
+
+const t = createI18n('en').t
 
 const mockRouter = { query: { deliveryId: 'del-1' } as Record<string, any> }
 jest.mock('next/router', () => ({
@@ -130,9 +133,9 @@ describe('the order page after a split at pickup (spec 0047, AC-8, AC-10)', () =
   // delivery ends with no rider ever accepting it, so an ended one states the rule and claims no charge.
   describe('what the split costs the restaurant (decision 11.10)', () => {
     // The sentences are worded once, in splitOutcome.ts (its own test pins them); a page must show that one.
-    const CHARGE_NOTE = SPLIT_CHARGE_NOTE
-    const COST_0_NOTE = SPLIT_LEG_COST_NOTE
-    const ENDED_NOTE = SPLIT_LEG_ENDED_NOTE
+    const CHARGE_NOTE = t(SPLIT_CHARGE_NOTE)
+    const COST_0_NOTE = t(SPLIT_LEG_COST_NOTE)
+    const ENDED_NOTE = t(SPLIT_LEG_ENDED_NOTE)
 
     // The page asks for the order's other legs; these tests only read the lines above them.
     const twoLegs = () =>

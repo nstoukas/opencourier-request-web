@@ -1,8 +1,11 @@
 import React, { useRef } from 'react'
 import '@testing-library/jest-dom'
 import { render, screen, fireEvent } from '@testing-library/react'
+import { createI18n } from '../../../i18n/createI18n'
 import { PickedCustomerCard, floorAndDoorbellLine } from './PickedCustomerCard'
 import type { SavedCustomer } from '../types'
+
+const t = createI18n('en').t
 
 describe('PickedCustomerCard (spec 0006, AC-11 & spec 0016, AC-3)', () => {
   const sampleCustomer: SavedCustomer = {
@@ -26,25 +29,25 @@ describe('PickedCustomerCard (spec 0006, AC-11 & spec 0016, AC-3)', () => {
 
   describe('floorAndDoorbellLine (spec 0016, AC-3)', () => {
     it('formats both floor and doorbell as "Floor <floor> · Doorbell <doorbell>"', () => {
-      expect(floorAndDoorbellLine({ floor: '3', doorbell: 'Papadopoulou' })).toBe('Floor 3 · Doorbell Papadopoulou')
+      expect(floorAndDoorbellLine({ floor: '3', doorbell: 'Papadopoulou' }, t)).toBe('Floor 3 · Doorbell Papadopoulou')
     })
 
     it('formats floor only when doorbell is empty or null', () => {
-      expect(floorAndDoorbellLine({ floor: '3', doorbell: null })).toBe('Floor 3')
-      expect(floorAndDoorbellLine({ floor: '3', doorbell: '' })).toBe('Floor 3')
-      expect(floorAndDoorbellLine({ floor: '  3  ', doorbell: '   ' })).toBe('Floor 3')
+      expect(floorAndDoorbellLine({ floor: '3', doorbell: null }, t)).toBe('Floor 3')
+      expect(floorAndDoorbellLine({ floor: '3', doorbell: '' }, t)).toBe('Floor 3')
+      expect(floorAndDoorbellLine({ floor: '  3  ', doorbell: '   ' }, t)).toBe('Floor 3')
     })
 
     it('formats doorbell only when floor is empty or null', () => {
-      expect(floorAndDoorbellLine({ floor: null, doorbell: 'Papadopoulou' })).toBe('Doorbell Papadopoulou')
-      expect(floorAndDoorbellLine({ floor: '', doorbell: 'Papadopoulou' })).toBe('Doorbell Papadopoulou')
-      expect(floorAndDoorbellLine({ floor: '   ', doorbell: '  Papadopoulou  ' })).toBe('Doorbell Papadopoulou')
+      expect(floorAndDoorbellLine({ floor: null, doorbell: 'Papadopoulou' }, t)).toBe('Doorbell Papadopoulou')
+      expect(floorAndDoorbellLine({ floor: '', doorbell: 'Papadopoulou' }, t)).toBe('Doorbell Papadopoulou')
+      expect(floorAndDoorbellLine({ floor: '   ', doorbell: '  Papadopoulou  ' }, t)).toBe('Doorbell Papadopoulou')
     })
 
     it('returns empty string when both floor and doorbell are empty, null or undefined', () => {
-      expect(floorAndDoorbellLine({ floor: null, doorbell: null })).toBe('')
-      expect(floorAndDoorbellLine({ floor: '', doorbell: '' })).toBe('')
-      expect(floorAndDoorbellLine({ floor: '   ', doorbell: '   ' })).toBe('')
+      expect(floorAndDoorbellLine({ floor: null, doorbell: null }, t)).toBe('')
+      expect(floorAndDoorbellLine({ floor: '', doorbell: '' }, t)).toBe('')
+      expect(floorAndDoorbellLine({ floor: '   ', doorbell: '   ' }, t)).toBe('')
     })
   })
 

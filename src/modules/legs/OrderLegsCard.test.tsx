@@ -66,7 +66,7 @@ describe('OrderLegsCard (spec 0046, AC-6)', () => {
   it('the cost is the sum of the legs (each leg is charged a delivery price)', () => {
     renderOrder([legFixture('del-1', 1, { totalCost: 356 }), legFixture('del-2', 2, { totalCost: 392 })])
 
-    expect(screen.getByText(/Cost:/).textContent?.replace(/ /g, ' ')).toBe('Cost: 7,48 €')
+    expect(screen.getByText(/Cost:/).textContent?.replace(/ /g, ' ')).toBe('Cost: €7.48')
   })
 
   // Row 10 review: the list is a page, so the card cannot know a leg was never sent; it says the leg is not

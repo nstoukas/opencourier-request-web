@@ -3,6 +3,7 @@ import '@testing-library/jest-dom'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { SignInScreen, signInErrorMessage } from './SignInScreen'
 import * as api from '../../../api/manualRequestApi'
+import { createI18n } from '../../../i18n/createI18n'
 
 // Mock next/head so head title tags render safely in jsdom
 jest.mock('next/head', () => ({
@@ -20,12 +21,16 @@ jest.mock('../../../api/manualRequestApi', () => {
 })
 
 describe('signInErrorMessage() helper', () => {
+  const t = createI18n('en').t
+
   it('maps 400, 401, 403, and 404 to wrong credentials wording with no HTTP code digits', () => {
     const statuses = [400, 401, 403, 404]
     for (const status of statuses) {
       const error = new Error('Raw backend error message') as api.SignInError
       error.status = status
-      const message = signInErrorMessage(error)
+      const key = signInErrorMessage(error)
+      expect(key).toBe('signIn.wrongCredentials')
+      const message = t(key)
       expect(message).toBe("That email and password don't match. Check for typos and try again.")
       // Pin: plain words and never an HTTP code or digits of an HTTP status
       expect(message).not.toMatch(/\b(400|401|403|404)\b/)
@@ -36,7 +41,9 @@ describe('signInErrorMessage() helper', () => {
   it('maps 429 to rate limit wording with no HTTP code digits', () => {
     const error = new Error('Too Many Requests') as api.SignInError
     error.status = 429
-    const message = signInErrorMessage(error)
+    const key = signInErrorMessage(error)
+    expect(key).toBe('signIn.tooManyTries')
+    const message = t(key)
     expect(message).toBe('Too many tries in a row. Wait a minute, then try again.')
     expect(message).not.toMatch(/\b429\b/)
   })
@@ -46,24 +53,23 @@ describe('signInErrorMessage() helper', () => {
     for (const status of serverStatuses) {
       const error = new Error('Internal Server Error') as api.SignInError
       error.status = status
-      const message = signInErrorMessage(error)
+      const key = signInErrorMessage(error)
+      expect(key).toBe('signIn.serverDown')
+      const message = t(key)
       expect(message).toBe("The co-op's server didn't answer. Check your internet connection and try again in a minute.")
       expect(message).not.toMatch(/\b(500|502|503|504)\b/)
     }
 
     // Network failure with no status code
     const networkError = new Error('Failed to fetch')
-    expect(signInErrorMessage(networkError)).toBe(
+    expect(signInErrorMessage(networkError)).toBe('signIn.serverDown')
+    expect(t(signInErrorMessage(networkError))).toBe(
       "The co-op's server didn't answer. Check your internet connection and try again in a minute."
     )
 
     // Non-object thrown value
-    expect(signInErrorMessage('unknown error')).toBe(
-      "The co-op's server didn't answer. Check your internet connection and try again in a minute."
-    )
-    expect(signInErrorMessage(null)).toBe(
-      "The co-op's server didn't answer. Check your internet connection and try again in a minute."
-    )
+    expect(signInErrorMessage('unknown error')).toBe('signIn.serverDown')
+    expect(signInErrorMessage(null)).toBe('signIn.serverDown')
   })
 })
 

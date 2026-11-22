@@ -1,3 +1,4 @@
+import { createI18n } from '../../../i18n/createI18n'
 import {
   euroAmountToCents,
   orderTotalProblem,
@@ -24,6 +25,8 @@ import {
 } from './orderForm'
 
 describe('orderForm pure utilities (spec 0006 & 0016)', () => {
+  const t = createI18n('en').t
+
   describe('orderTotalProblem and parseEuroAmount (AC-4)', () => {
     it('accepts valid amounts including 0, integers, decimal comma and dot, and trims whitespace', () => {
       expect(orderTotalProblem('0')).toBeNull()
@@ -55,33 +58,34 @@ describe('orderForm pure utilities (spec 0006 & 0016)', () => {
     })
 
     it('refuses empty string or only whitespace with exact message', () => {
-      const expectedMessage = 'Enter the order total (0 if it is free)'
-      expect(orderTotalProblem('')).toBe(expectedMessage)
+      const problem = orderTotalProblem('')
+      expect(problem).toBe('form.totalMissing')
+      expect(t(problem!)).toBe('Enter the order total (0 if it is free)')
       expect(parseEuroAmount('')).toBeNull()
 
-      expect(orderTotalProblem('   ')).toBe(expectedMessage)
+      const wsProblem = orderTotalProblem('   ')
+      expect(wsProblem).toBe('form.totalMissing')
+      expect(t(wsProblem!)).toBe('Enter the order total (0 if it is free)')
       expect(parseEuroAmount('   ')).toBeNull()
     })
 
     it('refuses invalid formats (.5, 12., 1.000, €12, -3, etc.) with exact message', () => {
-      const expectedMessage = 'Use an amount like 12,50'
       const invalidInputs = ['.5', '12.', '1.000', '1.000,50', '€12', '-3', 'abc', '12,505']
       for (const input of invalidInputs) {
-        expect(orderTotalProblem(input)).toBe(expectedMessage)
+        const problem = orderTotalProblem(input)
+        expect(problem).toBe('form.totalNotAmount')
+        expect(t(problem!)).toBe('Use an amount like 12,50')
         expect(parseEuroAmount(input)).toBeNull()
       }
     })
 
     it('refuses amounts over 1000 with exact message', () => {
-      const expectedMessage = 'That is over 1000 €, check the amount'
-      expect(orderTotalProblem('1000,01')).toBe(expectedMessage)
-      expect(parseEuroAmount('1000,01')).toBeNull()
-
-      expect(orderTotalProblem('1001')).toBe(expectedMessage)
-      expect(parseEuroAmount('1001')).toBeNull()
-
-      expect(orderTotalProblem('2500,50')).toBe(expectedMessage)
-      expect(parseEuroAmount('2500,50')).toBeNull()
+      for (const input of ['1000,01', '1001', '2500,50']) {
+        const problem = orderTotalProblem(input)
+        expect(problem).toBe('form.totalTooHigh')
+        expect(t(problem!)).toBe('That is over 1000 €, check the amount')
+        expect(parseEuroAmount(input)).toBeNull()
+      }
     })
 
     it('AC-4: euroAmountToCents converts euro amounts to whole cents with rounding and handles refused text', () => {
