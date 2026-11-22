@@ -8,6 +8,7 @@ import {
   fileRiderComplaint,
 } from '../../api/complaintsApi'
 import { formatDateTime } from '../../utils/format'
+import { restaurantErrorText } from '../../utils/restaurantError'
 import { COMPLAINT_TEXT, complaintCategoryLabel } from './complaintText'
 
 // The backend keeps a complaint to 1000 characters.
@@ -78,9 +79,9 @@ export function RiderComplaintSection({ deliveryId, status }: Props) {
     try {
       setComplaints(await fetchOrderComplaints(deliveryId))
       setListError('')
-    } catch (err: any) {
-      // The backend's own sentence (an order past the restaurant's history), else a plain one.
-      setListError(err?.message || COMPLAINT_TEXT.listFailed)
+    } catch (err) {
+      // A refusal's own sentence, else a plain one: never a timeout's or a 5xx's words (row 83 review).
+      setListError(restaurantErrorText(err, COMPLAINT_TEXT.listFailed))
     }
   }, [deliveryId])
 
@@ -107,8 +108,11 @@ export function RiderComplaintSection({ deliveryId, status }: Props) {
       setCategory(null)
       setText('')
       await load()
-    } catch (err: any) {
-      setError(err?.message || COMPLAINT_TEXT.sendFailed)
+    } catch (err) {
+      setError(restaurantErrorText(err, COMPLAINT_TEXT.sendFailed))
+      // Row 83 review: the complaint may have been saved even so (a timeout after the server stored it,
+      // or a 409 for one already open), so read the list again; an open one then hides the form.
+      await load()
     } finally {
       setSending(false)
     }

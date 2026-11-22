@@ -31,6 +31,7 @@ import { getManualRequestApiMode } from '../../../utils/manualRequestAuth'
 import { CustomerSaveNotice } from '../../../modules/saved-customers/components/CustomerSaveNotice'
 import { formatDateTime, formatMoney } from '../../../utils/format'
 import { orderCodeOf } from '../../../utils/orderCode'
+import { restaurantErrorText } from '../../../utils/restaurantError'
 import { PageHeader } from '../../../modules/portal/components/PortalFrame'
 import { CancelDeliveryDialog } from '../../../modules/cancel/CancelDeliveryDialog'
 
@@ -363,19 +364,9 @@ export default function ManualRequestStatusPage() {
   // Decision 11.10: what the split costs the restaurant, and why a leg the split made reads cost 0.
   const splitNote = partnerData ? splitChargeNote(partnerData) : null
   const isLeg = Boolean(partnerData?.legCount)
-  // The server's own sentence for a refusal (a 4xx, such as the 404 "This order is older than 30 days..."
-  // for an old order, spec 0017), else a general line: a timeout's or the browser's own words, and a
-  // 5xx's text, are not for restaurants. A 401 is handled by the frame, which checks the session.
-  const errorStatus: number | undefined = (error as any)?.statusCode
-  const serverMessage: string | undefined = (error as any)?.message
-  const errorMessage =
-    errorStatus !== undefined &&
-    errorStatus >= 400 &&
-    errorStatus < 500 &&
-    serverMessage &&
-    !/^Request failed \(HTTP \d+\)$/.test(serverMessage)
-      ? serverMessage
-      : 'The order could not be loaded. Try again in a moment.'
+  // The server's own sentence for a refusal, else a general line (restaurantErrorText). A 401 is handled
+  // by the frame, which checks the session.
+  const errorMessage = restaurantErrorText(error, 'The order could not be loaded. Try again in a moment.')
 
   const isTerminal = data ? TERMINAL_STATUSES.has(data.status) : false
 
