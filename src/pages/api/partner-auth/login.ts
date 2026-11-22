@@ -48,6 +48,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const payload = unwrapBackendResult<{
       email?: string
+      language?: string
       session?: { accessToken?: string; expiresIn?: number }
     }>(body)
 
@@ -64,8 +65,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     res.setHeader('Set-Cookie', cookie)
 
-    // The response body must contain ONLY email (never accessToken, apiKey, or session credentials).
-    return res.status(200).json({ email: payload.email ?? null })
+    // The response body must contain ONLY email and the account's language (never accessToken, apiKey, or
+    // session credentials). The language lets the sign in screen start the portal in it (spec 0054, cross check 2).
+    const language = payload.language === 'el' || payload.language === 'en' ? payload.language : null
+    return res.status(200).json({ email: payload.email ?? null, language })
   } catch {
     return res.status(502).json({ message: 'Backend unreachable.' })
   }

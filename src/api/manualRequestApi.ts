@@ -17,6 +17,7 @@ import {
 import { EnumDeliveryEventType } from '../shared-types'
 import { notifyPartnerUnauthorized } from './partnerSessionEvents'
 import { usePolledFetch } from '../hooks/usePolledFetch'
+import type { Language } from '../i18n/language'
 import {
   getManualRequestApiMode,
   PARTNER_AUTH_BASE_URL,
@@ -421,7 +422,20 @@ export function usePartnerProfileQuery() {
 // the server's own text or a code.
 export type SignInError = Error & { status?: number }
 
-export async function loginPartner(email: string, password: string): Promise<{ email: string | null }> {
+// Spec 0054 (AC-2): saves the language on the signed in restaurant user's account, so the next sign in and
+// the backend's mails use it. The backend answers 400 for anything but 'el' or 'en'.
+export async function saveAccountLanguage(language: Language): Promise<void> {
+  await manualRequestFetch<{ language: Language }>('/auth/language', {
+    method: 'PUT',
+    body: JSON.stringify({ language }),
+  })
+}
+
+// `language` is the one stored on the account ('el' or 'en'), or null when the server sent none.
+export async function loginPartner(
+  email: string,
+  password: string,
+): Promise<{ email: string | null; language: Language | null }> {
   const response = await fetch(`${PARTNER_AUTH_BASE_URL}/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -434,7 +448,7 @@ export async function loginPartner(email: string, password: string): Promise<{ e
     error.status = response.status
     throw error
   }
-  return { email: body?.email ?? null }
+  return { email: body?.email ?? null, language: body?.language === 'el' || body?.language === 'en' ? body.language : null }
 }
 
 // Throws when the sign out did not happen (no connection, or the page's server answered an error), so the
