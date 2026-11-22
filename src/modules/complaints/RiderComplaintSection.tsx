@@ -1,0 +1,209 @@
+import React, { useCallback, useEffect, useState } from 'react'
+import { Button, Separator, Textarea } from '../../admin-web-components'
+import {
+  PartnerComplaint,
+  RIDER_COMPLAINT_CATEGORIES,
+  RiderComplaintCategory,
+  fetchOrderComplaints,
+  fileRiderComplaint,
+} from '../../api/complaintsApi'
+import { formatDateTime } from '../../utils/format'
+import { COMPLAINT_TEXT, complaintCategoryLabel } from './complaintText'
+
+// The backend keeps a complaint to 1000 characters.
+export const COMPLAINT_TEXT_MAX_LENGTH = 1000
+
+// AC-3: a restaurant complains about the rider once the order is delivered or cancelled.
+const FILING_STATUSES = new Set(['DROPPED_OFF', 'CANCELED'])
+
+type Props = {
+  deliveryId: string
+  status: string
+}
+
+// One complaint the restaurant filed, with its outcome once there is one (AC-7). Never the rider's
+// reply and never who decided: the server does not send them.
+function ComplaintLine({ complaint }: { complaint: PartnerComplaint }) {
+  return (
+    <li className="space-y-1 rounded-md border p-3" data-testid="order-complaint">
+      <p className="text-sm font-medium">
+        {complaintCategoryLabel(complaint.category)}
+        <span className="font-normal text-muted-foreground">
+          {' · '}
+          {COMPLAINT_TEXT.filedOn} {formatDateTime(complaint.createdAt)}
+        </span>
+      </p>
+      <p className="whitespace-pre-wrap text-sm">{complaint.text}</p>
+      {complaint.status === 'OPEN' ? (
+        <p className="text-sm text-muted-foreground">{COMPLAINT_TEXT.statusOpen}</p>
+      ) : null}
+      {complaint.status === 'DECIDED' ? (
+        <div className="border-l-2 pl-3">
+          <p className="text-sm font-medium">
+            {COMPLAINT_TEXT.statusDecided}
+            <span className="font-normal text-muted-foreground"> · {formatDateTime(complaint.decidedAt)}</span>
+          </p>
+          {complaint.outcome ? <p className="whitespace-pre-wrap text-sm">{complaint.outcome}</p> : null}
+        </div>
+      ) : null}
+      {complaint.status === 'WITHDRAWN' ? (
+        <div className="border-l-2 pl-3">
+          <p className="text-sm font-medium">
+            {COMPLAINT_TEXT.statusWithdrawn}
+            <span className="font-normal text-muted-foreground"> · {formatDateTime(complaint.withdrawnAt)}</span>
+          </p>
+          {complaint.withdrawnReason ? (
+            <p className="whitespace-pre-wrap text-sm">{complaint.withdrawnReason}</p>
+          ) : null}
+        </div>
+      ) : null}
+    </li>
+  )
+}
+
+// Spec 0052 (AC-3, AC-7; cross check 10): on the order page, the restaurant's complaints about this
+// order's rider and their outcomes, and the form to file one. The server decides whether one may be
+// filed (an order that never had a rider, an open complaint already), so a refusal shows its sentence.
+export function RiderComplaintSection({ deliveryId, status }: Props) {
+  const [complaints, setComplaints] = useState<PartnerComplaint[] | null>(null)
+  const [listError, setListError] = useState('')
+  const [open, setOpen] = useState(false)
+  const [category, setCategory] = useState<RiderComplaintCategory | null>(null)
+  const [text, setText] = useState('')
+  const [sending, setSending] = useState(false)
+  const [error, setError] = useState('')
+  const [sent, setSent] = useState(false)
+
+  const load = useCallback(async () => {
+    try {
+      setComplaints(await fetchOrderComplaints(deliveryId))
+      setListError('')
+    } catch (err: any) {
+      // The backend's own sentence (an order past the restaurant's history), else a plain one.
+      setListError(err?.message || COMPLAINT_TEXT.listFailed)
+    }
+  }, [deliveryId])
+
+  useEffect(() => {
+    void load()
+  }, [load])
+
+  const canFileNow = FILING_STATUSES.has(status)
+  const hasOpen = (complaints ?? []).some((complaint) => complaint.status === 'OPEN')
+  // Nothing to show on an order still running with no complaint: the section stays out of the way.
+  if (!canFileNow && (complaints ?? []).length === 0) return null
+
+  const trimmed = text.trim()
+  const canSend = category !== null && trimmed.length > 0 && !sending
+
+  const send = async () => {
+    if (!category) return
+    setSending(true)
+    setError('')
+    try {
+      await fileRiderComplaint({ deliveryId, category, text: trimmed })
+      setSent(true)
+      setOpen(false)
+      setCategory(null)
+      setText('')
+      await load()
+    } catch (err: any) {
+      setError(err?.message || COMPLAINT_TEXT.sendFailed)
+    } finally {
+      setSending(false)
+    }
+  }
+
+  return (
+    <>
+      <Separator />
+      <section className="space-y-3" data-testid="rider-complaint">
+        <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          {COMPLAINT_TEXT.sectionTitle}
+        </h2>
+        {listError ? <p className="text-sm text-muted-foreground">{listError}</p> : null}
+        {complaints && complaints.length > 0 ? (
+          <ul className="space-y-2">
+            {complaints.map((complaint) => (
+              <ComplaintLine key={complaint.id} complaint={complaint} />
+            ))}
+          </ul>
+        ) : null}
+        {sent ? (
+          <p role="status" className="text-sm font-medium">
+            {COMPLAINT_TEXT.sent}
+          </p>
+        ) : null}
+        {canFileNow && !hasOpen && !open ? (
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">{COMPLAINT_TEXT.intro}</p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setOpen(true)
+                setSent(false)
+              }}
+            >
+              {COMPLAINT_TEXT.open}
+            </Button>
+          </div>
+        ) : null}
+        {open ? (
+          <div className="space-y-3">
+            <p className="text-sm font-medium">{COMPLAINT_TEXT.whatHappened}</p>
+            {/* role="radiogroup" tells a screen reader these buttons are one choice. */}
+            <div className="flex flex-wrap gap-2" role="radiogroup" aria-label={COMPLAINT_TEXT.whatHappened}>
+              {RIDER_COMPLAINT_CATEGORIES.map((value) => (
+                <Button
+                  key={value}
+                  type="button"
+                  size="sm"
+                  role="radio"
+                  aria-checked={category === value}
+                  variant={category === value ? 'default' : 'outline'}
+                  onClick={() => setCategory(value)}
+                >
+                  {complaintCategoryLabel(value)}
+                </Button>
+              ))}
+            </div>
+            <Textarea
+              aria-label={COMPLAINT_TEXT.textLabel}
+              placeholder={COMPLAINT_TEXT.textPlaceholder}
+              value={text}
+              maxLength={COMPLAINT_TEXT_MAX_LENGTH}
+              onChange={(event) => setText(event.target.value)}
+            />
+            <p className="text-right text-xs text-muted-foreground">
+              {text.length}/{COMPLAINT_TEXT_MAX_LENGTH}
+            </p>
+            {error ? (
+              <p role="alert" className="text-sm text-destructive">
+                {error}
+              </p>
+            ) : null}
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" size="sm" disabled={!canSend} onClick={send}>
+                {COMPLAINT_TEXT.send}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                disabled={sending}
+                onClick={() => {
+                  setOpen(false)
+                  setError('')
+                }}
+              >
+                {COMPLAINT_TEXT.cancel}
+              </Button>
+            </div>
+          </div>
+        ) : null}
+      </section>
+    </>
+  )
+}
