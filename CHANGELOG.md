@@ -37,6 +37,16 @@ has the full reasoning and verification notes.
 On 2 November rows 29, 32, 31 and 28 were merged in. The GA rows (29 and 32) have the entries
 below; rows 31 and 28 are recorded in the workspace's scope and walkthroughs.
 
+### Complaints about a rider (scope row 83, spec 0052, Beta)
+Built on `feat/complaints` and merged on 22 November, with the backend, adminweb and courier app halves.
+- A delivered or cancelled order's page has a complaint section under Courier: the restaurant files a
+  complaint about the order's rider (a category from pills and a few lines, text only), sees each of its
+  complaints with its status and, once decided or withdrawn, the outcome. The rider's reply is never
+  shown to the restaurant, and the file button hides while one of its complaints on the order is open.
+- Refusals show the server's own sentence and other failures the section's (`restaurantErrorText`, now
+  shared with the order page); after a failed send the list is read again, since the complaint may have
+  been stored. `fce45db`, `4716b3c`, review fixes `9d58701`, `312869d`; tests by agy, `a8fb3e7`, `cfca04c`.
+
 ### Split at pickup (scope row 11, spec 0047, GA)
 - A rider who finds an order does not fit one box asks dispatch to split it at the restaurant. The
   order then says "Split at pickup, now in 2 deliveries" (on its page under "Leg 1 of 2", on the
