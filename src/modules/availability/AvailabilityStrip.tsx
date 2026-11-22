@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Alert, AlertDescription, AlertTitle, Button } from '../../admin-web-components'
 import { clearPartnerBusy, pausePartner, resumePartner, setPartnerBusy } from '../../api/manualRequestApi'
 import { PartnerAvailability } from '../manual-request/types'
-import { serverMessage } from '../../i18n/serverText'
+import { codedSentenceText, serverMessage } from '../../i18n/serverText'
 
 const BUSY_OPTIONS = [5, 10, 15, 20, 30]
 // Each pause length with its label's translation key and the number it shows.
@@ -21,9 +21,10 @@ type Props = {
 }
 
 // Spec 0029 (AC-8): busy mode and pause, on the order form page and on My Orders. The sentence why
-// ordering is off comes from the server, so it is the same words the refusal uses.
+// ordering is off comes from the server, so it is the same words the refusal uses; it is worded from its
+// code in the reader's language, else the server's English (spec 0054, row 124).
 export function AvailabilityStrip({ availability, onChanged }: Props) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
 
@@ -35,7 +36,7 @@ export function AvailabilityStrip({ availability, onChanged }: Props) {
     try {
       await request()
     } catch (err: any) {
-      setError(serverMessage(err) || t('availability.changeFailed'))
+      setError(serverMessage(err, i18n) || t('availability.changeFailed'))
     } finally {
       // Wait for the fresh availability before the buttons come back, so a second tap meets the new
       // state and does not record a second pause (Fable's review).
@@ -56,7 +57,15 @@ export function AvailabilityStrip({ availability, onChanged }: Props) {
       {!availability.acceptingOrders && availability.notAcceptingReason ? (
         <Alert variant="destructive" role="status">
           <AlertTitle>{disabled ? t('availability.disabled') : t('availability.paused')}</AlertTitle>
-          <AlertDescription>{availability.notAcceptingReason}</AlertDescription>
+          <AlertDescription>
+            {codedSentenceText(
+              i18n,
+              'error',
+              availability.notAcceptingCode,
+              availability.notAcceptingParams,
+              availability.notAcceptingReason,
+            )}
+          </AlertDescription>
         </Alert>
       ) : null}
 

@@ -11,8 +11,9 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useTranslation } from 'react-i18next'
-// TFunction is the type of i18next's `t`, so the plain functions below can take it as a parameter.
-import type { TFunction } from 'i18next'
+// TFunction is the type of i18next's `t`, so the plain functions below can take it as a parameter;
+// `i18n as I18n` is the type of the whole instance (renamed on import, as `i18n` is also a variable here).
+import type { i18n as I18n, TFunction } from 'i18next'
 import { isMessageKey, keyMessage, showMessage, textMessage, type ShownMessage } from '../../../i18n/shownMessage'
 import {
   Alert,
@@ -99,7 +100,7 @@ import {
   checkPartnerPickupUsable,
   mapPartnerProfileToPickupValues,
 } from '../../../utils/partnerProfilePickup'
-import { serverMessage } from '../../../i18n/serverText'
+import { codedSentenceText, serverMessage } from '../../../i18n/serverText'
 
 // ─── Validation schema ────────────────────────────────────────────────────────
 
@@ -337,20 +338,21 @@ function resolveSubmittedFormattedAddress(
   )
 }
 
-// A failed call's message in plain words: the backend's own sentence (through serverMessage, where its
-// error codes will be translated, spec 0054 AC-6), never a status code. A failure with no status (a
+// A failed call's message in plain words: the backend's sentence in the reader's language (through
+// serverMessage, which words the refusal from its code, spec 0054 AC-6), never a status code. A failure with no status (a
 // timeout, a dropped connection) has only the browser's or our own English words for developers, so the
 // caller's sentence shows instead (decision 47.6). Returns a message for state, not words: the caller's
 // sentence stays a key, so it follows a switch of language (row 47 review, finding 3). With no caller's
-// sentence (null), a failure with nothing to say gives null.
-function plainErrorMessage(err: any, fallbackKey: string | null): ShownMessage | null {
+// sentence (null), a failure with nothing to say gives null. The server's sentence is worded once, in the
+// language of the moment (row 124): a switch afterwards keeps it until the next try.
+function plainErrorMessage(err: any, fallbackKey: string | null, i18n: I18n): ShownMessage | null {
   const fallback = fallbackKey ? keyMessage(fallbackKey) : null
   const statusCode = err?.statusCode ?? err?.status
   if (statusCode === 401) {
     return keyMessage('form.sessionExpired')
   }
   if (statusCode === undefined) return fallback
-  const message = serverMessage(err)
+  const message = serverMessage(err, i18n)
   return message && !/^Request failed \(HTTP \d+\)$/.test(message) ? textMessage(message) : fallback
 }
 
@@ -410,7 +412,7 @@ export const BOX_SIZE_DESCRIPTIONS: { size: ManualRequestPackageSize; text: stri
 // `availability`: the restaurant's busy mode and pause, read by the page (spec 0029). While it is loading
 // the form behaves as before; the server refuses a paused order either way.
 export function CreateDeliveryForm({ availability }: { availability?: PartnerAvailability } = {}) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   // The schema in the reader's language, built again only when the language changes.
   const formSchema = useMemo(() => buildFormSchema(t), [t])
   // The resolver below reads the schema through this ref, so a language switch reaches validation too
@@ -583,7 +585,15 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
     if (availability?.acceptingOrders === false) {
       setBarError(
         availability.notAcceptingReason
-          ? textMessage(availability.notAcceptingReason)
+          ? textMessage(
+              codedSentenceText(
+                i18n,
+                'error',
+                availability.notAcceptingCode,
+                availability.notAcceptingParams,
+                availability.notAcceptingReason,
+              ),
+            )
           : keyMessage('form.notAccepting'),
       )
       return
@@ -665,7 +675,7 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
       }
       showPrice({ values: pricedValues, pickupReadyAt, orderTotalValue, quote, quotes })
     } catch (err: any) {
-      setBarError(plainErrorMessage(err, 'form.priceFailed'))
+      setBarError(plainErrorMessage(err, 'form.priceFailed', i18n))
     }
   }
 
@@ -716,7 +726,7 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
       if (isQuoteFailure(err)) {
         setIsExpired(true)
       } else {
-        setBarError(plainErrorMessage(err, 'form.sendFailed'))
+        setBarError(plainErrorMessage(err, 'form.sendFailed', i18n))
       }
       return
     }
@@ -776,7 +786,7 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
       } catch (legError: any) {
         // Row 10 review: the backend's reason, so the restaurant knows why before it retries.
         // Words now, not a key: they go straight into a toast, which is gone before any switch.
-        const reason = plainErrorMessage(legError, null)
+        const reason = plainErrorMessage(legError, null, i18n)
         return { firstLegId: first.id, legNotSent: index + 1, reason: reason ? showMessage(reason, t) : '' }
       }
     }
@@ -924,7 +934,7 @@ export function CreateDeliveryForm({ availability }: { availability?: PartnerAva
           ) : profileError ? (
             <Alert variant="destructive">
               <AlertDescription>
-                {(profileError instanceof Error ? serverMessage(profileError) : undefined) ?? t('form.profileFailed')}
+                {(profileError instanceof Error ? serverMessage(profileError, i18n) : undefined) ?? t('form.profileFailed')}
               </AlertDescription>
             </Alert>
           ) : !pickupCheck.usable ? (

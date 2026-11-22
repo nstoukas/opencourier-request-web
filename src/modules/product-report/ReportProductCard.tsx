@@ -17,7 +17,7 @@ type Props = {
 // Spec 0032 (AC-9): a delivered order's "Report a product". The server decides whether it may be
 // reported, so a refusal shows its own sentence.
 export function ReportProductCard({ deliveryId, orderItems }: Props) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const [open, setOpen] = useState(false)
   const [kind, setKind] = useState<Kind>('WRONG_ITEM')
   const [item, setItem] = useState<string>(orderItems[0]?.name ?? SOMETHING_ELSE)
@@ -49,7 +49,7 @@ export function ReportProductCard({ deliveryId, orderItems }: Props) {
       })
       setSent(true)
     } catch (err: any) {
-      setError(serverMessage(err) || t('productReport.sendFailed'))
+      setError(serverMessage(err, i18n) || t('productReport.sendFailed'))
     } finally {
       setSending(false)
     }

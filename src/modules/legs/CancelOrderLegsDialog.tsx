@@ -36,7 +36,7 @@ type Props = {
  * a restaurant's own cancellation is charged per accepted leg). Each leg's answer is shown.
  */
 export function CancelOrderLegsDialog({ legs, onClose, onDone }: Props) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const [cancelledBy, setCancelledBy] = useState<PartnerCancelledBy>('RESTAURANT')
   // The legs as the dialog opened: the page reads the legs again after the cancels (row 10 review).
   const [openedWith] = useState(legs)
@@ -52,7 +52,7 @@ export function CancelOrderLegsDialog({ legs, onClose, onDone }: Props) {
         await cancelDelivery(leg.id, cancelledBy)
         answers.push({ label, ok: true, message: t('cancelLegs.cancelled') })
       } catch (err: any) {
-        answers.push({ label, ok: false, message: serverMessage(err) ?? t('cancelLegs.failed') })
+        answers.push({ label, ok: false, message: serverMessage(err, i18n) ?? t('cancelLegs.failed') })
       }
     }
     setResults(answers)

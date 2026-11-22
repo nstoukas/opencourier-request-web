@@ -21,7 +21,7 @@ type ReadyAction = (deliveryId: string, readyAt: string | null) => Promise<Ready
 // Spec 0023 (AC-8): the ready time with "+5", "+10", "+15" and "Food ready". The answer of a tap is
 // shown at once, not at the next 30 s poll; a newer order from the page (a poll) replaces it.
 export function ReadyControls({ deliveryId, order, onChanged, otherLegs = [] }: Props) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const format = useFormat()
   const [shown, setShown] = useState<ReadyFields>(order)
   const [sending, setSending] = useState(false)
@@ -53,7 +53,7 @@ export function ReadyControls({ deliveryId, order, onChanged, otherLegs = [] }: 
       const updated = await action(deliveryId, shown.readyAt)
       setShown({ status: updated.status, readyAt: updated.readyAt, foodReadyAt: updated.foodReadyAt })
     } catch (err: any) {
-      ownError = serverMessage(err) || t('ready.changeFailed')
+      ownError = serverMessage(err, i18n) || t('ready.changeFailed')
     }
     // Spec 0046: then each other leg, so the whole order moves together, even when the first refused (row 10
     // review). A leg that refuses (already picked up, say) is named; the others still go.
@@ -64,7 +64,7 @@ export function ReadyControls({ deliveryId, order, onChanged, otherLegs = [] }: 
         const updated = await action(leg.id, readyAtToSend(leg))
         answers[leg.id] = { pageHad: leg.readyAt, readyAt: updated.readyAt }
       } catch (legError: any) {
-        refused.push(`${leg.legLabel}: ${serverMessage(legError) || t('ready.notChanged')}`)
+        refused.push(`${leg.legLabel}: ${serverMessage(legError, i18n) || t('ready.notChanged')}`)
       }
     }
     // `{ ...a, ...b }` copies both objects into a new one, b's entries winning.

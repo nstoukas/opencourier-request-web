@@ -367,7 +367,7 @@ function AdminDeliveryDetails({ data }: { data: ManualRequestDeliveryDto }) {
 }
 
 export default function ManualRequestStatusPage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const router = useRouter()
   const deliveryId = typeof router.query.deliveryId === 'string' ? router.query.deliveryId : ''
   const partnerMode = getManualRequestApiMode() === 'partner'
@@ -397,7 +397,7 @@ export default function ManualRequestStatusPage() {
   const isLeg = Boolean(partnerData?.legCount)
   // The server's own sentence for a refusal, else a general line (restaurantErrorText). A 401 is handled
   // by the frame, which checks the session.
-  const errorMessage = restaurantErrorText(error, t('orderPage.loadFailed'))
+  const errorMessage = restaurantErrorText(error, t('orderPage.loadFailed'), i18n)
 
   const isTerminal = data ? TERMINAL_STATUSES.has(data.status) : false
 

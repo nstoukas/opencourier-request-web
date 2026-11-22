@@ -321,6 +321,10 @@ export interface PartnerAvailability {
   disabledReason: string | null
   acceptingOrders: boolean
   notAcceptingReason: string | null
+  // The same sentence by code (a key of `server.error`) and its values (spec 0054), for the reader's
+  // language. Optional: an older backend does not send them, and the English above shows then.
+  notAcceptingCode?: string | null
+  notAcceptingParams?: Record<string, unknown> | null
 }
 
 // Spec 0030 (AC-6): the restaurant's own record, naming no rider.

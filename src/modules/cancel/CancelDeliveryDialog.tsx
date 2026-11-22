@@ -32,7 +32,7 @@ const CHOICES: { value: PartnerCancelledBy; labelKey: string }[] = [
  * after a rider accepted is charged to it; the rider who took the job is paid either way.
  */
 export function CancelDeliveryDialog({ deliveryId, onClose, onCancelled }: CancelDeliveryDialogProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const [cancelledBy, setCancelledBy] = useState<PartnerCancelledBy>('RESTAURANT')
   const [error, setError] = useState<string | null>(null)
   const [cancelDelivery, { isLoading }] = useCancelManualRequestDeliveryMutation()
@@ -43,7 +43,7 @@ export function CancelDeliveryDialog({ deliveryId, onClose, onCancelled }: Cance
       await cancelDelivery({ deliveryId, cancelledBy })
       onCancelled()
     } catch (err: any) {
-      setError(serverMessage(err) ?? t('cancel.failed'))
+      setError(serverMessage(err, i18n) ?? t('cancel.failed'))
     }
   }
 

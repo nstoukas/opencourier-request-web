@@ -82,6 +82,9 @@ export async function manualRequestFetch<T>(
     const err: any = new Error(message)
     err.statusCode = wrapped?.statusCode ?? response.status
     err.code = wrapped?.code
+    // A refusal with a number, a time or a name in it sends them here, so the portal can word it in its
+    // reader's language (spec 0054, AC-6; src/i18n/serverText.ts).
+    err.params = wrapped?.params
     // A saved customer's phone clash (409) names the other customer by id (spec 0005, AC-4).
     err.conflictingCustomerId = wrapped?.conflictingCustomerId
     // The session may have ended mid visit: the portal frame checks it again (spec 0017, AC-5).
@@ -563,8 +566,16 @@ export function useGetManualRequestDeliveryQuery(
 }
 
 // Spec 0014. Whether dispatch is stopped (heat or a storm) and until when, with the sentence the
-// backend wrote for restaurants. `next` is a stop starting within 12 hours.
-export type DispatchStopView = { reason: 'HEAT' | 'STORM' | 'OTHER'; startsAt: string; endsAt: string | null; message: string }
+// backend wrote for restaurants. `next` is a stop starting within 12 hours. `messageCode` (a key of
+// `server.notice`) and `messageParams` are the same sentence by code (spec 0054), for the reader's language.
+export type DispatchStopView = {
+  reason: 'HEAT' | 'STORM' | 'OTHER'
+  startsAt: string
+  endsAt: string | null
+  message: string
+  messageCode?: string | null
+  messageParams?: Record<string, unknown> | null
+}
 export type DispatchState = { current: DispatchStopView | null; next: DispatchStopView | null }
 
 export async function fetchDispatchState(): Promise<DispatchState> {

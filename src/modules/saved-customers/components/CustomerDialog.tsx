@@ -127,7 +127,7 @@ interface CustomerDialogProps {
  * in the dialog and keep what was typed; a phone another saved customer has names that customer.
  */
 export function CustomerDialog({ customer, onClose, onSaved, onGone }: CustomerDialogProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const isEdit = customer !== null
   // The schema in the reader's language; the resolver reads the latest through the ref (see the order form).
   const dialogSchema = useMemo(() => buildDialogSchema(t), [t])
@@ -249,7 +249,7 @@ export function CustomerDialog({ customer, onClose, onSaved, onGone }: CustomerD
         return
       }
       // A 422's message is a plain sentence written for the restaurant; anything else gets a general one.
-      const refusal = failure.statusCode === 422 ? serverMessage(failure) : undefined
+      const refusal = failure.statusCode === 422 ? serverMessage(failure, i18n) : undefined
       setError(refusal ? textMessage(refusal) : keyMessage('customerDialog.saveFailed'))
     } finally {
       setIsSaving(false)

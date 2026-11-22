@@ -4,12 +4,16 @@
 import i18next, { type i18n as I18n } from 'i18next'
 import { en } from './resources/en'
 import { el } from './resources/el'
+import { serverEn } from './resources/serverEn'
+import { serverEl } from './resources/serverEl'
 import { DEFAULT_LANGUAGE, type Language } from './language'
 
-// The texts, one set per language, under i18next's default namespace "translation".
+// The texts, one set per language, under i18next's default namespace "translation". The server's own
+// templates (`server.error.*`, `server.notice.*`, ...) sit beside the portal's, a copy of the backend's,
+// rendered by src/i18n/serverText.ts. `...` spreads both objects' keys into one.
 export const RESOURCES = {
-  el: { translation: el },
-  en: { translation: en },
+  el: { translation: { ...el, ...serverEl } },
+  en: { translation: { ...en, ...serverEn } },
 }
 
 /** A ready to use i18next instance in `language`. Synchronous: the texts are bundled, nothing loads. */

@@ -46,7 +46,7 @@ type Props = {
  * expired by now, so it is always priced again); and Cancel all for the legs not yet ended.
  */
 export function OrderLegsSection({ deliveryId, version, onChanged, onLegs }: Props) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const [cancelOpen, setCancelOpen] = useState(false)
 
   // agy's review of row 10: the legs are read again every 30 s while the tab is visible, like the page
@@ -55,7 +55,7 @@ export function OrderLegsSection({ deliveryId, version, onChanged, onLegs }: Pro
   const load = useCallback((): Promise<PartnerOrderLegsDto> => fetchOrderLegs(deliveryId), [deliveryId])
   const { data, error, refetch } = usePolledFetch(load, { enabled: Boolean(deliveryId) })
   const order = data ?? null
-  const loadError = error ? (serverMessage(error as any) ?? t('orderLegs.loadFailed')) : null
+  const loadError = error ? (serverMessage(error as any, i18n) ?? t('orderLegs.loadFailed')) : null
 
   // A bump of `version` after the first render: read again now. useRef keeps the last version seen
   // without causing a render.
@@ -152,7 +152,7 @@ function MissingLeg({
   const [size, setSize] = useState<ManualRequestPackageSize | ''>('')
   const [quote, setQuote] = useState<ManualRequestQuoteDto | null>(null)
   const [busy, setBusy] = useState(false)
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const format = useFormat()
   const [error, setError] = useState<string | null>(null)
   const label = legLabel(legNumber, legCount, t)
@@ -175,7 +175,7 @@ function MissingLeg({
     try {
       setQuote(await requestQuote(quoteInput()))
     } catch (err: any) {
-      setError(serverMessage(err) ?? t('form.priceFailed'))
+      setError(serverMessage(err, i18n) ?? t('form.priceFailed'))
     } finally {
       setBusy(false)
     }
@@ -205,7 +205,7 @@ function MissingLeg({
       })
       onSent()
     } catch (err: any) {
-      setError(serverMessage(err) ?? t('orderLegs.legSendFailed', { leg: label }))
+      setError(serverMessage(err, i18n) ?? t('orderLegs.legSendFailed', { leg: label }))
       setQuote(null)
     } finally {
       setBusy(false)

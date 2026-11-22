@@ -70,7 +70,7 @@ function ComplaintLine({ complaint }: { complaint: PartnerComplaint }) {
 // order's rider and their outcomes, and the form to file one. The server decides whether one may be
 // filed (an order that never had a rider, an open complaint already), so a refusal shows its sentence.
 export function RiderComplaintSection({ deliveryId, status }: Props) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const [complaints, setComplaints] = useState<PartnerComplaint[] | null>(null)
   const [listError, setListError] = useState('')
   const [open, setOpen] = useState(false)
@@ -86,7 +86,7 @@ export function RiderComplaintSection({ deliveryId, status }: Props) {
       setListError('')
     } catch (err) {
       // A refusal's own sentence, else a plain one: never a timeout's or a 5xx's words (row 83 review).
-      setListError(restaurantErrorText(err, t(COMPLAINT_TEXT.listFailed)))
+      setListError(restaurantErrorText(err, t(COMPLAINT_TEXT.listFailed), i18n))
     }
   }, [deliveryId])
 
@@ -114,7 +114,7 @@ export function RiderComplaintSection({ deliveryId, status }: Props) {
       setText('')
       await load()
     } catch (err) {
-      setError(restaurantErrorText(err, t(COMPLAINT_TEXT.sendFailed)))
+      setError(restaurantErrorText(err, t(COMPLAINT_TEXT.sendFailed), i18n))
       // Row 83 review: the complaint may have been saved even so (a timeout after the server stored it,
       // or a 409 for one already open), so read the list again; an open one then hides the form.
       await load()

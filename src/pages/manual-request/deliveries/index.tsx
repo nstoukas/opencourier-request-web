@@ -64,7 +64,7 @@ function fromDatetimeLocal(value: string): string | null {
 }
 
 function EditDialog({ delivery, onClose, onSaved }: EditDialogProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const [orderReference, setOrderReference] = useState(delivery.orderReference ?? '')
   const [pickupNotes, setPickupNotes] = useState(delivery.pickup?.pickupNotes ?? '')
   // The ready time moves only by the audited buttons on the order (spec 0023, decision 21.9); the update
@@ -103,7 +103,7 @@ function EditDialog({ delivery, onClose, onSaved }: EditDialogProps) {
       })
       onSaved()
     } catch (err: any) {
-      const refusal = serverMessage(err)
+      const refusal = serverMessage(err, i18n)
       setError(refusal ? textMessage(refusal) : keyMessage('orders.editFailed'))
     }
   }
@@ -212,7 +212,7 @@ function EditDialog({ delivery, onClose, onSaved }: EditDialogProps) {
 }
 
 export default function DeliveriesPage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const format = useFormat()
   const [page, setPage] = useState(1)
   const PER_PAGE = 20
@@ -236,7 +236,7 @@ export default function DeliveriesPage() {
       const full = await fetchPartnerDelivery(deliveryId)
       setEditingDelivery(full)
     } catch (err: any) {
-      const refusal = serverMessage(err)
+      const refusal = serverMessage(err, i18n)
       setStatusMessage(refusal ? textMessage(refusal) : keyMessage('orders.editLoadFailed'))
     } finally {
       setLoadingEditId(null)
@@ -283,7 +283,7 @@ export default function DeliveriesPage() {
           <p className="text-sm text-muted-foreground">{t('orders.loading')}</p>
         ) : error && !data ? (
           <p className="text-sm text-destructive">
-            {serverMessage(error as any) ?? t('orders.loadFailed')}
+            {serverMessage(error as any, i18n) ?? t('orders.loadFailed')}
           </p>
         ) : deliveries.length === 0 ? (
           <p className="text-sm text-muted-foreground">{t('orders.empty')}</p>

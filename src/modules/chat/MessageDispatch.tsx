@@ -13,6 +13,7 @@ import {
   Textarea,
 } from '../../admin-web-components'
 import { useTranslation } from 'react-i18next'
+import type { i18n as I18n } from 'i18next'
 import { formatDateTime, formatTime } from '../../utils/format'
 import { useFormat } from '../../i18n/useFormat'
 import type { Language } from '../../i18n/language'
@@ -48,17 +49,17 @@ function newClientMessageId(): string {
 
 // The backend's sentence for a refusal (4xx), or nothing for a network failure or a 401 (the frame
 // handles a 401 by checking the session again).
-function refusalOf(error: unknown): string | undefined {
+function refusalOf(error: unknown, i18n: I18n): string | undefined {
   const status = (error as { statusCode?: number } | null)?.statusCode
   if (typeof status !== 'number' || status < 400 || status >= 500 || status === 401) return undefined
-  return error instanceof Error ? serverMessage(error) : undefined
+  return error instanceof Error ? serverMessage(error, i18n) : undefined
 }
 
 // Spec 0034 (chat), AC-14: Message Dispatch, in the signed in header. A side sheet with the restaurant's
 // one conversation with the co-op's dispatch. No presets: those are for riders on the road.
 // What is being sent lives here, not in the sheet, so closing the sheet never loses it (AC-19).
 export function MessageDispatch({ email = null }: { email?: string | null }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const [open, setOpen] = useState(false)
   const seenKey = chatSeenKey(email)
   const [seen, setSeen] = useState<ChatSeen | null>(null)
@@ -114,7 +115,7 @@ export function MessageDispatch({ email = null }: { email?: string | null }) {
       await sendChatMessage({ body: item.body, clientMessageId: item.clientMessageId })
       void refetch()
     } catch (sendError) {
-      const reason = refusalOf(sendError)
+      const reason = refusalOf(sendError, i18n)
       setOutgoing((list) =>
         list.map((entry) => (entry.clientMessageId === item.clientMessageId ? { ...entry, state: 'failed', reason } : entry)),
       )
