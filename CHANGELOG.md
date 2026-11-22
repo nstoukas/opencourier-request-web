@@ -37,6 +37,32 @@ has the full reasoning and verification notes.
 On 2 November rows 29, 32, 31 and 28 were merged in. The GA rows (29 and 32) have the entries
 below; rows 31 and 28 are recorded in the workspace's scope and walkthroughs.
 
+### Greek interface (scope row 47, spec 0054, Beta) and its loose ends (scope row 124)
+Built on `feat/greek-interface` and `fix/greek-loose-ends` and merged on 23 November, with the backend, adminweb and
+courier app halves.
+- The portal is in Greek by default with English available: i18next 25 and react-i18next 15, the language kept in the
+  `oc_lang` cookie and read on the server, so the first render is already in it (a broken cookie reads as Greek), and a
+  ΕΛ / EN switch in the header and on the sign in. `<html lang>` and the map's zoom tooltips follow it. `7fa4245` to
+  `2e7d331`, `61a8363`, `df5d69e`
+- Every word on the order form, the order page, the history, legs and cancel dialogs, saved customers, availability, the
+  record, ready times, complaints, product reports and chat moved into `el` and `en` files. Dates and times in Athens
+  time and the 24 hour clock in both languages, money `1.234,56 €` or `€1,234.56`, km and minutes with the language's
+  decimal mark, so the wait record reads "0,3 λεπτά" (`2362ad6`). The order page shows a Greek address in Greek order;
+  a typed address is sent exactly as before (`cf270ea`).
+- Signed in, the switch also saves to the restaurant's account (`PUT partner/v1/auth/language`, through the partner
+  proxy), and sign in follows the account's language, as admin does. `47bf80d`, `452d77f`
+- Row 124: server refusals (with their numbers and times), the dispatch stop banner and the not accepting line read in
+  the restaurant's language, from a copy of the backend's templates (`serverEn.ts`, `serverEl.ts`) and adminweb's
+  renderer. An error with no code keeps its own message as before, a timeout reads the portal's own sentence in either
+  language, and a sentence that cannot be worded falls back to the server's English instead of breaking the page.
+  `6ca0033`, `e96abcb`, `24e61e1`
+- Review fixes: the red cancel button reads Ακύρωση, messages kept on screen are translated when shown, "στη 01:05" at
+  one o'clock and "στις" otherwise. `b30df78`, `c2b44fe`, `bfb67c8`; tests by agy, `75a364a`, `4c4aac4`, `8aba6c7`,
+  `d78a8f1`, `158bdaf`. Reviewed by Fable (row 47) and a fresh Opus session (row 124).
+- Still open: the three copies of the server's templates (backend, adminweb, here) are not checked against each other,
+  other uncoded failures ("Backend unreachable.") still show developer English, and the Greek waits for a Greek
+  speaking member's check before go live (scope row 127).
+
 ### Fixes from the cross family review of rows 79, 10 and 11
 The cross family review (agy, `/crosscheck review`) that rows 79, 10 and 11 owed was given on 22 November;
 its fixes were built on `fix/agy-owed-reviews` and merged the same day. Rows 79 and 11 needed no change here.
