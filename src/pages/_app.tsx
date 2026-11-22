@@ -36,7 +36,10 @@ export default function App({ Component, pageProps, language = DEFAULT_LANGUAGE 
   // The cookie changed under us (another tab switched language) and a page change read it again:
   // follow it, so the page and the cookie never disagree.
   useEffect(() => {
-    if (i18n.language !== language) void i18n.changeLanguage(language)
+    if (i18n.language === language) return
+    void i18n.changeLanguage(language)
+    // <html lang> too, as the switch does: screen readers and Greek upper case rules read it.
+    document.documentElement.lang = language
   }, [i18n, language])
 
   return (

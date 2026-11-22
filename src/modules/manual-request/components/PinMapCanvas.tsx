@@ -55,7 +55,7 @@ function CenterFollower({ center, onUserMove }: Omit<PinMapCanvasProps, 'zoom'>)
 }
 
 export function PinMapCanvas({ center, zoom, onUserMove }: PinMapCanvasProps) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   return (
     // `isolate` starts a stacking context, so Leaflet's own z-index values (up to 1000) stay inside this box
     // and never paint over the page's sticky header or the fixed Get price bar.
@@ -75,7 +75,14 @@ export function PinMapCanvas({ center, zoom, onUserMove }: PinMapCanvasProps) {
         zoomControl={false}
         className="h-full w-full"
       >
-        <ZoomControl position="topleft" zoomInTitle={t('pin.zoomIn')} zoomOutTitle={t('pin.zoomOut')} />
+        {/* react-leaflet builds the control once and ignores new titles; a new `key` per language makes
+            React build a fresh one, so the tooltips follow a switch. */}
+        <ZoomControl
+          key={i18n.language}
+          position="topleft"
+          zoomInTitle={t('pin.zoomIn')}
+          zoomOutTitle={t('pin.zoomOut')}
+        />
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
