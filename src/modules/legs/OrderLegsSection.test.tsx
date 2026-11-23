@@ -238,6 +238,61 @@ describe('OrderLegsSection (spec 0046)', () => {
     })
   })
 
+  describe('Row 140: MissingLeg dropoff business name (decision 140.2)', () => {
+    const retryAndSendMissingLeg = async (leg1Overrides: Partial<ReturnType<typeof legFixture>> = {}) => {
+      await show({
+        legs: [legFixture('del-1', 1, leg1Overrides)],
+        missingLegNumbers: [2],
+      })
+      const missing = screen.getByTestId('missing-leg-2')
+      fireEvent.click(within(missing).getByRole('radio', { name: 'Small' }))
+      fireEvent.click(within(missing).getByRole('button', { name: 'Retry: get a price' }))
+      fireEvent.click(await within(missing).findByRole('button', { name: 'Send leg 2 of 2' }))
+
+      await waitFor(() => expect(createDelivery).toHaveBeenCalledTimes(1))
+      return (createDelivery as jest.Mock).mock.calls[0][0]
+    }
+
+    it('(d) MissingLeg send, from a source whose dropoffBusinessName is null, posts "" and not the source dropoffName', async () => {
+      // In legFixture, dropoff.dropoffBusinessName defaults to null and dropoffName is 'Vassilis Spanoulis'
+      const baseLeg = legFixture('del-1', 1)
+      expect(baseLeg.dropoff?.dropoffBusinessName).toBeNull()
+      expect(baseLeg.dropoff?.dropoffName).toBe('Vassilis Spanoulis')
+
+      const body = await retryAndSendMissingLeg()
+
+      expect(body.dropoffBusinessName).toBe('')
+      expect(body.dropoffBusinessName).not.toBe('Vassilis Spanoulis')
+    })
+
+    it('(e) from a source whose dropoffBusinessName equals its dropoffName (an old order copy), posts ""', async () => {
+      const baseLeg = legFixture('del-1', 1)
+      const body = await retryAndSendMissingLeg({
+        dropoff: {
+          ...baseLeg.dropoff!,
+          dropoffName: 'Vassilis Spanoulis',
+          dropoffBusinessName: 'Vassilis Spanoulis',
+        },
+      })
+
+      expect(body.dropoffBusinessName).toBe('')
+      expect(body.dropoffBusinessName).not.toBe('Vassilis Spanoulis')
+    })
+
+    it('(f) from a source with a real business name, posts that name (trimmed)', async () => {
+      const baseLeg = legFixture('del-1', 1)
+      const body = await retryAndSendMissingLeg({
+        dropoff: {
+          ...baseLeg.dropoff!,
+          dropoffName: 'Vassilis Spanoulis',
+          dropoffBusinessName: '  Spanoulis Bakery  ',
+        },
+      })
+
+      expect(body.dropoffBusinessName).toBe('Spanoulis Bakery')
+    })
+  })
+
   // Row 10 review: an order whose sent legs were all cancelled or failed is over; a missing leg is not sent
   // after it. A delivered leg still counts: the customer is waiting for the rest.
   describe('Retry only while the order is still alive', () => {
