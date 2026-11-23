@@ -11,6 +11,8 @@ has the full reasoning and verification notes.
 ---
 Scope row 128 (auto accept takes stacked pairs) needed only the server's new event wording here: `ACCEPTED_TOGETHER_AUTOMATICALLY` is copied word for word in English and Greek, and the unused `STACK_NOT_AUTOMATIC` is deleted (`97632b5`, merged 23 November).
 
+Scope row 133 (request-web's last lint warnings) was built on the branch `chore/lint-leftovers` and merged in on 23 November. The ready controls' effect now names the three ready fields it follows, so lint has no hook warning left; it still runs at the same moments and keeps a tap's answer until the page's copy changes. The lint limit drops to 2 warnings (the two logo images), and `@tanstack/react-table`, unused since row 129, is removed (`ba57789`, review fix `eae3705`; tests by agy, `384e5d1`). Reviewed by Fable; the findings that held were fixed.
+
 Scope row 129 (lint and a hard coded text check) was built on the branch `chore/request-web-lint` and merged in on 23 November. request-web had no ESLint at all; now `yarn lint` runs Next's `next/core-web-vitals` set plus `i18next/no-literal-string`, so a sentence written between JSX tags fails lint (and `next build`) and belongs in the i18n files instead; tests are exempt. Its first run found 43 hard coded texts, all in upstream components and Storybook stories nothing imports, which were deleted. Three hooks that left out `t` now take it, so a message worded after a language switch follows the new language; the warning baseline is 3 (`689b23f`, review fixes `e0be78d`; guard test by agy, `4ad029d`). Reviewed by Fable; the findings that held were fixed.
 
 
