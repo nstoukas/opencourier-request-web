@@ -9,6 +9,8 @@ Everything below sits on top of upstream `main` on the branch `fix/partial-addre
 has the full reasoning and verification notes.
 
 ---
+Scope row 129 (lint and a hard coded text check) was built on the branch `chore/request-web-lint` and merged in on 23 November. request-web had no ESLint at all; now `yarn lint` runs Next's `next/core-web-vitals` set plus `i18next/no-literal-string`, so a sentence written between JSX tags fails lint (and `next build`) and belongs in the i18n files instead; tests are exempt. Its first run found 43 hard coded texts, all in upstream components and Storybook stories nothing imports, which were deleted. Three hooks that left out `t` now take it, so a message worded after a language switch follows the new language; the warning baseline is 3 (`689b23f`, review fixes `e0be78d`; guard test by agy, `4ad029d`). Reviewed by Fable; the findings that held were fixed.
+
 
 ## Security
 
