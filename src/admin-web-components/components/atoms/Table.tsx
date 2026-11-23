@@ -2,14 +2,6 @@ import { cn } from '../../../ui-shared-utils'
 import Image from 'next/image'
 import * as React from 'react'
 import { Icons } from './Icons'
-import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-} from './Pagination'
 
 const Table = React.forwardRef<HTMLTableElement, React.HTMLAttributes<HTMLTableElement>>(
   ({ className, ...props }, ref) => (
@@ -103,58 +95,6 @@ const TableCaption = React.forwardRef<HTMLTableCaptionElement, React.HTMLAttribu
 )
 TableCaption.displayName = 'TableCaption'
 
-type TablePaginationProps = {
-  canPreviousPage: boolean
-  canNextPage: boolean
-  previousPage: () => void
-  nextPage: () => void
-  pageIndex: number
-  pageCount: number
-  setPageIndex: (pageIndex: number) => void
-  className?: string
-}
-const TablePagination = ({
-  canPreviousPage,
-  canNextPage,
-  previousPage,
-  nextPage,
-  pageIndex,
-  pageCount,
-  className,
-  setPageIndex,
-}: TablePaginationProps) => {
-  return (
-    <Pagination className={cn(className)}>
-      <PaginationContent>
-        <PaginationItem>
-          <PaginationPrevious onClick={previousPage} disabled={!canPreviousPage} />
-        </PaginationItem>
-
-        {/* TODO: Slice page list in chunks and add elipsis. */}
-        {Array(pageCount)
-          .fill(0)
-          .map((_, idx) => {
-            return (
-              <PaginationItem key={idx}>
-                <PaginationLink onClick={() => setPageIndex(idx)} isActive={pageIndex === idx}>
-                  {idx + 1}
-                </PaginationLink>
-              </PaginationItem>
-            )
-          })}
-
-        {/* <PaginationItem>
-          <PaginationEllipsis />
-        </PaginationItem> */}
-
-        <PaginationItem>
-          <PaginationNext onClick={nextPage} disabled={!canNextPage} />
-        </PaginationItem>
-      </PaginationContent>
-    </Pagination>
-  )
-}
-TablePagination.displayName = 'TablePagination'
 export {
   Table,
   TableBody,
@@ -164,6 +104,5 @@ export {
   TableHead,
   TableHeader,
   TableLabeledImageCell,
-  TablePagination,
   TableRow,
 }

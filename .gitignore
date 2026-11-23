@@ -41,3 +41,6 @@ next-env.d.ts
 # local records from the retired aiflow.sh pipeline (deleted 2026-09-30); kept, not source
 .aiflow/
 plan.md
+
+# ESLint cache (yarn lint --cache)
+.eslintcache

@@ -102,7 +102,6 @@ export function AddressSection<T extends FieldValues>({
     setTyping(true)
     const town = getValues(field('city'))
     if (!String(town ?? '').trim() && defaultTown) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       setValue(field('city'), defaultTown as any, { shouldDirty: true, shouldValidate: true })
     }
   }
@@ -168,7 +167,6 @@ export function AddressSection<T extends FieldValues>({
     const postalCode = a.postcode ?? ''
     const countryCode = (a.country_code ?? '').toUpperCase()
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const set = (path: Path<T>, value: any) => setValue(path, value, { shouldValidate: true, shouldDirty: true })
 
     set(field('streetAddress.0'), streetLine)
@@ -196,7 +194,6 @@ export function AddressSection<T extends FieldValues>({
     setResults([])
     setShowResults(false)
     if (compact) return
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const set = (path: Path<T>, value: any) => setValue(path, value, { shouldDirty: true })
     set(field('streetAddress.0'), '')
     set(field('formattedAddress'), '')

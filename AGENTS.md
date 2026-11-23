@@ -23,7 +23,11 @@ react-hook-form, zod. Dev server on port 3090, using the backend's `partner` API
 ## Commands
 
 Yarn 1.22, **not Corepack**: run `node node_modules/.bin/next dev -p 3090` and
-`node node_modules/.bin/jest`. There is no lint script. Full list in the workspace rulebook.
+`node node_modules/.bin/jest`. Lint: `npx yarn@1.22.22 lint` (or `node node_modules/.bin/eslint --ext .js,.ts,.jsx,.tsx src`;
+row 129): Next's `next/core-web-vitals` plus `i18next/no-literal-string`, so text written between JSX tags fails it and
+goes in `src/i18n/resources` (en.ts and el.ts) instead; tests are exempt. `--max-warnings 6` is the measured baseline
+(4 hook dependency warnings, 2 logo `<img>`): fixing one, lower the number in `package.json`. `next build` also runs this
+ESLint now, so a lint error fails the build. Full list in the workspace rulebook.
 
 ## Gotchas
 
