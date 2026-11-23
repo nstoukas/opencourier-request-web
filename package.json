@@ -6,8 +6,8 @@
     "dev": "next dev -p 3090",
     "build": "next build",
     "start": "next start -p 3090",
-    "lint": "eslint --ext .js,.ts,.jsx,.tsx src --max-warnings 3 --cache --cache-strategy content",
-    "lint:fix": "eslint --ext .js,.ts,.jsx,.tsx src --max-warnings 3 --fix --cache --cache-strategy content",
+    "lint": "eslint --ext .js,.ts,.jsx,.tsx src --max-warnings 2 --cache --cache-strategy content",
+    "lint:fix": "eslint --ext .js,.ts,.jsx,.tsx src --max-warnings 2 --fix --cache --cache-strategy content",
     "typecheck": "tsc --noEmit --project tsconfig.json",
     "test": "jest"
   },
@@ -32,7 +32,6 @@
     "@radix-ui/react-tabs": "^1.1.12",
     "@radix-ui/react-toast": "^1.2.14",
     "@radix-ui/react-tooltip": "^1.2.7",
-    "@tanstack/react-table": "^8.21.3",
     "ably": "^2.13.0",
     "autoprefixer": "^10.4.21",
     "class-variance-authority": "^0.7.1",

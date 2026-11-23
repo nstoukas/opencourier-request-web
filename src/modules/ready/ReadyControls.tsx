@@ -39,10 +39,14 @@ export function ReadyControls({ deliveryId, order, onChanged, otherLegs = [] }: 
     return answer && answer.pageHad === leg.readyAt ? answer.readyAt : leg.readyAt
   }
 
-  // The page's own copy moved on (a poll, another tab): show that.
+  // The page's own copy moved on (a poll, another tab): show that. The effect follows the three fields, not
+  // the `order` object, which every page builds anew on each render: following the object would put the
+  // page's copy back over a tap's answer at every render (row 133). Taking the fields out first
+  // (destructuring) lets lint see that they are all the effect reads.
+  const { status, readyAt, foodReadyAt } = order
   useEffect(() => {
-    setShown(order)
-  }, [order.status, order.readyAt, order.foodReadyAt])
+    setShown({ status, readyAt, foodReadyAt })
+  }, [status, readyAt, foodReadyAt])
 
   const run = async (action: ReadyAction) => {
     setSending(true)
