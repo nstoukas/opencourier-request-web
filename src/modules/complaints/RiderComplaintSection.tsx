@@ -88,7 +88,8 @@ export function RiderComplaintSection({ deliveryId, status }: Props) {
       // A refusal's own sentence, else a plain one: never a timeout's or a 5xx's words (row 83 review).
       setListError(restaurantErrorText(err, t(COMPLAINT_TEXT.listFailed), i18n))
     }
-  }, [deliveryId])
+    // `t` and `i18n` too: a refusal read after a language switch is worded in the new language (row 129 review).
+  }, [deliveryId, t, i18n])
 
   useEffect(() => {
     void load()

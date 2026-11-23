@@ -97,7 +97,7 @@ describe('ESLint guard for request-web i18n and repo cleanliness (row 129, decis
     expect(pkg.scripts.lint).toMatch(/--max-warnings\s+\d+/)
 
     const maxWarningsMatch = pkg.scripts.lint.match(/--max-warnings\s+(\d+)/)
-    expect(Number(maxWarningsMatch[1])).toBe(6)
+    const maxWarnings = Number(maxWarningsMatch[1])
 
     // 2. Run ESLint over the real repo src directory and assert errorCount is 0
     const results = await eslint.lintFiles(['src'])
@@ -108,6 +108,6 @@ describe('ESLint guard for request-web i18n and repo cleanliness (row 129, decis
 
     expect(totalErrors).toBe(0)
     // Warnings are bounded by the measured baseline in package.json
-    expect(totalWarnings).toBeLessThanOrEqual(6)
+    expect(totalWarnings).toBeLessThanOrEqual(maxWarnings)
   }, 30000)
 })

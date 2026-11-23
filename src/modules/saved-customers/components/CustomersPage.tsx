@@ -92,7 +92,8 @@ export function CustomersPage() {
     } finally {
       setIsLoadingMore(false)
     }
-  }, [list, search, toast])
+    // `t` too: the toast after a language switch is worded in the new language (row 129 review).
+  }, [list, search, toast, t])
 
   const removeFromList = (id: string) => {
     setList((current) =>

@@ -91,7 +91,8 @@ export function MessageDispatch({ email = null }: { email?: string | null }) {
       setAnnouncement(t('chat.newMessageAnnouncement'))
     }
     lastDispatchId.current = newestDispatchId
-  }, [open, newestDispatchId])
+    // `t` too: after a language switch the announcement is worded in the new language (row 129 review).
+  }, [open, newestDispatchId, t])
   useEffect(() => {
     if (!open) setAnnouncement('')
   }, [open])

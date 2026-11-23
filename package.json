@@ -6,8 +6,8 @@
     "dev": "next dev -p 3090",
     "build": "next build",
     "start": "next start -p 3090",
-    "lint": "eslint --ext .js,.ts,.jsx,.tsx src --max-warnings 6 --cache --cache-strategy content",
-    "lint:fix": "eslint --ext .js,.ts,.jsx,.tsx src --max-warnings 6 --fix --cache --cache-strategy content",
+    "lint": "eslint --ext .js,.ts,.jsx,.tsx src --max-warnings 3 --cache --cache-strategy content",
+    "lint:fix": "eslint --ext .js,.ts,.jsx,.tsx src --max-warnings 3 --fix --cache --cache-strategy content",
     "typecheck": "tsc --noEmit --project tsconfig.json",
     "test": "jest"
   },
