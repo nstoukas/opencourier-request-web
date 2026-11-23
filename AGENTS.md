@@ -80,4 +80,7 @@ strings and attributes such as `placeholder` or `aria-label` (`jsx-only` flags a
   sentence) and `splitChargeNote` (what the split costs, never an amount; decision 11.10). A leg the split made has no cost
   (null until its first offer, then 0); every sentence must stay true if its charge is later taken back (cross check 5).
 
+- A drop off business name is only what the restaurant typed, else `''` (row 140): never copy the customer's name into it,
+  or riders' offers carry it before they accept. Anything that shows it falls back to the customer's name with `||`, not `??`.
+
 _Drafted by /audit from the repo, worth a quick human pass. Edit freely: once a line stops matching this draft, later runs treat it as curated and will flag rather than overwrite it._

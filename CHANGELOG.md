@@ -9,6 +9,8 @@ Everything below sits on top of upstream `main` on the branch `fix/partial-addre
 has the full reasoning and verification notes.
 
 ---
+Scope row 140 (the drop off business name in offers) was built on the branch `fix/business-name-not-customer` and merged in on 24 November, with its backend half. When a restaurant left the business field empty, this app used to send the customer's name as the drop off business name, and riders' offers carried it before they accepted. Now an order sends only a business name the restaurant typed (trimmed), else an empty one; a new leg from the Retry carries only the source order's own business name, and never an older order's copied customer name. The order page falls back to the customer's name with `||`, so an empty business name never shows a blank heading (`d4e101a`, review nits `3151759`; tests by agy, `54a9850`). Reviewed by Fable; the findings that held were fixed.
+
 Scope row 128 (auto accept takes stacked pairs) needed only the server's new event wording here: `ACCEPTED_TOGETHER_AUTOMATICALLY` is copied word for word in English and Greek, and the unused `STACK_NOT_AUTOMATIC` is deleted (`97632b5`, merged 23 November).
 
 Scope row 133 (request-web's last lint warnings) was built on the branch `chore/lint-leftovers` and merged in on 23 November. The ready controls' effect now names the three ready fields it follows, so lint has no hook warning left; it still runs at the same moments and keeps a tap's answer until the page's copy changes. The lint limit drops to 2 warnings (the two logo images), and `@tanstack/react-table`, unused since row 129, is removed (`ba57789`, review fix `eae3705`; tests by agy, `384e5d1`). Reviewed by Fable; the findings that held were fixed.
