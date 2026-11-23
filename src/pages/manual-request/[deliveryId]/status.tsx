@@ -183,7 +183,8 @@ function PartnerDeliveryDetails({
           <h2 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t('orderPage.dropoff')}</h2>
           {data.dropoff ? (
             <>
-              <p className="text-sm font-medium">{data.dropoff.dropoffBusinessName ?? data.dropoff.dropoffName}</p>
+              {/* `||`, not `??`: an order with no business stores an empty name (row 140). */}
+              <p className="text-sm font-medium">{data.dropoff.dropoffBusinessName || data.dropoff.dropoffName}</p>
               <p className="text-sm text-muted-foreground">{formatLocationAddress(data.dropoff)}</p>
               {[data.dropoff.latitude, data.dropoff.longitude].every((x) => x != null) ? (
                 <p className="text-xs font-mono text-muted-foreground">
@@ -337,7 +338,7 @@ function AdminDeliveryDetails({ data }: { data: ManualRequestDeliveryDto }) {
           items={[
             { label: t('orderPage.locationId'), value: data.dropoffLocationId, mono: true },
             { label: t('orderPage.name'), value: data.dropoffName },
-            { label: t('orderPage.business'), value: data.dropoffBusinessName ?? '—' },
+            { label: t('orderPage.business'), value: data.dropoffBusinessName || '—' },
             { label: t('orderPage.phone'), value: data.dropoffPhoneNumber },
             { label: t('orderPage.notes'), value: data.dropoffNotes ?? '—' },
             { label: t('orderPage.ready'), value: format.dateTime(data.dropoffReadyAt) },

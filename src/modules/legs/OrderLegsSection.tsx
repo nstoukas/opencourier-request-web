@@ -188,7 +188,8 @@ function MissingLeg({
     try {
       await createDelivery({
         ...quoteInput(),
-        dropoffBusinessName: source.dropoff?.dropoffBusinessName ?? source.dropoff?.dropoffName ?? '',
+        // Row 140: the source's own business name or empty, never the customer's name.
+        dropoffBusinessName: source.dropoff?.dropoffBusinessName ?? '',
         orderItems: (source.orderItems ?? []).map((item) => ({
           name: item.name,
           quantity: item.quantity,

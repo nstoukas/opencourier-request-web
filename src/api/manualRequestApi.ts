@@ -210,7 +210,9 @@ function mapDeliveryInputForPartner(input: ManualRequestDeliveryInput) {
     ],
     pickupBusinessName: input.pickupBusinessName,
     pickupNotes: input.pickupNotes ?? '',
-    dropoffBusinessName: input.dropoffBusinessName || input.dropoffName,
+    // Row 140: only a business name the restaurant typed, else empty (the backend accepts ''). Copying the
+    // customer's name here put it in every rider's offer as the "business", before they accepted.
+    dropoffBusinessName: input.dropoffBusinessName ?? '',
     dropoffNotes: input.dropoffNotes ?? '',
     dropoffSellerNotes: input.dropoffSellerNotes ?? '',
     // Spec 0016: their own fields; left out when empty (the backend stores none).
