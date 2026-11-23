@@ -254,6 +254,145 @@ describe('ReadyControls (spec 0023, AC-8)', () => {
     expect(screen.queryAllByRole('button')).toHaveLength(0)
   })
 
+  it('keeps a tap answer when rerendered with a new order object holding the same values, until readyAt, foodReadyAt, or status changes (row 133)', async () => {
+    ;(delayDeliveryReady as jest.Mock).mockResolvedValue({
+      id: 'del-1',
+      status: 'ACCEPTED',
+      readyAt: LATER_READY_AT,
+      foodReadyAt: null,
+    })
+
+    const initialOrder = { status: 'ACCEPTED', readyAt: READY_AT, foodReadyAt: null }
+    const { rerender } = render(<ReadyControls deliveryId="del-1" order={initialOrder} />)
+    expect(screen.getByText('Ready at 14:32')).toBeInTheDocument()
+
+    // 1. Tap "+10" and let the answer land
+    fireEvent.click(screen.getByRole('button', { name: '+10' }))
+    expect(await screen.findByText('Ready at 14:42')).toBeInTheDocument()
+    expect(screen.queryByText('Ready at 14:32')).not.toBeInTheDocument()
+
+    // 2. Rerender with a NEW order object holding the SAME three values as before the tap:
+    // the shown answer must stay (does not revert to page copy)
+    rerender(<ReadyControls deliveryId="del-1" order={{ status: 'ACCEPTED', readyAt: READY_AT, foodReadyAt: null }} />)
+    expect(screen.getByText('Ready at 14:42')).toBeInTheDocument()
+    expect(screen.queryByText('Ready at 14:32')).not.toBeInTheDocument()
+
+    // 3. A changed readyAt from the page replaces the answer
+    const THIRD_READY_AT = '2026-11-03T12:52:00.000Z' // 14:52 Athens
+    rerender(
+      <ReadyControls
+        deliveryId="del-1"
+        order={{ status: 'ACCEPTED', readyAt: THIRD_READY_AT, foodReadyAt: null }}
+      />,
+    )
+    expect(screen.getByText('Ready at 14:52')).toBeInTheDocument()
+    expect(screen.queryByText('Ready at 14:42')).not.toBeInTheDocument()
+
+    // 4. A changed foodReadyAt from the page replaces the answer
+    rerender(
+      <ReadyControls
+        deliveryId="del-1"
+        order={{ status: 'ACCEPTED', readyAt: THIRD_READY_AT, foodReadyAt: FOOD_READY_AT }}
+      />,
+    )
+    expect(screen.getByText('Food ready at 14:30')).toBeInTheDocument()
+    expect(screen.queryByText('Ready at 14:52')).not.toBeInTheDocument()
+    expect(screen.queryAllByRole('button')).toHaveLength(0)
+
+    // 5. A changed status from the page replaces the answer
+    rerender(
+      <ReadyControls
+        deliveryId="del-1"
+        order={{ status: 'PICKED_UP', readyAt: THIRD_READY_AT, foodReadyAt: null }}
+      />,
+    )
+    expect(screen.getByText('Ready at 14:52')).toBeInTheDocument()
+    expect(screen.queryByText('Food ready at 14:30')).not.toBeInTheDocument()
+    expect(screen.queryAllByRole('button')).toHaveLength(0)
+  })
+
+  it('keeps a "Food ready" tap answer when rerendered with a new order object holding the same values (row 133)', async () => {
+    ;(markDeliveryFoodReady as jest.Mock).mockResolvedValue({
+      id: 'del-1',
+      status: 'ACCEPTED',
+      readyAt: READY_AT,
+      foodReadyAt: FOOD_READY_AT,
+    })
+
+    const { rerender } = render(
+      <ReadyControls deliveryId="del-1" order={{ status: 'ACCEPTED', readyAt: READY_AT, foodReadyAt: null }} />,
+    )
+    expect(screen.getByText('Ready at 14:32')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Food ready' }))
+    expect(await screen.findByText('Food ready at 14:30')).toBeInTheDocument()
+    expect(screen.queryAllByRole('button')).toHaveLength(0)
+
+    // Rerender with a NEW object holding the same values as before the tap: shown answer stays
+    rerender(<ReadyControls deliveryId="del-1" order={{ status: 'ACCEPTED', readyAt: READY_AT, foodReadyAt: null }} />)
+    expect(screen.getByText('Food ready at 14:30')).toBeInTheDocument()
+    expect(screen.queryAllByRole('button')).toHaveLength(0)
+
+    // A changed readyAt from the page replaces the answer
+    rerender(<ReadyControls deliveryId="del-1" order={{ status: 'ACCEPTED', readyAt: LATER_READY_AT, foodReadyAt: null }} />)
+    expect(screen.getByText('Ready at 14:42')).toBeInTheDocument()
+    expect(screen.queryByText('Food ready at 14:30')).not.toBeInTheDocument()
+    expect(screen.getAllByRole('button')).toHaveLength(4)
+  })
+
+  it('a changed foodReadyAt from the page replaces a delay tap answer (row 133)', async () => {
+    ;(delayDeliveryReady as jest.Mock).mockResolvedValue({
+      id: 'del-1',
+      status: 'ACCEPTED',
+      readyAt: LATER_READY_AT,
+      foodReadyAt: null,
+    })
+
+    const { rerender } = render(
+      <ReadyControls deliveryId="del-1" order={{ status: 'ACCEPTED', readyAt: READY_AT, foodReadyAt: null }} />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: '+5' }))
+    expect(await screen.findByText('Ready at 14:42')).toBeInTheDocument()
+
+    // Same values in new object: answer stays
+    rerender(<ReadyControls deliveryId="del-1" order={{ status: 'ACCEPTED', readyAt: READY_AT, foodReadyAt: null }} />)
+    expect(screen.getByText('Ready at 14:42')).toBeInTheDocument()
+
+    // Page reports food is ready: replaces the delayed time
+    rerender(
+      <ReadyControls deliveryId="del-1" order={{ status: 'ACCEPTED', readyAt: READY_AT, foodReadyAt: FOOD_READY_AT }} />,
+    )
+    expect(screen.getByText('Food ready at 14:30')).toBeInTheDocument()
+    expect(screen.queryByText('Ready at 14:42')).not.toBeInTheDocument()
+    expect(screen.queryAllByRole('button')).toHaveLength(0)
+  })
+
+  it('a changed status from the page replaces a delay tap answer and removes buttons (row 133)', async () => {
+    ;(delayDeliveryReady as jest.Mock).mockResolvedValue({
+      id: 'del-1',
+      status: 'ACCEPTED',
+      readyAt: LATER_READY_AT,
+      foodReadyAt: null,
+    })
+
+    const { rerender } = render(
+      <ReadyControls deliveryId="del-1" order={{ status: 'ACCEPTED', readyAt: READY_AT, foodReadyAt: null }} />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: '+5' }))
+    expect(await screen.findByText('Ready at 14:42')).toBeInTheDocument()
+
+    // Same values in new object: answer stays
+    rerender(<ReadyControls deliveryId="del-1" order={{ status: 'ACCEPTED', readyAt: READY_AT, foodReadyAt: null }} />)
+    expect(screen.getByText('Ready at 14:42')).toBeInTheDocument()
+
+    // Rider picked up: status changes to PICKED_UP
+    rerender(<ReadyControls deliveryId="del-1" order={{ status: 'PICKED_UP', readyAt: READY_AT, foodReadyAt: null }} />)
+    // The page's own readyAt and status are shown, and buttons are removed
+    expect(screen.getByText('Ready at 14:32')).toBeInTheDocument()
+    expect(screen.queryByText('Ready at 14:42')).not.toBeInTheDocument()
+    expect(screen.queryAllByRole('button')).toHaveLength(0)
+  })
+
   describe('Greek time preposition rules (Finding 5, decision 47.16)', () => {
     it('uses "στη" for 01:00-01:59 on Athens time and "στις" for other hours in Greek', () => {
       const elI18n = createI18n('el')

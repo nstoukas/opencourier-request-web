@@ -86,18 +86,27 @@ describe('ESLint guard for request-web i18n and repo cleanliness (row 129, decis
     expect(i18nErrors).toEqual([])
   })
 
-  it('(e) package.json\'s lint script lints src with --max-warnings and the real repo lints with 0 errors', async () => {
-    // 1. Verify package.json configures ESLint over src with max warnings
+  it('(e) package.json configures lint with --max-warnings <= 2, lint:fix carries the same number, and the real repo lints with 0 errors (row 133)', async () => {
+    // 1. Verify package.json configures ESLint over src with max warnings <= 2 (the two logo <img> warnings)
+    // and that lint:fix carries the exact same number (row 133, decision 133.1)
     const pkgPath = path.join(repoRoot, 'package.json')
     const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'))
 
     expect(pkg.scripts?.lint).toBeDefined()
+    expect(pkg.scripts?.['lint:fix']).toBeDefined()
     expect(pkg.scripts.lint).toMatch(/\beslint\b/)
     expect(pkg.scripts.lint).toMatch(/\bsrc\b/)
     expect(pkg.scripts.lint).toMatch(/--max-warnings\s+\d+/)
+    expect(pkg.scripts['lint:fix']).toMatch(/--max-warnings\s+\d+/)
 
     const maxWarningsMatch = pkg.scripts.lint.match(/--max-warnings\s+(\d+)/)
+    const fixMaxWarningsMatch = pkg.scripts['lint:fix'].match(/--max-warnings\s+(\d+)/)
     const maxWarnings = Number(maxWarningsMatch[1])
+    const fixMaxWarnings = Number(fixMaxWarningsMatch[1])
+
+    // The limit must be 2 or lower and lint:fix must carry the same number
+    expect(maxWarnings).toBeLessThanOrEqual(2)
+    expect(fixMaxWarnings).toBe(maxWarnings)
 
     // 2. Run ESLint over the real repo src directory and assert errorCount is 0
     const results = await eslint.lintFiles(['src'])
@@ -107,7 +116,27 @@ describe('ESLint guard for request-web i18n and repo cleanliness (row 129, decis
     const totalWarnings = results.reduce((acc, r) => acc + r.warningCount, 0)
 
     expect(totalErrors).toBe(0)
-    // Warnings are bounded by the measured baseline in package.json
+    // Warnings are bounded by the measured baseline in package.json (at most 2)
     expect(totalWarnings).toBeLessThanOrEqual(maxWarnings)
   }, 30000)
+
+  it('(f) @tanstack/react-table is gone from package.json and yarn.lock (row 133)', () => {
+    const pkgPath = path.join(repoRoot, 'package.json')
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'))
+
+    // package.json dependencies and devDependencies must not contain @tanstack/react-table
+    const allDeps = {
+      ...pkg.dependencies,
+      ...pkg.devDependencies,
+    }
+    expect(allDeps['@tanstack/react-table']).toBeUndefined()
+
+    // Neither package.json nor yarn.lock may have any @tanstack/ reference
+    const pkgContent = fs.readFileSync(pkgPath, 'utf8')
+    expect(pkgContent).not.toMatch(/@tanstack\//)
+
+    const yarnLockPath = path.join(repoRoot, 'yarn.lock')
+    const yarnLockContent = fs.readFileSync(yarnLockPath, 'utf8')
+    expect(yarnLockContent).not.toMatch(/@tanstack\//)
+  })
 })
