@@ -17,6 +17,15 @@ import { serverMessage } from '../../i18n/serverText'
 import { usePolledFetch } from '../../hooks/usePolledFetch'
 import { CancelOrderLegsDialog } from './CancelOrderLegsDialog'
 
+// Row 140 review: a real business name for the new leg, else empty. Before row 140 this app copied the
+// customer's name into the business name, so a value equal to the customer's name is that copy.
+type LegDropoffNames = { dropoffBusinessName?: string | null; dropoffName?: string | null }
+
+function legBusinessName(dropoff: LegDropoffNames | null | undefined): string {
+  const business = dropoff?.dropoffBusinessName?.trim() ?? ''
+  return business !== '' && business !== dropoff?.dropoffName?.trim() ? business : ''
+}
+
 // The three box sizes, labelled in the reader's language (the same words as the order form's).
 const sizeOptions = (t: TFunction): ChoicePillOption[] => [
   { value: ManualRequestPackageSize.SMALL, label: t('form.sizeSmall') },
@@ -188,8 +197,9 @@ function MissingLeg({
     try {
       await createDelivery({
         ...quoteInput(),
-        // Row 140: the source's own business name or empty, never the customer's name.
-        dropoffBusinessName: source.dropoff?.dropoffBusinessName ?? '',
+        // Row 140: the source's own business name or empty, never the customer's name. An order made
+        // before row 140 holds the customer's name there, copied in by this app; that copy is not carried on.
+        dropoffBusinessName: legBusinessName(source.dropoff),
         orderItems: (source.orderItems ?? []).map((item) => ({
           name: item.name,
           quantity: item.quantity,
