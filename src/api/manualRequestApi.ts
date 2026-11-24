@@ -480,6 +480,49 @@ export async function loginPartner(
   return { email: body?.email ?? null, language: body?.language === 'el' || body?.language === 'en' ? body.language : null }
 }
 
+// Row 153: a restaurant resets its own forgotten password by an emailed code. Both calls go to request-web's own
+// server routes (src/pages/api/partner-auth/), which forward them to the backend. A failure throws the shape
+// manualRequestFetch throws (`statusCode`, `code`, `params`), so the page words it with serverMessage; no answer at
+// all gets NO_ANSWER_CODE (row 151).
+async function postPasswordReset<T>(path: 'forgot-password' | 'reset-password', body: object): Promise<T | undefined> {
+  let response: Response
+  try {
+    response = await fetch(`${PARTNER_AUTH_BASE_URL}/${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+  } catch (error: any) {
+    if (typeof error === 'object' && error !== null) error.code = NO_ANSWER_CODE
+    throw error
+  }
+  const text = await response.text()
+  // `as any`: the body is whatever the server sent, read field by field below.
+  let parsed: any
+  try { parsed = text ? JSON.parse(text) : undefined } catch { parsed = undefined }
+  if (!response.ok) {
+    const wrapped = Array.isArray(parsed?.result) ? parsed.result[0] : null
+    const said = wrapped?.message ?? parsed?.message
+    const err: any = new Error(typeof said === 'string' && said ? said : `Request failed (HTTP ${response.status})`)
+    err.statusCode = wrapped?.statusCode ?? response.status
+    err.code = wrapped?.code ?? parsed?.code ?? (said ? undefined : NO_ANSWER_CODE)
+    err.params = wrapped?.params
+    throw err
+  }
+  return (parsed?.result ?? parsed) as T | undefined
+}
+
+/** Asks for a reset code by email. The server answers the same whether or not the email has a login. */
+export async function requestPasswordResetCode(email: string): Promise<void> {
+  await postPasswordReset('forgot-password', { email })
+}
+
+/** Sets a new password with the emailed code. `apiKeyRemoved`: the restaurant's API key was switched off. */
+export async function resetPartnerPassword(email: string, code: string, password: string): Promise<{ apiKeyRemoved: boolean }> {
+  const answer = await postPasswordReset<{ apiKeyRemoved?: boolean }>('reset-password', { email, code, password })
+  return { apiKeyRemoved: answer?.apiKeyRemoved === true }
+}
+
 // Throws when the sign out did not happen (no connection, or the page's server answered an error), so the
 // frame keeps the restaurant signed in and says so instead of pretending (spec 0017, AC-6).
 export async function logoutPartner(): Promise<void> {

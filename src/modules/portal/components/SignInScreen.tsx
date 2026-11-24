@@ -23,6 +23,7 @@ import { loginPartner, saveAccountLanguage, type SignInError } from '../../../ap
 import { LanguageSwitch } from '../../../i18n/LanguageSwitch'
 import { toLanguage } from '../../../i18n/language'
 import { applyLanguage, forgetChosenBeforeSignIn, wasChosenBeforeSignIn } from '../../../i18n/languageChoice'
+import { PasswordReset } from './PasswordReset'
 
 /**
  * Turns a failed sign in into plain words for the restaurant, as the translation key of the words
@@ -63,6 +64,8 @@ export function SignInScreen({ onSignedIn, notice }: SignInScreenProps) {
   // right above the card reaches an error already on screen.
   const [errorKey, setErrorKey] = useState('')
   const [isSigningIn, setIsSigningIn] = useState(false)
+  // Row 153: the card shows the password reset steps instead of the sign in form.
+  const [resetting, setResetting] = useState(false)
 
   // `FormEvent` is the type of the event a <form> passes to onSubmit.
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -125,6 +128,16 @@ export function SignInScreen({ onSignedIn, notice }: SignInScreenProps) {
                 <AlertDescription role="status">{notice}</AlertDescription>
               </Alert>
             ) : null}
+            {resetting ? (
+              <PasswordReset
+                initialEmail={email}
+                onBack={(typedEmail) => {
+                  if (typedEmail) setEmail(typedEmail)
+                  setPassword('')
+                  setResetting(false)
+                }}
+              />
+            ) : (
             <form onSubmit={handleSubmit} noValidate className="space-y-6">
               <FieldGroup>
                 <Field>
@@ -148,13 +161,23 @@ export function SignInScreen({ onSignedIn, notice }: SignInScreenProps) {
                     type="password"
                     autoComplete="current-password"
                     required
-                    aria-describedby="partner-password-hint"
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
                     className="h-12 text-base"
                   />
-                  <FieldDescription id="partner-password-hint">
-                    {t('signIn.passwordHint')}
+                  {/* Row 153: the restaurant resets it itself, by an emailed code. */}
+                  <FieldDescription>
+                    <Button
+                      type="button"
+                      variant="link"
+                      className="h-auto p-0"
+                      onClick={() => {
+                        setErrorKey('')
+                        setResetting(true)
+                      }}
+                    >
+                      {t('signIn.forgotPassword')}
+                    </Button>
                   </FieldDescription>
                 </Field>
               </FieldGroup>
@@ -179,6 +202,7 @@ export function SignInScreen({ onSignedIn, notice }: SignInScreenProps) {
                 )}
               </Button>
             </form>
+            )}
           </CardContent>
         </Card>
       </main>
