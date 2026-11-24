@@ -9,6 +9,12 @@ Everything below sits on top of upstream `main` on the branch `fix/partial-addre
 has the full reasoning and verification notes.
 
 ---
+Scope rows 151, 152 and 153, built in the unattended run of 24 November and merged in that night:
+- **Failures the server never answered show the page's own sentence (row 151).** No connection, an error answer with no words in it, the proxy's 502 and the backend's catch all 500 now get the code `NO_ANSWER`, and every page shows its own sentence in the restaurant's language instead of "Request failed (HTTP 500)" or "Backend unreachable." (`ed11323`, review fix `e87dcd0`).
+- **A restaurant resets its own password by email (row 153).** "Forgot your password?" on the sign in card asks for a code by email, then takes the 6 digit code and a new password, checked on the page first, then says to sign in again, and when the API key was switched off, to ask the co-op for a new one. Two server routes forward the calls to the backend, so the browser talks only to its own origin; no cookie is set. Run end to end on dev through Mailpit (`34da3f9`, review fix `deab9b8`).
+- Tests for both by agy (`2f4106b`). Row 152's two partner edit refusals are copied word for word into the server template files (`b98411e`).
+Each row was reviewed by Fable; the findings that held were fixed.
+
 Scope row 140 (the drop off business name in offers) was built on the branch `fix/business-name-not-customer` and merged in on 24 November, with its backend half. When a restaurant left the business field empty, this app used to send the customer's name as the drop off business name, and riders' offers carried it before they accepted. Now an order sends only a business name the restaurant typed (trimmed), else an empty one; a new leg from the Retry carries only the source order's own business name, and never an older order's copied customer name. The order page falls back to the customer's name with `||`, so an empty business name never shows a blank heading (`d4e101a`, review nits `3151759`; tests by agy, `54a9850`). Reviewed by Fable; the findings that held were fixed.
 
 Scope row 128 (auto accept takes stacked pairs) needed only the server's new event wording here: `ACCEPTED_TOGETHER_AUTOMATICALLY` is copied word for word in English and Greek, and the unused `STACK_NOT_AUTOMATIC` is deleted (`97632b5`, merged 23 November).
