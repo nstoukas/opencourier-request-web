@@ -83,4 +83,12 @@ strings and attributes such as `placeholder` or `aria-label` (`jsx-only` flags a
 - A drop off business name is only what the restaurant typed, else `''` (row 140): never copy the customer's name into it,
   or riders' offers carry it before they accept. Anything that shows it falls back to the customer's name with `||`, not `??`.
 
+- A failure the server never answered in words (no connection, an empty error answer, the proxy's 502, the backend's catch all 500 with
+  code missing, `UNKNOWN`, `INTERNAL_ERROR` or `ERROR`) gets `NO_ANSWER_CODE` (`noWordsForTheRestaurant`, `src/api/manualRequestApi.ts`),
+  and `serverMessage` answers undefined for it, so a page shows its own sentence (row 151). A new call path that builds its own error
+  uses the same function.
+- Password reset by email (row 153): `src/pages/api/partner-auth/forgot-password.ts` and `reset-password.ts` forward only the named fields
+  (`src/utils/forwardPasswordReset.ts`) to the backend's public partner routes and set no cookie; the restaurant signs in again after.
+  Every restaurant reaches those routes from this server's one address, so they share the backend's per address limit.
+
 _Drafted by /audit from the repo, worth a quick human pass. Edit freely: once a line stops matching this draft, later runs treat it as curated and will flag rather than overwrite it._
