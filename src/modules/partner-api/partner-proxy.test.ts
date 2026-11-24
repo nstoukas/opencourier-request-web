@@ -207,7 +207,7 @@ describe('/api/partner-proxy/[...path] API Route', () => {
     await handler(req, res)
 
     expect(resState.statusCode).toBe(502)
-    expect(resState.jsonBody).toEqual({ message: 'Backend unreachable.' })
+    expect(resState.jsonBody).toEqual({ message: 'Backend unreachable.', code: 'NO_ANSWER' })
   })
 
   it('proxies DELETE request sending no body and no Content-Type header', async () => {

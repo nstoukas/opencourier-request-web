@@ -130,17 +130,13 @@ describe('SignInScreen component', () => {
     expect(emailInput).toHaveAttribute('autoComplete', 'username')
     expect(emailInput).toHaveClass('h-12') // 48px touch target
 
-    // Password field with hint linked via aria-describedby
+    // Password field with forgot password button (Row 153)
     const passwordInput = screen.getByLabelText(/^Password/i)
     expect(passwordInput).toBeInTheDocument()
     expect(passwordInput).toHaveAttribute('type', 'password')
     expect(passwordInput).toHaveAttribute('autoComplete', 'current-password')
-    expect(passwordInput).toHaveAttribute('aria-describedby', 'partner-password-hint')
     expect(passwordInput).toHaveClass('h-12') // 48px touch target
-    expect(screen.getByText('Forgotten it? Ask the co-op to set a new one.')).toHaveAttribute(
-      'id',
-      'partner-password-hint'
-    )
+    expect(screen.getByRole('button', { name: 'Forgot your password?' })).toBeInTheDocument()
 
     // Full width Sign In submit button
     const submitBtn = screen.getByRole('button', { name: /^Sign In$/i })
@@ -472,6 +468,56 @@ describe('SignInScreen component', () => {
 
       expect(i18n.language).toBe('el')
       expect(api.saveAccountLanguage).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('forgot password navigation (Row 153)', () => {
+    it('clicking "Forgot your password?" shows PasswordReset with initial email and back button returns with typed email', () => {
+      render(<SignInScreen onSignedIn={onSignedInMock} />)
+
+      // Type email and password
+      const emailInput = screen.getByLabelText(/^Email/i)
+      const passwordInput = screen.getByLabelText(/^Password/i)
+      fireEvent.change(emailInput, { target: { value: 'chef@restaurant.gr' } })
+      fireEvent.change(passwordInput, { target: { value: 'oldsecret' } })
+
+      // Click "Forgot your password?"
+      const forgotBtn = screen.getByRole('button', { name: 'Forgot your password?' })
+      fireEvent.click(forgotBtn)
+
+      // Sign-in form is replaced by PasswordReset component
+      expect(screen.queryByRole('button', { name: /^Sign In$/i })).not.toBeInTheDocument()
+      expect(screen.getByText('Enter your sign in email. If it has a restaurant login, we email you a code.')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Email me a code' })).toBeInTheDocument()
+
+      // The email input in PasswordReset has the initial email
+      const resetEmailInput = screen.getByLabelText(/^Email/i)
+      expect(resetEmailInput).toHaveValue('chef@restaurant.gr')
+
+      // User changes the email in reset view
+      fireEvent.change(resetEmailInput, { target: { value: 'newchef@restaurant.gr' } })
+
+      // Click "Back to sign in"
+      const backBtn = screen.getByRole('button', { name: 'Back to sign in' })
+      fireEvent.click(backBtn)
+
+      // Returns to sign in form with updated email and cleared password
+      expect(screen.getByRole('button', { name: /^Sign In$/i })).toBeInTheDocument()
+      const restoredEmailInput = screen.getByLabelText(/^Email/i)
+      const restoredPasswordInput = screen.getByLabelText(/^Password/i)
+      expect(restoredEmailInput).toHaveValue('newchef@restaurant.gr')
+      expect(restoredPasswordInput).toHaveValue('')
+    })
+
+    it('renders "Ξεχάσατε τον κωδικό;" in Greek', () => {
+      const i18n = createI18n('el')
+      render(
+        <I18nextProvider i18n={i18n}>
+          <SignInScreen onSignedIn={onSignedInMock} />
+        </I18nextProvider>,
+      )
+
+      expect(screen.getByRole('button', { name: 'Ξεχάσατε τον κωδικό;' })).toBeInTheDocument()
     })
   })
 })

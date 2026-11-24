@@ -1,5 +1,5 @@
 import { manualRequestFetch, fetchPartnerDelivery } from './manualRequestApi'
-import { REQUEST_TIMEOUT_CODE, serverMessage } from '../i18n/serverText'
+import { NO_ANSWER_CODE, REQUEST_TIMEOUT_CODE, serverMessage } from '../i18n/serverText'
 import { createI18n } from '../i18n/createI18n'
 
 // Decisions 124.10 and 124.15: A request that times out must reject with an error whose code is
@@ -143,7 +143,7 @@ describe('manualRequestFetch timeout (decisions 124.10, 124.15)', () => {
     jest.advanceTimersByTime(15_000)
   })
 
-  it('rethrows original non-abort error without REQUEST_TIMEOUT_CODE when fetch fails with network error', async () => {
+  it('rethrows original non-abort error with NO_ANSWER_CODE when fetch fails with network error (row 151)', async () => {
     // Failure case: network error (e.g., DNS failure, offline)
     const networkError = new TypeError('Failed to fetch')
     global.fetch = jest.fn().mockRejectedValue(networkError)
@@ -157,11 +157,11 @@ describe('manualRequestFetch timeout (decisions 124.10, 124.15)', () => {
 
     expect(caughtError).toBeDefined()
     expect(caughtError).toBe(networkError)
-    expect(caughtError.code).toBeUndefined()
+    // Row 151: fetch errors with no code get NO_ANSWER_CODE so callers show their own words
+    expect(caughtError.code).toBe(NO_ANSWER_CODE)
     expect(caughtError.code).not.toBe(REQUEST_TIMEOUT_CODE)
 
-    // serverMessage should fall back to error message, not the timeout text
-    expect(serverMessage(caughtError, i18nEl)).toBe('Failed to fetch')
-    expect(serverMessage(caughtError, i18nEl)).not.toBe(i18nEl.t('common.requestTimedOut'))
+    // serverMessage returns undefined for NO_ANSWER_CODE
+    expect(serverMessage(caughtError, i18nEl)).toBeUndefined()
   })
 })
