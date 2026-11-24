@@ -67,6 +67,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     return res.status(upstreamRes.status).send(text)
   } catch {
-    return res.status(502).json({ message: 'Backend unreachable.' })
+    // Row 151: the code tells the page this is no answer from the server, so it shows its own sentence in
+    // the restaurant's language; the English stays for developers. Kept as a literal: a route file under
+    // src/pages/api stays free of the i18n bundle (NO_ANSWER_CODE in src/i18n/serverText.ts is the same).
+    return res.status(502).json({ message: 'Backend unreachable.', code: 'NO_ANSWER' })
   }
 }

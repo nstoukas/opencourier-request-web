@@ -18,7 +18,7 @@ import { EnumDeliveryEventType } from '../shared-types'
 import { notifyPartnerUnauthorized } from './partnerSessionEvents'
 import { usePolledFetch } from '../hooks/usePolledFetch'
 import type { Language } from '../i18n/language'
-import { REQUEST_TIMEOUT_CODE } from '../i18n/serverText'
+import { NO_ANSWER_CODE, REQUEST_TIMEOUT_CODE } from '../i18n/serverText'
 import {
   getManualRequestApiMode,
   PARTNER_AUTH_BASE_URL,
@@ -30,6 +30,19 @@ import {
  * This app talks directly to opencourier-backend manual-request endpoints via server proxy.
  */
 const REQUEST_TIMEOUT_MS = 12000
+
+// Row 151 (closing decision 124.2's KNOWN GAP): true when a failed answer holds no words meant for the
+// restaurant, so the page shows its own sentence in their language instead of developer English:
+//   - no message in the body (an empty 5xx; the message is then our "Request failed (HTTP n)"),
+//   - the partner proxy's own 502 ("Backend unreachable."), which sends NO_ANSWER_CODE beside it,
+//   - the backend's catch all 500 ("Internal server error", with no code or UNKNOWN or INTERNAL_ERROR).
+// A coded refusal, and any 4xx or 503 the server worded (a dispatch stop, no rider free), keeps its words.
+const CATCH_ALL_500_CODES = [undefined, 'UNKNOWN', 'INTERNAL_ERROR']
+function noWordsForTheRestaurant(statusCode: number, code: unknown, said: unknown): boolean {
+  if (code === NO_ANSWER_CODE) return true
+  if (said === undefined || said === null || said === '') return true
+  return statusCode === 500 && CATCH_ALL_500_CODES.includes(code as string | undefined)
+}
 
 // Exported for the other API files (savedCustomersApi.ts), so every partner call shares one error shape.
 export async function manualRequestFetch<T>(
@@ -68,6 +81,9 @@ export async function manualRequestFetch<T>(
       timeout.code = REQUEST_TIMEOUT_CODE
       throw timeout
     }
+    // No connection at all (fetch itself failed): no words from the server, so the page says it in its own
+    // (row 151). The error keeps its message for developers and logs.
+    if (typeof error === 'object' && error !== null && error.code === undefined) error.code = NO_ANSWER_CODE
     throw error
   } finally {
     clearTimeout(timeoutId)
@@ -86,7 +102,9 @@ export async function manualRequestFetch<T>(
       : `Request failed (HTTP ${response.status})`
     const err: any = new Error(message)
     err.statusCode = wrapped?.statusCode ?? response.status
-    err.code = wrapped?.code
+    err.code = noWordsForTheRestaurant(err.statusCode, wrapped?.code ?? body?.code, wrapped?.message ?? body?.message)
+      ? NO_ANSWER_CODE
+      : wrapped?.code
     // A refusal with a number, a time or a name in it sends them here, so the portal can word it in its
     // reader's language (spec 0054, AC-6; src/i18n/serverText.ts).
     err.params = wrapped?.params

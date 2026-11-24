@@ -25,14 +25,11 @@
 // A timeout is worded here too (row 124 review, decision 124.10): manualRequestFetch gives it the code
 // REQUEST_TIMEOUT_CODE, and serverMessage shows the portal's own `common.requestTimedOut` for it.
 //
-// KNOWN GAP, left as it was (row 47 review, finding 4, ruled pre-existing; decision 124.2): any other
-// failure the server never answered ("Request failed (HTTP 500)", the proxy's "Backend unreachable.")
-// has no code, so its message, our developer English, still comes back from serverMessage, and the places
-// that call `serverMessage(err, i18n) ?? t(...)` with no status check show it: deliveries/index.tsx (edit
-// save, edit load, list load), AvailabilityStrip, ReadyControls, OrderLegsSection, CancelOrderLegsDialog,
-// CancelDeliveryDialog, ReportProductCard and CreateDeliveryForm's profile load line. adminweb returns
-// undefined for an error with no `statusCode` (its serverErrorText); doing the same here changes what a
-// dozen existing tests expect, so it is its own small change.
+// A failure the server never answered in words (no connection, a 5xx with no message, the proxy's
+// "Backend unreachable.") gets the code NO_ANSWER_CODE from manualRequestFetch and the proxy (row 151,
+// closing decision 124.2's KNOWN GAP). serverMessage answers undefined for it, so every caller shows its
+// own sentence (`serverMessage(err, i18n) ?? t(...)`), in the reader's language: adminweb's rule
+// (its serverErrorText returns undefined for an error with no statusCode).
 // ─────────────────────────────────────────────────────────────────────────────────────────────
 import type { i18n as I18n } from 'i18next'
 import { formatMoney, formatTime } from '../utils/format'
@@ -45,6 +42,13 @@ const TIME_ZONE = 'Europe/Athens'
  * `server.error` template has it, so serverMessage words it from the portal's own `common.requestTimedOut`.
  */
 export const REQUEST_TIMEOUT_CODE = 'REQUEST_TIMEOUT'
+
+/**
+ * Row 151: the code a failure gets when the server never answered in words: no connection, an error status
+ * with no message in its body, or the partner proxy's 502 "Backend unreachable.". Not a server code either:
+ * serverMessage answers undefined for it, so the page shows its own sentence instead of developer English.
+ */
+export const NO_ANSWER_CODE = 'NO_ANSWER'
 
 // A value the server sends inside `params`. A "part" is a piece of sentence with its own template
 // (only delivery records use them; refusals and banners send plain values), kept so the renderer
@@ -206,7 +210,7 @@ export interface ServerError {
 /**
  * The words for a server's refusal in the reader's language, or undefined when it carried none (then
  * the caller shows its own sentence). A code with a template here wins; otherwise the error's own
- * message, which is the server's English (see KNOWN GAP above for errors the server never answered).
+ * message, which is the server's English. A failure the server never answered (NO_ANSWER_CODE) has none.
  * `i18n` is the page's i18next instance: `const { t, i18n } = useTranslation()` in a component.
  */
 export function serverMessage(error: ServerError | null | undefined, i18n: I18n): string | undefined {
@@ -214,6 +218,8 @@ export function serverMessage(error: ServerError | null | undefined, i18n: I18n)
   const message = typeof error.message === 'string' && error.message.length > 0 ? error.message : undefined
   // No answer in time: the portal's own sentence in the reader's language, not the developer English.
   if (error.code === REQUEST_TIMEOUT_CODE) return i18n.t('common.requestTimedOut')
+  // No words from the server (row 151): the caller's own sentence, never "Request failed (HTTP 500)".
+  if (error.code === NO_ANSWER_CODE) return undefined
   if (typeof error.code === 'string' && hasServerText(i18n, `server.error.${error.code}`)) {
     // A throw while rendering shows the server's English instead (or, with none, the caller's sentence).
     return safeRender(i18n, `server.error.${error.code}`, asParams(error.params)) ?? message
