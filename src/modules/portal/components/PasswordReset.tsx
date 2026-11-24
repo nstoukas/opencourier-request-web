@@ -18,6 +18,9 @@ import { serverMessage } from '../../../i18n/serverText'
 
 // The backend's limits (spec 0039): a six digit code, a password of 8 to 72 characters (bcrypt's limit).
 const CODE_PATTERN = /^\d{6}$/
+// Review of row 153: something@something.something, checked here so a typo gets this page's sentence instead of
+// the server's validation English. The server checks it properly.
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const PASSWORD_MIN = 8
 const PASSWORD_MAX = 72
 
@@ -54,7 +57,7 @@ export function PasswordReset({ initialEmail, onBack }: PasswordResetProps) {
 
   const askForCode = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (!email.trim()) {
+    if (!EMAIL_PATTERN.test(email.trim())) {
       setError(t('reset.emailMissing'))
       return
     }
@@ -165,7 +168,17 @@ export function PasswordReset({ initialEmail, onBack }: PasswordResetProps) {
           {isSending ? <Spinner className="mr-2" aria-hidden /> : null}
           {t('reset.setPassword')}
         </Button>
-        <Button type="button" variant="link" className="w-full" onClick={() => setStep('ask')}>
+        <Button
+          type="button"
+          variant="link"
+          className="w-full"
+          onClick={() => {
+            // Review of row 153: a fresh start, without the old code or its error.
+            setCode('')
+            setError('')
+            setStep('ask')
+          }}
+        >
           {t('reset.newCode')}
         </Button>
         {backButton}

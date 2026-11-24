@@ -503,9 +503,15 @@ async function postPasswordReset<T>(path: 'forgot-password' | 'reset-password', 
   if (!response.ok) {
     const wrapped = Array.isArray(parsed?.result) ? parsed.result[0] : null
     const said = wrapped?.message ?? parsed?.message
-    const err: any = new Error(typeof said === 'string' && said ? said : `Request failed (HTTP ${response.status})`)
+    // A validation refusal sends a list of sentences: joined, as manualRequestFetch does.
+    const saidText = Array.isArray(said) ? said.join('; ') : said
+    const err: any = new Error(typeof saidText === 'string' && saidText ? saidText : `Request failed (HTTP ${response.status})`)
     err.statusCode = wrapped?.statusCode ?? response.status
-    err.code = wrapped?.code ?? parsed?.code ?? (said ? undefined : NO_ANSWER_CODE)
+    // Review of row 153: the same no words rule as every other call (row 151), so a 500 or an empty answer gets
+    // the page's own sentence.
+    err.code = noWordsForTheRestaurant(err.statusCode, wrapped?.code ?? parsed?.code, said)
+      ? NO_ANSWER_CODE
+      : wrapped?.code
     err.params = wrapped?.params
     throw err
   }

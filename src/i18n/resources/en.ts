@@ -63,7 +63,7 @@ export const en = {
   reset: {
     intro: 'Enter your sign in email. If it has a restaurant login, we email you a code.',
     sendCode: 'Email me a code',
-    emailMissing: 'Enter your email, then press Email me a code.',
+    emailMissing: 'Enter your sign in email, then press Email me a code.',
     codeSent: 'If that email has a restaurant login, a 6 digit code is on its way. It works for 15 minutes.',
     code: 'Code from the email',
     newPassword: 'New password',
