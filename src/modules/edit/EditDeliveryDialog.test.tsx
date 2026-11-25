@@ -379,29 +379,29 @@ describe('EditDeliveryDialog (Row 165: after a refused edit, the portal shows th
           deliveryId: 'del-old-1',
           dropoffLatitude: 39.361,
           dropoffLongitude: 22.941,
-          pickupReadyAt: '2026-11-25T10:15:00.000Z',
           orderReference: 'ORD-OLD-REF',
         }),
       )
+      expect('pickupReadyAt' in mockUpdateDelivery.mock.calls[0][0]).toBe(false)
 
       // Check second save sent RELOADED delivery values:
       // - reloaded delivery id ('del-reloaded-2')
       // - reloaded dropoff coordinates (39.385, 22.965)
-      // - reloaded stored pickupReadyAt ('2026-11-25T10:45:00.000Z')
-      // - reloaded stored times unchanged because untouched ('2026-11-25T12:00:00.000Z', etc.)
+      // - stored pickupReadyAt is never sent (decision 168.2)
+      // - reloaded stored times left out as undefined because untouched
       // - reloaded order reference and notes
       expect(mockUpdateDelivery).toHaveBeenNthCalledWith(2, {
         deliveryId: 'del-reloaded-2',
         orderReference: 'ORD-RELOADED-REF',
         pickupNotes: 'Current pickup instructions from backend',
-        pickupReadyAt: '2026-11-25T10:45:00.000Z',
-        pickupDeadlineAt: '2026-11-25T12:00:00.000Z',
+        pickupDeadlineAt: undefined,
         dropoffNotes: 'Current dropoff instructions from backend',
         dropoffLatitude: 39.385,
         dropoffLongitude: 22.965,
-        dropoffReadyAt: '2026-11-25T11:45:00.000Z',
-        dropoffDeadlineAt: '2026-11-25T12:45:00.000Z',
+        dropoffReadyAt: undefined,
+        dropoffDeadlineAt: undefined,
       })
+      expect('pickupReadyAt' in mockUpdateDelivery.mock.calls[1][0]).toBe(false)
 
       expect(onSaved).toHaveBeenCalledTimes(1)
     })
@@ -847,19 +847,22 @@ describe('Row 168: timeToSend', () => {
   })
 
   describe('untouched box (box matches toDatetimeLocal(stored))', () => {
-    it('Clause 1: sends stored time exactly as stored, including seconds and milliseconds', () => {
+    it('Clause 1: answers undefined for an untouched box, leaving field out so server keeps stored time', () => {
       process.env.TZ = 'Europe/Athens'
       const storedWithSeconds = '2026-11-25T19:15:47.000Z'
       const box = toDatetimeLocal(storedWithSeconds) // '2026-11-25T21:15'
-      expect(timeToSend(box, storedWithSeconds)).toBe('2026-11-25T19:15:47.000Z')
+      expect(timeToSend(box, storedWithSeconds)).toBeUndefined()
+      expect(timeToSend(box, storedWithSeconds)).not.toBeNull()
+      expect(timeToSend(box, storedWithSeconds)).not.toBe(storedWithSeconds)
 
       const storedWithMs = '2026-11-25T19:15:47.123Z'
-      expect(timeToSend(toDatetimeLocal(storedWithMs), storedWithMs)).toBe('2026-11-25T19:15:47.123Z')
+      expect(timeToSend(toDatetimeLocal(storedWithMs), storedWithMs)).toBeUndefined()
     })
 
-    it('Clause 1: sends null when stored time is null or undefined (empty stays null)', () => {
-      expect(timeToSend('', null)).toBeNull()
-      expect(timeToSend('', undefined)).toBeNull()
+    it('Clause 1: answers undefined when stored time is null or undefined (empty stays undefined)', () => {
+      expect(timeToSend('', null)).toBeUndefined()
+      expect(timeToSend('', undefined)).toBeUndefined()
+      expect(timeToSend('', null)).not.toBeNull()
     })
   })
 
@@ -875,7 +878,7 @@ describe('Row 168: timeToSend', () => {
       expect(result).toBe('2026-11-25T21:30:00.000Z')
     })
 
-    it('Clause 2: sends null when box is cleared to empty string', () => {
+    it('Clause 2: sends null when box is cleared to empty string (it had a time, now empty)', () => {
       const stored = '2026-11-25T19:15:47.000Z'
       expect(timeToSend('', stored)).toBeNull()
     })
@@ -902,8 +905,8 @@ describe('Row 168: EditDeliveryDialog - keeping order times as they are', () => 
     }
   }
 
-  describe('Clause 1: Untouched times are sent unchanged as stored, and empty stays null', () => {
-    it('sends pickupDeadlineAt, dropoffReadyAt, and dropoffDeadlineAt unchanged with seconds preserved when untouched', async () => {
+  describe('Clause 1: Untouched times are left out (undefined), empty stays undefined, and pickupReadyAt is never sent', () => {
+    it('leaves out pickupDeadlineAt, dropoffReadyAt, and dropoffDeadlineAt when untouched, and never sends pickupReadyAt', async () => {
       mockUpdateDelivery.mockResolvedValueOnce({ id: 'del-168-1', status: 'ACCEPTED' })
 
       const delivery = mockDelivery({
@@ -928,17 +931,23 @@ describe('Row 168: EditDeliveryDialog - keeping order times as they are', () => 
       })
 
       const sentPayload = mockUpdateDelivery.mock.calls[0][0]
-      // Times must be sent exactly as stored, not truncated or converted
-      expect(sentPayload.pickupReadyAt).toBe('2026-11-25T17:00:15.123Z')
-      expect(sentPayload.pickupDeadlineAt).toBe('2026-11-25T19:15:47.000Z')
-      expect(sentPayload.dropoffReadyAt).toBe('2026-11-25T18:30:22.456Z')
-      expect(sentPayload.dropoffDeadlineAt).toBe('2026-11-25T20:45:59.999Z')
+      // Untouched times must be undefined (omitted in JSON), not stored text and not null
+      expect(sentPayload.pickupDeadlineAt).toBeUndefined()
+      expect(sentPayload.dropoffReadyAt).toBeUndefined()
+      expect(sentPayload.dropoffDeadlineAt).toBeUndefined()
+      expect(sentPayload.pickupDeadlineAt).not.toBe('2026-11-25T19:15:47.000Z')
+      expect(sentPayload.pickupDeadlineAt).not.toBeNull()
+
+      // pickupReadyAt is never sent in the update payload
+      expect('pickupReadyAt' in sentPayload).toBe(false)
+      expect(sentPayload.pickupReadyAt).toBeUndefined()
+
       expect(sentPayload.pickupNotes).toBe('Updated pickup note only')
       expect(sentPayload.dropoffNotes).toBe('Updated dropoff note only')
       expect(onSaved).toHaveBeenCalledTimes(1)
     })
 
-    it('sends null for empty stored times and does not invent a "now plus one hour" deadline', async () => {
+    it('leaves out empty stored times (answers undefined, not null) and does not invent a "now plus one hour" deadline', async () => {
       mockUpdateDelivery.mockResolvedValueOnce({ id: 'del-168-null', status: 'ACCEPTED' })
 
       const delivery = mockDelivery({
@@ -964,16 +973,18 @@ describe('Row 168: EditDeliveryDialog - keeping order times as they are', () => 
       })
 
       const sentPayload = mockUpdateDelivery.mock.calls[0][0]
-      expect(sentPayload.pickupReadyAt).toBeNull()
-      expect(sentPayload.pickupDeadlineAt).toBeNull()
-      expect(sentPayload.dropoffReadyAt).toBeNull()
-      expect(sentPayload.dropoffDeadlineAt).toBeNull()
+      expect('pickupReadyAt' in sentPayload).toBe(false)
+      expect(sentPayload.pickupReadyAt).toBeUndefined()
+      expect(sentPayload.pickupDeadlineAt).toBeUndefined()
+      expect(sentPayload.dropoffReadyAt).toBeUndefined()
+      expect(sentPayload.dropoffDeadlineAt).toBeUndefined()
+      expect(sentPayload.pickupDeadlineAt).not.toBeNull()
       expect(onSaved).toHaveBeenCalledTimes(1)
     })
   })
 
-  describe('Clause 2: A changed box sends that local time', () => {
-    it('typing a new value into time boxes sends new Date(value).toISOString()', async () => {
+  describe('Clause 2: A changed box sends that local time, and a cleared box sends null', () => {
+    it('typing a new value into time boxes sends new Date(value).toISOString() and never sends pickupReadyAt', async () => {
       mockUpdateDelivery.mockResolvedValueOnce({ id: 'del-168-2', status: 'ACCEPTED' })
 
       const delivery = mockDelivery({
@@ -1002,11 +1013,12 @@ describe('Row 168: EditDeliveryDialog - keeping order times as they are', () => 
       expect(sentPayload.pickupDeadlineAt).toBe(new Date('2026-11-25T22:30').toISOString())
       expect(sentPayload.dropoffReadyAt).toBe(new Date('2026-11-25T21:45').toISOString())
       expect(sentPayload.dropoffDeadlineAt).toBe(new Date('2026-11-25T23:15').toISOString())
-      // pickupReadyAt is untouched and sent as stored
-      expect(sentPayload.pickupReadyAt).toBe('2026-11-25T17:00:00.000Z')
+      // pickupReadyAt is never sent
+      expect('pickupReadyAt' in sentPayload).toBe(false)
+      expect(sentPayload.pickupReadyAt).toBeUndefined()
     })
 
-    it('clearing a time box sends null', async () => {
+    it('clearing a time box that had a time sends null', async () => {
       mockUpdateDelivery.mockResolvedValueOnce({ id: 'del-168-clear', status: 'ACCEPTED' })
 
       const delivery = mockDelivery({
@@ -1033,9 +1045,10 @@ describe('Row 168: EditDeliveryDialog - keeping order times as they are', () => 
       expect(sentPayload.pickupDeadlineAt).toBeNull()
       expect(sentPayload.dropoffReadyAt).toBeNull()
       expect(sentPayload.dropoffDeadlineAt).toBeNull()
+      expect('pickupReadyAt' in sentPayload).toBe(false)
     })
 
-    it('changing only one time box sends that local time while untouched boxes send stored times', async () => {
+    it('changing only one time box sends that local time while untouched boxes are left out (undefined)', async () => {
       mockUpdateDelivery.mockResolvedValueOnce({ id: 'del-168-mixed', status: 'ACCEPTED' })
 
       const delivery = mockDelivery({
@@ -1058,9 +1071,10 @@ describe('Row 168: EditDeliveryDialog - keeping order times as they are', () => 
       })
 
       const sentPayload = mockUpdateDelivery.mock.calls[0][0]
-      // Untouched boxes stay exact
-      expect(sentPayload.pickupDeadlineAt).toBe('2026-11-25T19:15:47.000Z')
-      expect(sentPayload.dropoffReadyAt).toBe('2026-11-25T18:30:00.123Z')
+      // Untouched boxes are undefined (left out)
+      expect(sentPayload.pickupDeadlineAt).toBeUndefined()
+      expect(sentPayload.dropoffReadyAt).toBeUndefined()
+      expect('pickupReadyAt' in sentPayload).toBe(false)
       // Changed box sends new Date(value).toISOString()
       expect(sentPayload.dropoffDeadlineAt).toBe(new Date('2026-11-25T23:50').toISOString())
     })
@@ -1094,7 +1108,7 @@ describe('Row 168: EditDeliveryDialog - keeping order times as they are', () => 
   })
 
   describe('Clause 4: A test fails if an untouched time moves', () => {
-    it('fails if an untouched time moves by offset or loses precision when editing non-time fields', async () => {
+    it('fails if an untouched time is resent instead of left out as undefined when editing non-time fields', async () => {
       mockUpdateDelivery.mockResolvedValueOnce({ id: 'del-168-immobile', status: 'ACCEPTED' })
 
       const storedPickupDeadline = '2026-11-25T19:15:47.654Z'
@@ -1125,17 +1139,248 @@ describe('Row 168: EditDeliveryDialog - keeping order times as they are', () => 
 
       const sent = mockUpdateDelivery.mock.calls[0][0]
 
-      // Strict equality check: the untouched time must not move by a single second or millisecond,
-      // and must not shift by timezone offset (e.g. Athens 2-hour offset).
-      expect(sent.pickupDeadlineAt).toBe(storedPickupDeadline)
-      expect(sent.dropoffReadyAt).toBe(storedDropoffReady)
-      expect(sent.dropoffDeadlineAt).toBe(storedDropoffDeadline)
-      expect(sent.pickupReadyAt).toBe(storedPickupReady)
+      // Decision 168.2: untouched times are left out (undefined), not resent
+      expect(sent.pickupDeadlineAt).toBeUndefined()
+      expect(sent.dropoffReadyAt).toBeUndefined()
+      expect(sent.dropoffDeadlineAt).toBeUndefined()
+      expect('pickupReadyAt' in sent).toBe(false)
 
-      // Specifically prove it didn't become the local time re-serialized to UTC with 00 seconds
+      // Specifically prove it was not sent as stored text, not null, not re-serialized
+      expect(sent.pickupDeadlineAt).not.toBe(storedPickupDeadline)
+      expect(sent.pickupDeadlineAt).not.toBeNull()
       expect(sent.pickupDeadlineAt).not.toBe('2026-11-25T19:15:00.000Z')
-      // And didn't shift by 2 hours earlier (17:15 UTC)
-      expect(sent.pickupDeadlineAt).not.toBe('2026-11-25T17:15:00.000Z')
     })
+  })
+})
+
+describe('Row 168 (Minor 1 & Decision 168.2): Half-typed time box and unfinished times handling', () => {
+  const onClose = jest.fn()
+  const onSaved = jest.fn()
+
+  beforeEach(() => {
+    jest.resetAllMocks()
+    process.env.TZ = 'Europe/Athens'
+  })
+
+  // datetime-local input validity is read-only in jsdom; define property to simulate browser's badInput.
+  function setBadInput(input: HTMLInputElement, badInput: boolean) {
+    Object.defineProperty(input, 'validity', {
+      get: () => ({ badInput }),
+      configurable: true,
+    })
+  }
+
+  function getInputs() {
+    return {
+      orderRef: document.querySelector('#edit-order-ref') as HTMLInputElement,
+      pickupNotes: document.querySelector('#edit-pickup-notes') as HTMLTextAreaElement,
+      pickupDeadline: document.querySelector('#edit-pickup-deadline') as HTMLInputElement,
+      dropoffNotes: document.querySelector('#edit-dropoff-notes') as HTMLTextAreaElement,
+      dropoffReady: document.querySelector('#edit-dropoff-ready') as HTMLInputElement,
+      dropoffDeadline: document.querySelector('#edit-dropoff-deadline') as HTMLInputElement,
+    }
+  }
+
+  it('a half typed box refuses save with orders.editTimeUnfinished in English and sends nothing', async () => {
+    const delivery = mockDelivery({
+      id: 'del-bad-input-en',
+      pickupDeadlineAt: '2026-11-25T19:00:00.000Z',
+    })
+
+    render(<EditDeliveryDialog delivery={delivery} onClose={onClose} onSaved={onSaved} />)
+
+    const inputs = getInputs()
+    // Simulate typing a half-typed date into pickupDeadline (browser sets validity.badInput = true and value = '')
+    setBadInput(inputs.pickupDeadline, true)
+    fireEvent.change(inputs.pickupDeadline, { target: { value: '' } })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+    // Refusal sentence displayed in English
+    expect(screen.getByText('A time is not finished. Complete it or clear it.')).toBeInTheDocument()
+    // Nothing sent to the backend
+    expect(mockUpdateDelivery).not.toHaveBeenCalled()
+    expect(onSaved).not.toHaveBeenCalled()
+  })
+
+  it('a half typed box refuses save with orders.editTimeUnfinished in Greek and sends nothing', async () => {
+    const delivery = mockDelivery({
+      id: 'del-bad-input-el',
+      dropoffReadyAt: '2026-11-25T18:00:00.000Z',
+    })
+
+    const elI18n = createI18n('el')
+    render(
+      <I18nextProvider i18n={elI18n}>
+        <EditDeliveryDialog delivery={delivery} onClose={onClose} onSaved={onSaved} />
+      </I18nextProvider>,
+    )
+
+    const inputs = getInputs()
+    setBadInput(inputs.dropoffReady, true)
+    fireEvent.change(inputs.dropoffReady, { target: { value: '' } })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Αποθήκευση αλλαγών' }))
+
+    // Refusal sentence displayed in Greek
+    expect(screen.getByText('Μια ώρα δεν είναι πλήρης. Συμπληρώστε τη ή σβήστε τη.')).toBeInTheDocument()
+    // Nothing sent to the backend
+    expect(mockUpdateDelivery).not.toHaveBeenCalled()
+    expect(onSaved).not.toHaveBeenCalled()
+  })
+
+  it('refuses save when dropoffDeadline is half typed', async () => {
+    const delivery = mockDelivery({
+      id: 'del-bad-input-dropoff-dl',
+      dropoffDeadlineAt: '2026-11-25T20:00:00.000Z',
+    })
+
+    render(<EditDeliveryDialog delivery={delivery} onClose={onClose} onSaved={onSaved} />)
+
+    const inputs = getInputs()
+    setBadInput(inputs.dropoffDeadline, true)
+    fireEvent.change(inputs.dropoffDeadline, { target: { value: '' } })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+    expect(screen.getByText('A time is not finished. Complete it or clear it.')).toBeInTheDocument()
+    expect(mockUpdateDelivery).not.toHaveBeenCalled()
+  })
+
+  it('finishing a half typed box with a valid date clears unfinished error and allows save', async () => {
+    mockUpdateDelivery.mockResolvedValueOnce({ id: 'del-finish-ok', status: 'ACCEPTED' })
+
+    const delivery = mockDelivery({
+      id: 'del-finish-ok',
+      pickupDeadlineAt: '2026-11-25T19:00:00.000Z',
+    })
+
+    render(<EditDeliveryDialog delivery={delivery} onClose={onClose} onSaved={onSaved} />)
+
+    const inputs = getInputs()
+    // Step 1: User enters half-typed input -> Save fails
+    setBadInput(inputs.pickupDeadline, true)
+    fireEvent.change(inputs.pickupDeadline, { target: { value: '' } })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+    expect(screen.getByText('A time is not finished. Complete it or clear it.')).toBeInTheDocument()
+    expect(mockUpdateDelivery).not.toHaveBeenCalled()
+
+    // Step 2: User completes typing the full date -> validity.badInput becomes false
+    setBadInput(inputs.pickupDeadline, false)
+    fireEvent.change(inputs.pickupDeadline, { target: { value: '2026-11-25T23:30' } })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+    await waitFor(() => {
+      expect(mockUpdateDelivery).toHaveBeenCalledTimes(1)
+    })
+
+    const sentPayload = mockUpdateDelivery.mock.calls[0][0]
+    expect(sentPayload.pickupDeadlineAt).toBe(new Date('2026-11-25T23:30').toISOString())
+    expect(screen.queryByText('A time is not finished. Complete it or clear it.')).not.toBeInTheDocument()
+    expect(onSaved).toHaveBeenCalledTimes(1)
+  })
+
+  it('clearing a half typed box clears unfinished error and allows save (sending null for a previously set time)', async () => {
+    mockUpdateDelivery.mockResolvedValueOnce({ id: 'del-clear-ok', status: 'ACCEPTED' })
+
+    const delivery = mockDelivery({
+      id: 'del-clear-ok',
+      pickupDeadlineAt: '2026-11-25T19:00:00.000Z',
+    })
+
+    render(<EditDeliveryDialog delivery={delivery} onClose={onClose} onSaved={onSaved} />)
+
+    const inputs = getInputs()
+    // Step 1: User backspaces partially -> half typed
+    setBadInput(inputs.pickupDeadline, true)
+    fireEvent.change(inputs.pickupDeadline, { target: { value: '' } })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+    expect(screen.getByText('A time is not finished. Complete it or clear it.')).toBeInTheDocument()
+    expect(mockUpdateDelivery).not.toHaveBeenCalled()
+
+    // Step 2: User completely clears the input -> badInput is false, value is ''
+    setBadInput(inputs.pickupDeadline, false)
+    // Reset React's internal value tracker so fireEvent.change triggers onChange when value is empty string again
+    if ((inputs.pickupDeadline as any)._valueTracker) {
+      ;(inputs.pickupDeadline as any)._valueTracker.setValue('half-typed')
+    }
+    fireEvent.change(inputs.pickupDeadline, { target: { value: '' } })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+    await waitFor(() => {
+      expect(mockUpdateDelivery).toHaveBeenCalledTimes(1)
+    })
+
+    const sentPayload = mockUpdateDelivery.mock.calls[0][0]
+    // A cleared box sends null
+    expect(sentPayload.pickupDeadlineAt).toBeNull()
+    expect(screen.queryByText('A time is not finished. Complete it or clear it.')).not.toBeInTheDocument()
+    expect(onSaved).toHaveBeenCalledTimes(1)
+  })
+
+  it('a reload after a refusal (row 165) forgets the unfinished mark', async () => {
+    // First save fails on server with 409 PARTNER_EDIT_CHANGED
+    mockUpdateDelivery.mockRejectedValueOnce({
+      statusCode: 409,
+      code: 'PARTNER_EDIT_CHANGED',
+      message: 'This order just changed. Look again before you save.',
+    })
+
+    let resolveReload: (d: any) => void
+    mockFetchPartnerDelivery.mockImplementationOnce(
+      () => new Promise((resolve) => { resolveReload = resolve }),
+    )
+
+    const initialDelivery = mockDelivery({
+      id: 'del-reload-unfinished',
+      orderReference: 'ORD-INIT',
+      pickupDeadlineAt: '2026-11-25T19:00:00.000Z',
+    })
+
+    const reloadedDelivery = mockDelivery({
+      id: 'del-reload-unfinished',
+      orderReference: 'ORD-RELOADED',
+      pickupDeadlineAt: '2026-11-25T20:00:00.000Z',
+    })
+
+    render(<EditDeliveryDialog delivery={initialDelivery} onClose={onClose} onSaved={onSaved} />)
+
+    const inputs = getInputs()
+    // First click -> server refusal triggered, fetchPartnerDelivery in flight
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+    await waitFor(() => {
+      expect(mockFetchPartnerDelivery).toHaveBeenCalledWith('del-reload-unfinished')
+    })
+
+    // While rereading / after refusal, user had typed half-typed input into pickupDeadline
+    setBadInput(inputs.pickupDeadline, true)
+    fireEvent.change(inputs.pickupDeadline, { target: { value: '' } })
+
+    // Reload resolves: fillFrom is called with reloaded delivery and resets unfinishedTimes
+    resolveReload!(reloadedDelivery)
+
+    await waitFor(() => {
+      expect(screen.getByText('The boxes now show the order as it is.')).toBeInTheDocument()
+    })
+
+    // Refilled box shows reloaded time
+    expect(inputs.pickupDeadline.value).toBe('2026-11-25T22:00')
+
+    // Second save succeeds because reload forgot the unfinished mark
+    mockUpdateDelivery.mockResolvedValueOnce({ id: 'del-reload-unfinished', status: 'ACCEPTED' })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+    await waitFor(() => {
+      expect(mockUpdateDelivery).toHaveBeenCalledTimes(2)
+    })
+
+    expect(screen.queryByText('A time is not finished. Complete it or clear it.')).not.toBeInTheDocument()
+    expect(onSaved).toHaveBeenCalledTimes(1)
   })
 })
