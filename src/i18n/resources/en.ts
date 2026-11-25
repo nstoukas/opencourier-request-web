@@ -381,6 +381,7 @@ export const en = {
     editNoCoordinates: 'Dropoff coordinates are missing — cannot update this delivery.',
     editFailed: 'Update failed.',
     editReloaded: 'The boxes now show the order as it is.',
+    editTimeUnfinished: 'A time is not finished. Complete it or clear it.',
     editTitle: 'Edit Delivery',
     editOrderReference: 'Order Reference',
     editOrderReferencePlaceholder: 'e.g. ORD-12345',

@@ -237,16 +237,17 @@ export interface PartnerDeliveryPaginatedDto {
 }
 
 export interface ManualRequestUpdateDeliveryInput {
+  // Row 168 (decision 168.2): a time left out (undefined) keeps the stored one; null clears it.
   deliveryId: string
   orderReference: string
   pickupNotes: string
-  pickupReadyAt: string | null
-  pickupDeadlineAt: string | null
+  pickupReadyAt?: string | null
+  pickupDeadlineAt?: string | null
   dropoffNotes: string
   dropoffLatitude: number
   dropoffLongitude: number
-  dropoffReadyAt: string | null
-  dropoffDeadlineAt: string | null
+  dropoffReadyAt?: string | null
+  dropoffDeadlineAt?: string | null
 }
 
 export interface ManualRequestQuoteDto {

@@ -48,11 +48,13 @@ function fromDatetimeLocal(value: string): string | null {
   return new Date(value).toISOString()
 }
 
-// Row 168: what a time box sends. A box the restaurant left as it was filled sends the stored time exactly (its
-// seconds too, or none if there was none), so a save that changes only the notes changes no time, and the rider is
-// not told the times changed (row 164). A changed box sends the time typed.
-export function timeToSend(box: string, stored: string | null | undefined): string | null {
-  if (box === toDatetimeLocal(stored)) return stored ?? null
+// Row 168: what a time box sends. A box the restaurant left as it was filled sends nothing (undefined: the field is
+// left out of the request, and the server keeps the stored time), so a save that changes only the notes changes no
+// time, and the rider is not told the times changed (row 164). Sending the stored text back instead would undo a
+// time the server moved meanwhile, such as the ready time at pickup (decision 168.2). A changed box sends the time
+// typed, and an emptied one sends null.
+export function timeToSend(box: string, stored: string | null | undefined): string | null | undefined {
+  if (box === toDatetimeLocal(stored)) return undefined
   return fromDatetimeLocal(box)
 }
 
@@ -62,10 +64,8 @@ export function EditDeliveryDialog({ delivery, onClose, onSaved }: EditDeliveryD
   const [current, setCurrent] = useState(delivery)
   const [orderReference, setOrderReference] = useState(delivery.orderReference ?? '')
   const [pickupNotes, setPickupNotes] = useState(delivery.pickup?.pickupNotes ?? '')
-  // The ready time moves only by the audited buttons on the order (spec 0023, decision 21.9); the update
-  // route still wants the field, so the stored value goes back exactly as it came, never through a
-  // local date box (which would read it as browser time and move it by the time zone's offset).
-  const storedPickupReadyAt = current.pickupReadyAt ?? null
+  // The ready time moves only by the audited buttons on the order (spec 0023, decision 21.9), so the edit leaves it
+  // out (decision 168.2: a left out time stays as stored).
   const [pickupDeadlineAt, setPickupDeadlineAt] = useState(toDatetimeLocal(delivery.pickupDeadlineAt))
   const [dropoffNotes, setDropoffNotes] = useState(delivery.dropoff?.dropoffNotes ?? '')
   const [dropoffReadyAt, setDropoffReadyAt] = useState(toDatetimeLocal(delivery.dropoffReadyAt))
@@ -76,10 +76,18 @@ export function EditDeliveryDialog({ delivery, onClose, onSaved }: EditDeliveryD
   const [reloaded, setReloaded] = useState(false)
   // True while the order is read again, so Save waits for the boxes to show it (Fable review, minor 1).
   const [rereading, setRereading] = useState(false)
+  // Row 168 (Fable review, minor 1): the time boxes holding a half typed time. Such a box reports '' as its value,
+  // which would read as "no time" and clear the stored one, so the save is refused until it is finished or cleared.
+  const [unfinishedTimes, setUnfinishedTimes] = useState<Record<string, boolean>>({})
+  // `validity.badInput` is the browser's own "this box holds something that is not a time yet".
+  const noteUnfinished = (box: string, input: HTMLInputElement) =>
+    setUnfinishedTimes(before => ({ ...before, [box]: input.validity.badInput }))
 
   // Puts the order's values into every box, the same way the dialog fills them when it opens.
   const fillFrom = (d: PartnerDeliveryDto) => {
     setCurrent(d)
+    // Every time box is refilled, so none holds a half typed time any more.
+    setUnfinishedTimes({})
     setOrderReference(d.orderReference ?? '')
     setPickupNotes(d.pickup?.pickupNotes ?? '')
     setPickupDeadlineAt(toDatetimeLocal(d.pickupDeadlineAt))
@@ -93,6 +101,10 @@ export function EditDeliveryDialog({ delivery, onClose, onSaved }: EditDeliveryD
   const handleSave = async () => {
     setError(null)
     setReloaded(false)
+    if (Object.values(unfinishedTimes).some(Boolean)) {
+      setError(keyMessage('orders.editTimeUnfinished'))
+      return
+    }
     const dropoffLat = current.dropoff?.latitude
     const dropoffLon = current.dropoff?.longitude
     if (dropoffLat == null || dropoffLon == null) {
@@ -104,7 +116,6 @@ export function EditDeliveryDialog({ delivery, onClose, onSaved }: EditDeliveryD
         deliveryId: current.id,
         orderReference,
         pickupNotes,
-        pickupReadyAt: storedPickupReadyAt,
         // Row 168: each time as stored unless its box was changed (an empty one stays empty: no invented deadline).
         pickupDeadlineAt: timeToSend(pickupDeadlineAt, current.pickupDeadlineAt),
         dropoffNotes,
@@ -175,7 +186,10 @@ export function EditDeliveryDialog({ delivery, onClose, onSaved }: EditDeliveryD
                   id="edit-pickup-deadline"
                   type="datetime-local"
                   value={pickupDeadlineAt}
-                  onChange={(e) => setPickupDeadlineAt(e.target.value)}
+                  onChange={(e) => {
+                    setPickupDeadlineAt(e.target.value)
+                    noteUnfinished('edit-pickup-deadline', e.target)
+                  }}
                 />
               </div>
             </div>
@@ -204,7 +218,10 @@ export function EditDeliveryDialog({ delivery, onClose, onSaved }: EditDeliveryD
                   id="edit-dropoff-ready"
                   type="datetime-local"
                   value={dropoffReadyAt}
-                  onChange={(e) => setDropoffReadyAt(e.target.value)}
+                  onChange={(e) => {
+                    setDropoffReadyAt(e.target.value)
+                    noteUnfinished('edit-dropoff-ready', e.target)
+                  }}
                 />
               </div>
               <div className="space-y-1.5">
@@ -215,7 +232,10 @@ export function EditDeliveryDialog({ delivery, onClose, onSaved }: EditDeliveryD
                   id="edit-dropoff-deadline"
                   type="datetime-local"
                   value={dropoffDeadlineAt}
-                  onChange={(e) => setDropoffDeadlineAt(e.target.value)}
+                  onChange={(e) => {
+                    setDropoffDeadlineAt(e.target.value)
+                    noteUnfinished('edit-dropoff-deadline', e.target)
+                  }}
                 />
               </div>
             </div>

@@ -361,6 +361,7 @@ export const el: Translations = {
     editNoCoordinates: 'Λείπουν οι συντεταγμένες παράδοσης — η διανομή δεν μπορεί να ενημερωθεί.',
     editFailed: 'Η ενημέρωση απέτυχε.',
     editReloaded: 'Τα πεδία δείχνουν τώρα την παραγγελία όπως είναι.',
+    editTimeUnfinished: 'Μια ώρα δεν είναι πλήρης. Συμπληρώστε τη ή σβήστε τη.',
     editTitle: 'Επεξεργασία διανομής',
     editOrderReference: 'Κωδικός παραγγελίας',
     editOrderReferencePlaceholder: 'π.χ. ORD-12345',
