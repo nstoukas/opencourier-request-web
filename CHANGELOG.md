@@ -9,6 +9,8 @@ Everything below sits on top of upstream `main` on the branch `fix/partial-addre
 has the full reasoning and verification notes.
 
 ---
+Scope row 160 (a restaurant's tip change is on the record) needed only the server's new sentence here: `TIP_CHANGED_BY_RESTAURANT` is copied word for word in English and Greek, together with rows 146 and 149's `ADD_ON_JOINED` and `ADD_ON_LEFT`, which this copy had missed, so both files match the backend's again (`53ac454`, merged in on 25 November). The portal shows no event lines yet; the copy keeps the files equal. Suite: 1232 pass.
+
 Scope rows 151, 152 and 153, built in the unattended run of 24 November and merged in that night:
 - **Failures the server never answered show the page's own sentence (row 151).** No connection, an error answer with no words in it, the proxy's 502 and the backend's catch all 500 now get the code `NO_ANSWER`, and every page shows its own sentence in the restaurant's language instead of "Request failed (HTTP 500)" or "Backend unreachable." (`ed11323`, review fix `e87dcd0`).
 - **A restaurant resets its own password by email (row 153).** "Forgot your password?" on the sign in card asks for a code by email, then takes the 6 digit code and a new password, checked on the page first, then says to sign in again, and when the API key was switched off, to ask the co-op for a new one. Two server routes forward the calls to the backend, so the browser talks only to its own origin; no cookie is set. Run end to end on dev through Mailpit (`34da3f9`, review fix `deab9b8`).
