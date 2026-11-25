@@ -82,7 +82,7 @@ strings and attributes such as `placeholder` or `aria-label` (`jsx-only` flags a
 
 - `src/i18n/resources/serverEn.ts` and `serverEl.ts` are word for word copies of the backend's `src/localization/en.ts` and
   `el.ts` (only the export names differ). `src/i18n/translationsParity.test.ts` compares every code with the backend's files
-  beside this repo, both ways (row 163), and skips with a warning when the backend is not there: copy each new or reworded code
+  beside this repo, both ways (row 163), and skips with a warning when the backend folder is absent (`REQUIRE_BACKEND=1` makes that a failure): copy each new or reworded code
   in the same row. It compares with whatever that folder has checked out, uncommitted edits included, so a green run is evidence
   only against that tree.
 - The orders page's Edit dialog lives in `src/modules/edit/EditDeliveryDialog.tsx` (rows 165, 168). It reads the order again only
