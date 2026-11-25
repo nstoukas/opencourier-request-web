@@ -5,6 +5,7 @@ import { I18nextProvider } from 'react-i18next'
 import { createI18n } from '../../i18n/createI18n'
 import { EditDeliveryDialog } from './EditDeliveryDialog'
 import { fetchPartnerDelivery, useUpdateManualRequestDeliveryMutation } from '../../api/manualRequestApi'
+import { REQUEST_TIMEOUT_CODE } from '../../i18n/serverText'
 import { PartnerDeliveryDto, PartnerDeliveryDropoffDto, PartnerDeliveryPickupDto } from '../manual-request/types'
 
 // Mock the manualRequestApi functions used by EditDeliveryDialog.
@@ -488,6 +489,272 @@ describe('EditDeliveryDialog (Row 165: after a refused edit, the portal shows th
       expect(inputs.orderRef.value).toBe('TYPED-REF-456')
       expect(inputs.dropoffNotes.value).toBe('Custom typed dropoff note')
       expect(onSaved).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('Clause 4: non-reread failures (timeout, uncoded 409, validation 400, coded refusal outside the three) keep typed values and do not reread', () => {
+    it('a timeout (REQUEST_TIMEOUT) shows common.requestTimedOut, keeps typed values, and does not reread', async () => {
+      mockUpdateDelivery.mockRejectedValueOnce({
+        code: REQUEST_TIMEOUT_CODE,
+        message: 'Request timed out after 12s. Check backend availability and token.',
+      })
+
+      render(<EditDeliveryDialog delivery={initialDelivery} onClose={onClose} onSaved={onSaved} />)
+
+      const inputs = getInputs()
+      fireEvent.change(inputs.orderRef, { target: { value: 'TYPED-REF-TIMEOUT' } })
+      fireEvent.change(inputs.pickupNotes, { target: { value: 'Custom pickup note during timeout' } })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+      await waitFor(() => {
+        expect(mockUpdateDelivery).toHaveBeenCalledTimes(1)
+      })
+
+      // Timeout message from common.requestTimedOut shows
+      expect(
+        screen.getByText('The server did not answer in time. Please try again in a moment.'),
+      ).toBeInTheDocument()
+
+      // fetchPartnerDelivery is NOT called
+      expect(mockFetchPartnerDelivery).not.toHaveBeenCalled()
+
+      // Typed values stay intact
+      expect(inputs.orderRef.value).toBe('TYPED-REF-TIMEOUT')
+      expect(inputs.pickupNotes.value).toBe('Custom pickup note during timeout')
+
+      // Reloaded line does not show
+      expect(screen.queryByText('The boxes now show the order as it is.')).not.toBeInTheDocument()
+      expect(onSaved).not.toHaveBeenCalled()
+    })
+
+    it('an uncoded 409 error shows the error message, keeps typed values, and does not reread', async () => {
+      mockUpdateDelivery.mockRejectedValueOnce({
+        statusCode: 409,
+        message: 'Conflict: some other operation is in progress.',
+      })
+
+      render(<EditDeliveryDialog delivery={initialDelivery} onClose={onClose} onSaved={onSaved} />)
+
+      const inputs = getInputs()
+      fireEvent.change(inputs.orderRef, { target: { value: 'TYPED-REF-UNCODED-409' } })
+      fireEvent.change(inputs.dropoffNotes, { target: { value: 'Custom dropoff note for 409' } })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+      await waitFor(() => {
+        expect(mockUpdateDelivery).toHaveBeenCalledTimes(1)
+      })
+
+      // The server's uncoded message shows
+      expect(
+        screen.getByText('Conflict: some other operation is in progress.'),
+      ).toBeInTheDocument()
+
+      // fetchPartnerDelivery is NOT called
+      expect(mockFetchPartnerDelivery).not.toHaveBeenCalled()
+
+      // Typed values stay intact
+      expect(inputs.orderRef.value).toBe('TYPED-REF-UNCODED-409')
+      expect(inputs.dropoffNotes.value).toBe('Custom dropoff note for 409')
+
+      // Reloaded line does not show
+      expect(screen.queryByText('The boxes now show the order as it is.')).not.toBeInTheDocument()
+      expect(onSaved).not.toHaveBeenCalled()
+    })
+
+    it('a validation 400 with a sentence shows the message, keeps typed values, and does not reread', async () => {
+      mockUpdateDelivery.mockRejectedValueOnce({
+        statusCode: 400,
+        message: 'pickupDeadlineAt must be a Date instance',
+      })
+
+      render(<EditDeliveryDialog delivery={initialDelivery} onClose={onClose} onSaved={onSaved} />)
+
+      const inputs = getInputs()
+      fireEvent.change(inputs.orderRef, { target: { value: 'TYPED-REF-VAL-400' } })
+      fireEvent.change(inputs.pickupNotes, { target: { value: 'Custom pickup note for 400' } })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+      await waitFor(() => {
+        expect(mockUpdateDelivery).toHaveBeenCalledTimes(1)
+      })
+
+      // Validation error message shows
+      expect(screen.getByText('pickupDeadlineAt must be a Date instance')).toBeInTheDocument()
+
+      // fetchPartnerDelivery is NOT called
+      expect(mockFetchPartnerDelivery).not.toHaveBeenCalled()
+
+      // Typed values stay intact
+      expect(inputs.orderRef.value).toBe('TYPED-REF-VAL-400')
+      expect(inputs.pickupNotes.value).toBe('Custom pickup note for 400')
+
+      // Reloaded line does not show
+      expect(screen.queryByText('The boxes now show the order as it is.')).not.toBeInTheDocument()
+      expect(onSaved).not.toHaveBeenCalled()
+    })
+
+    it('a coded refusal not in the three (drift refusal) shows the message, keeps typed values, and does not reread', async () => {
+      mockUpdateDelivery.mockRejectedValueOnce({
+        statusCode: 400,
+        code: 'DELIVERY_DROPOFF_LOCATION_DRIFT',
+        message: "Delivery dropoff location doesn't match quote location",
+      })
+
+      render(<EditDeliveryDialog delivery={initialDelivery} onClose={onClose} onSaved={onSaved} />)
+
+      const inputs = getInputs()
+      fireEvent.change(inputs.orderRef, { target: { value: 'TYPED-REF-DRIFT' } })
+      fireEvent.change(inputs.dropoffNotes, { target: { value: 'Custom dropoff note for drift' } })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+      await waitFor(() => {
+        expect(mockUpdateDelivery).toHaveBeenCalledTimes(1)
+      })
+
+      // Refusal message shows
+      expect(
+        screen.getByText("Delivery dropoff location doesn't match quote location"),
+      ).toBeInTheDocument()
+
+      // fetchPartnerDelivery is NOT called
+      expect(mockFetchPartnerDelivery).not.toHaveBeenCalled()
+
+      // Typed values stay intact
+      expect(inputs.orderRef.value).toBe('TYPED-REF-DRIFT')
+      expect(inputs.dropoffNotes.value).toBe('Custom dropoff note for drift')
+
+      // Reloaded line does not show
+      expect(screen.queryByText('The boxes now show the order as it is.')).not.toBeInTheDocument()
+      expect(onSaved).not.toHaveBeenCalled()
+    })
+
+    it('a coded 409 refusal outside the three (LEG_LABELS_LOCKED) shows the message, keeps typed values, and does not reread', async () => {
+      mockUpdateDelivery.mockRejectedValueOnce({
+        statusCode: 409,
+        code: 'LEG_LABELS_LOCKED',
+        message: 'This delivery is one leg of an order: its order reference and leg numbers cannot change.',
+      })
+
+      render(<EditDeliveryDialog delivery={initialDelivery} onClose={onClose} onSaved={onSaved} />)
+
+      const inputs = getInputs()
+      fireEvent.change(inputs.orderRef, { target: { value: 'TYPED-REF-LOCKED' } })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+      await waitFor(() => {
+        expect(mockUpdateDelivery).toHaveBeenCalledTimes(1)
+      })
+
+      // Refusal message shows
+      expect(
+        screen.getByText(
+          'This delivery is one leg of an order: its order reference and leg numbers cannot change.',
+        ),
+      ).toBeInTheDocument()
+
+      // fetchPartnerDelivery is NOT called
+      expect(mockFetchPartnerDelivery).not.toHaveBeenCalled()
+
+      // Typed values stay intact
+      expect(inputs.orderRef.value).toBe('TYPED-REF-LOCKED')
+
+      // Reloaded line does not show
+      expect(screen.queryByText('The boxes now show the order as it is.')).not.toBeInTheDocument()
+      expect(onSaved).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('Clause 5: Save button disabled while reread is pending after refusal', () => {
+    it('Save button is disabled while fetchPartnerDelivery is pending after refusal, and re-enabled after it resolves', async () => {
+      mockUpdateDelivery.mockRejectedValueOnce({
+        statusCode: 409,
+        code: 'PARTNER_EDIT_CHANGED',
+        message: 'This order just changed. Look again before you save.',
+      })
+
+      // A deferred promise so we can control when fetchPartnerDelivery finishes
+      let resolveReread!: (value: PartnerDeliveryDto) => void
+      const rereadPromise = new Promise<PartnerDeliveryDto>((resolve) => {
+        resolveReread = resolve
+      })
+      mockFetchPartnerDelivery.mockReturnValueOnce(rereadPromise)
+
+      render(<EditDeliveryDialog delivery={initialDelivery} onClose={onClose} onSaved={onSaved} />)
+
+      const saveButton = screen.getByRole('button', { name: 'Save changes' })
+      expect(saveButton).toBeEnabled()
+
+      fireEvent.click(saveButton)
+
+      // Wait until fetchPartnerDelivery has been triggered
+      await waitFor(() => {
+        expect(mockFetchPartnerDelivery).toHaveBeenCalledWith('del-old-1')
+      })
+
+      // While fetchPartnerDelivery is pending, Save button must be disabled
+      expect(saveButton).toBeDisabled()
+
+      // Settle the reread promise (resolve)
+      resolveReread(reloadedDelivery)
+
+      // Once reread settles, Save button is enabled again
+      await waitFor(() => {
+        expect(saveButton).toBeEnabled()
+      })
+
+      // Reloaded line shows
+      expect(screen.getByText('The boxes now show the order as it is.')).toBeInTheDocument()
+    })
+
+    it('Save button is disabled while fetchPartnerDelivery is pending after refusal, and re-enabled after it rejects', async () => {
+      mockUpdateDelivery.mockRejectedValueOnce({
+        statusCode: 409,
+        code: 'PARTNER_EDIT_POINT_HELD',
+        message: "A rider is already on this order, so its drop off point can't move. Message dispatch to change it.",
+      })
+
+      // A deferred promise for fetchPartnerDelivery that will reject
+      let rejectReread!: (err: any) => void
+      const rereadPromise = new Promise<PartnerDeliveryDto>((_resolve, reject) => {
+        rejectReread = reject
+      })
+      mockFetchPartnerDelivery.mockReturnValueOnce(rereadPromise)
+
+      render(<EditDeliveryDialog delivery={initialDelivery} onClose={onClose} onSaved={onSaved} />)
+
+      const saveButton = screen.getByRole('button', { name: 'Save changes' })
+      expect(saveButton).toBeEnabled()
+
+      fireEvent.click(saveButton)
+
+      // Wait until fetchPartnerDelivery has been triggered
+      await waitFor(() => {
+        expect(mockFetchPartnerDelivery).toHaveBeenCalledWith('del-old-1')
+      })
+
+      // While fetchPartnerDelivery is pending, Save button must be disabled
+      expect(saveButton).toBeDisabled()
+
+      // Settle the reread promise (reject)
+      rejectReread(new Error('Network error during reread'))
+
+      // Once reread settles (rejected), Save button is enabled again
+      await waitFor(() => {
+        expect(saveButton).toBeEnabled()
+      })
+
+      // Refusal stays shown, but reloaded line does not show
+      expect(
+        screen.getByText(
+          "A rider is already on this order, so its drop off point can't move. Message dispatch to change it.",
+        ),
+      ).toBeInTheDocument()
+      expect(screen.queryByText('The boxes now show the order as it is.')).not.toBeInTheDocument()
     })
   })
 
