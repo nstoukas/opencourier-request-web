@@ -607,7 +607,8 @@ export function useUpdateManualRequestDeliveryMutation() {
           dropoffLongitude,
           dropoffReadyAt,
           dropoffDeadlineAt,
-          tipByCustomer: 0,
+          // Row 169: no tip is sent. The portal has no tip box, and the 0 it used to send reset a tip the restaurant's
+          // own system had set through the API; the server keeps a left out tip as it is.
           pickupVerification: SAFE_VERIFICATION_DEFAULT,
           dropoffVerification: SAFE_VERIFICATION_DEFAULT,
         }),
