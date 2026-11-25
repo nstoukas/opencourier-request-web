@@ -380,6 +380,7 @@ export const en = {
   orders: {
     editNoCoordinates: 'Dropoff coordinates are missing — cannot update this delivery.',
     editFailed: 'Update failed.',
+    editReloaded: 'The boxes now show the order as it is.',
     editTitle: 'Edit Delivery',
     editOrderReference: 'Order Reference',
     editOrderReferencePlaceholder: 'e.g. ORD-12345',

@@ -360,6 +360,7 @@ export const el: Translations = {
   orders: {
     editNoCoordinates: 'Λείπουν οι συντεταγμένες παράδοσης — η διανομή δεν μπορεί να ενημερωθεί.',
     editFailed: 'Η ενημέρωση απέτυχε.',
+    editReloaded: 'Τα πεδία δείχνουν τώρα την παραγγελία όπως είναι.',
     editTitle: 'Επεξεργασία διανομής',
     editOrderReference: 'Κωδικός παραγγελίας',
     editOrderReferencePlaceholder: 'π.χ. ORD-12345',

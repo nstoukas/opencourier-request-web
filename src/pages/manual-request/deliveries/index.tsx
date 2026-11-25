@@ -11,22 +11,13 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  Input,
-  Label,
   Separator,
   StatusBadge,
-  Textarea,
 } from '../../../admin-web-components'
 import {
   usePartnerAvailabilityQuery,
   fetchPartnerDelivery,
   useListManualRequestDeliveriesQuery,
-  useUpdateManualRequestDeliveryMutation,
 } from '../../../api/manualRequestApi'
 import { PartnerDeliveryDto } from '../../../modules/manual-request/types'
 import { useFormat } from '../../../i18n/useFormat'
@@ -34,182 +25,13 @@ import { serverMessage } from '../../../i18n/serverText'
 import { keyMessage, showMessage, textMessage, type ShownMessage } from '../../../i18n/shownMessage'
 import { PageHeader } from '../../../modules/portal/components/PortalFrame'
 import { CancelDeliveryDialog } from '../../../modules/cancel/CancelDeliveryDialog'
+import { EditDeliveryDialog } from '../../../modules/edit/EditDeliveryDialog'
 import { OrderLegsCard } from '../../../modules/legs/OrderLegsCard'
 import { groupHistory } from '../../../modules/manual-request/utils/legs'
 import { splitChargeNote, splitOutcomeLine } from '../../../modules/legs/splitOutcome'
 
 // Statuses where cancel is no longer possible
 const TERMINAL_STATUSES = new Set(['DROPPED_OFF', 'CANCELED', 'FAILED'])
-
-interface EditDialogProps {
-  delivery: PartnerDeliveryDto
-  onClose: () => void
-  onSaved: () => void
-}
-
-function toDatetimeLocal(iso: string | null | undefined): string {
-  if (!iso) return ''
-  return iso.slice(0, 16)
-}
-
-function defaultDeadline(): string {
-  const d = new Date()
-  d.setHours(d.getHours() + 1)
-  return toDatetimeLocal(d.toISOString())
-}
-
-function fromDatetimeLocal(value: string): string | null {
-  if (!value) return null
-  return new Date(value).toISOString()
-}
-
-function EditDialog({ delivery, onClose, onSaved }: EditDialogProps) {
-  const { t, i18n } = useTranslation()
-  const [orderReference, setOrderReference] = useState(delivery.orderReference ?? '')
-  const [pickupNotes, setPickupNotes] = useState(delivery.pickup?.pickupNotes ?? '')
-  // The ready time moves only by the audited buttons on the order (spec 0023, decision 21.9); the update
-  // route still wants the field, so the stored value goes back exactly as it came, never through a
-  // local date box (which would read it as browser time and move it by the time zone's offset).
-  const storedPickupReadyAt = delivery.pickupReadyAt ?? null
-  const [pickupDeadlineAt, setPickupDeadlineAt] = useState(toDatetimeLocal(delivery.pickupDeadlineAt) || defaultDeadline())
-  const [dropoffNotes, setDropoffNotes] = useState(delivery.dropoff?.dropoffNotes ?? '')
-  const [dropoffReadyAt, setDropoffReadyAt] = useState(toDatetimeLocal(delivery.dropoffReadyAt))
-  const [dropoffDeadlineAt, setDropoffDeadlineAt] = useState(toDatetimeLocal(delivery.dropoffDeadlineAt) || defaultDeadline())
-  // A key or the server's words, translated where it is shown (src/i18n/shownMessage.ts).
-  const [error, setError] = useState<ShownMessage | null>(null)
-
-  const [updateDelivery, { isLoading }] = useUpdateManualRequestDeliveryMutation()
-
-  const handleSave = async () => {
-    setError(null)
-    const dropoffLat = delivery.dropoff?.latitude
-    const dropoffLon = delivery.dropoff?.longitude
-    if (dropoffLat == null || dropoffLon == null) {
-      setError(keyMessage('orders.editNoCoordinates'))
-      return
-    }
-    try {
-      await updateDelivery({
-        deliveryId: delivery.id,
-        orderReference,
-        pickupNotes,
-        pickupReadyAt: storedPickupReadyAt,
-        pickupDeadlineAt: fromDatetimeLocal(pickupDeadlineAt),
-        dropoffNotes,
-        dropoffLatitude: dropoffLat,
-        dropoffLongitude: dropoffLon,
-        dropoffReadyAt: fromDatetimeLocal(dropoffReadyAt),
-        dropoffDeadlineAt: fromDatetimeLocal(dropoffDeadlineAt),
-      })
-      onSaved()
-    } catch (err: any) {
-      const refusal = serverMessage(err, i18n)
-      setError(refusal ? textMessage(refusal) : keyMessage('orders.editFailed'))
-    }
-  }
-
-  return (
-    <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>{t('orders.editTitle')}</DialogTitle>
-        </DialogHeader>
-
-        <div className="space-y-5 py-2 max-h-[70vh] overflow-y-auto pr-1">
-          <div className="space-y-1.5">
-            <Label htmlFor="edit-order-ref">{t('orders.editOrderReference')}</Label>
-            <Input
-              id="edit-order-ref"
-              value={orderReference}
-              onChange={(e) => setOrderReference(e.target.value)}
-              placeholder={t('orders.editOrderReferencePlaceholder')}
-            />
-          </div>
-
-          <Separator />
-
-          <div className="space-y-3">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('orderPage.pickup')}</p>
-            <div className="space-y-1.5">
-              <Label htmlFor="edit-pickup-notes">{t('orderPage.notes')}</Label>
-              <Textarea
-                id="edit-pickup-notes"
-                value={pickupNotes}
-                onChange={(e) => setPickupNotes(e.target.value)}
-                placeholder={t('orders.editPickupNotesPlaceholder')}
-                rows={2}
-              />
-            </div>
-            <div className="grid sm:grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="edit-pickup-deadline">
-                  {t('orderPage.deadline')} <span className="text-muted-foreground font-normal">{t('common.optional')}</span>
-                </Label>
-                <Input
-                  id="edit-pickup-deadline"
-                  type="datetime-local"
-                  value={pickupDeadlineAt}
-                  onChange={(e) => setPickupDeadlineAt(e.target.value)}
-                />
-              </div>
-            </div>
-          </div>
-
-          <Separator />
-
-          <div className="space-y-3">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('orderPage.dropoff')}</p>
-            <div className="space-y-1.5">
-              <Label htmlFor="edit-dropoff-notes">{t('orderPage.notes')}</Label>
-              <Textarea
-                id="edit-dropoff-notes"
-                value={dropoffNotes}
-                onChange={(e) => setDropoffNotes(e.target.value)}
-                placeholder={t('orders.editDropoffNotesPlaceholder')}
-                rows={2}
-              />
-            </div>
-            <div className="grid sm:grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="edit-dropoff-ready">
-                  {t('orders.editReadyAt')} <span className="text-muted-foreground font-normal">{t('common.optional')}</span>
-                </Label>
-                <Input
-                  id="edit-dropoff-ready"
-                  type="datetime-local"
-                  value={dropoffReadyAt}
-                  onChange={(e) => setDropoffReadyAt(e.target.value)}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="edit-dropoff-deadline">
-                  {t('orderPage.deadline')} <span className="text-muted-foreground font-normal">{t('common.optional')}</span>
-                </Label>
-                <Input
-                  id="edit-dropoff-deadline"
-                  type="datetime-local"
-                  value={dropoffDeadlineAt}
-                  onChange={(e) => setDropoffDeadlineAt(e.target.value)}
-                />
-              </div>
-            </div>
-          </div>
-
-          {error ? <p className="text-sm text-destructive">{showMessage(error, t)}</p> : null}
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={isLoading}>
-            {t('common.cancel')}
-          </Button>
-          <Button onClick={handleSave} disabled={isLoading}>
-            {isLoading ? t('common.saving') : t('orders.saveChanges')}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
-}
 
 export default function DeliveriesPage() {
   const { t, i18n } = useTranslation()
@@ -432,7 +254,7 @@ export default function DeliveriesPage() {
       </div>
 
       {editingDelivery ? (
-        <EditDialog
+        <EditDeliveryDialog
           delivery={editingDelivery}
           onClose={() => setEditingDelivery(null)}
           onSaved={() => {
