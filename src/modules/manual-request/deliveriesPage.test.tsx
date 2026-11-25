@@ -607,7 +607,7 @@ describe('DeliveriesPage (/manual-request/deliveries/index.tsx)', () => {
       expect(within(dialog).getByLabelText(/Deadline/, { selector: '#edit-pickup-deadline' })).toBeInTheDocument()
     })
 
-    it('Save still sends the stored pickupReadyAt, as the same moment (in the co-op\'s own time zone)', async () => {
+    it('Save leaves out pickupReadyAt when a ready time was stored (the edit never moves the ready time)', async () => {
       // The restaurants' browsers run on Athens time; pin it so the result does not depend on the
       // machine running the test. Node reads process.env.TZ again whenever it is assigned.
       const originalTz = process.env.TZ
@@ -624,17 +624,17 @@ describe('DeliveriesPage (/manual-request/deliveries/index.tsx)', () => {
         await waitFor(() => expect(mockUpdate).toHaveBeenCalledTimes(1))
         const sent = mockUpdate.mock.calls[0][0]
         expect(sent.deliveryId).toBe('del-edit')
-        // Decision 21.9: the field is gone from the dialog, but the update route wants it, so the stored
-        // value goes back unchanged. Compared as instants, so the text's format does not matter.
-        expect(sent.pickupReadyAt).not.toBeNull()
-        expect(new Date(sent.pickupReadyAt).toISOString()).toBe(stored)
+        // Decision 168.2 (spec 0023, decision 21.9): the edit dialog never sends pickupReadyAt,
+        // so the ready time cannot move through an edit (it moves only by audited buttons).
+        expect('pickupReadyAt' in sent).toBe(false)
+        expect(sent.pickupReadyAt).toBeUndefined()
       } finally {
         if (originalTz === undefined) delete process.env.TZ
         else process.env.TZ = originalTz
       }
     })
 
-    it('Save sends pickupReadyAt null when none was stored', async () => {
+    it('Save leaves out pickupReadyAt when none was stored (the edit never moves the ready time)', async () => {
       const mockUpdate = jest.fn().mockResolvedValue({})
       ;(useUpdateManualRequestDeliveryMutation as jest.Mock).mockReturnValue([mockUpdate, { isLoading: false }])
 
@@ -642,7 +642,11 @@ describe('DeliveriesPage (/manual-request/deliveries/index.tsx)', () => {
       fireEvent.click(within(dialog).getByRole('button', { name: 'Save changes' }))
 
       await waitFor(() => expect(mockUpdate).toHaveBeenCalledTimes(1))
-      expect(mockUpdate.mock.calls[0][0].pickupReadyAt).toBeNull()
+      const sent = mockUpdate.mock.calls[0][0]
+      expect(sent.deliveryId).toBe('del-edit')
+      // Decision 168.2: the update input has no pickupReadyAt key, whether a ready time was stored or not.
+      expect('pickupReadyAt' in sent).toBe(false)
+      expect(sent.pickupReadyAt).toBeUndefined()
     })
   })
 
