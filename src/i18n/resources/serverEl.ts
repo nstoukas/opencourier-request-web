@@ -1,4 +1,4 @@
-// Copy from: opencourier-backend/src/localization/el.ts. Nothing checks this copy against it (a renamed param would show blank; decision 124.11).
+// Copy from: opencourier-backend/src/localization/el.ts. src/i18n/translationsParity.test.ts checks every code against it, word for word (row 163).
 // COPIED from opencourier-backend/src/localization/el.ts (spec 0054, row 124); see serverEn.ts.
 //
 // Spec 0054 (row 47): the Greek of every sentence in en.ts, key for key. Drafted by Claude during the
