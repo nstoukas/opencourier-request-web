@@ -53,6 +53,7 @@ export const serverEn = {
         'Courier {{courierId}} accepted delivery {{deliveryId}}, offered together with delivery {{otherDeliveryId}} (accepted automatically)',
       ACCEPTED_BY_SWEEP:
         'Courier {{courierId}} accepted delivery {{deliveryId}} as part of two orders offered together; completed by the minute sweep',
+      ACCEPTED_ALONE_BY_SWEEP: 'Courier {{courierId}} accepted delivery {{deliveryId}}; completed by the minute sweep',
       REJECTED: 'Courier {{courierId}} rejected delivery {{deliveryId}}',
       REJECTED_TOGETHER:
         'Courier {{courierId}} rejected delivery {{deliveryId}}, offered together with delivery {{otherDeliveryId}}',
