@@ -1,9 +1,12 @@
+// Pin timezone to Europe/Athens (co-op's timezone) before tests run.
+process.env.TZ = 'Europe/Athens'
+
 import React from 'react'
 import '@testing-library/jest-dom'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { I18nextProvider } from 'react-i18next'
 import { createI18n } from '../../i18n/createI18n'
-import { EditDeliveryDialog } from './EditDeliveryDialog'
+import { EditDeliveryDialog, toDatetimeLocal, timeToSend } from './EditDeliveryDialog'
 import { fetchPartnerDelivery, useUpdateManualRequestDeliveryMutation } from '../../api/manualRequestApi'
 import { REQUEST_TIMEOUT_CODE } from '../../i18n/serverText'
 import { PartnerDeliveryDto, PartnerDeliveryDropoffDto, PartnerDeliveryPickupDto } from '../manual-request/types'
@@ -171,10 +174,10 @@ describe('EditDeliveryDialog (Row 165: after a refused edit, the portal shows th
       const inputsAfter = getInputs()
       expect(inputsAfter.orderRef.value).toBe('ORD-RELOADED-REF')
       expect(inputsAfter.pickupNotes.value).toBe('Current pickup instructions from backend')
-      expect(inputsAfter.pickupDeadline.value).toBe('2026-11-25T12:00')
+      expect(inputsAfter.pickupDeadline.value).toBe('2026-11-25T14:00')
       expect(inputsAfter.dropoffNotes.value).toBe('Current dropoff instructions from backend')
-      expect(inputsAfter.dropoffReady.value).toBe('2026-11-25T11:45')
-      expect(inputsAfter.dropoffDeadline.value).toBe('2026-11-25T12:45')
+      expect(inputsAfter.dropoffReady.value).toBe('2026-11-25T13:45')
+      expect(inputsAfter.dropoffDeadline.value).toBe('2026-11-25T14:45')
 
       // Assert they are not the old values
       expect(inputsAfter.orderRef.value).not.toBe('ORD-OLD-REF')
@@ -213,10 +216,10 @@ describe('EditDeliveryDialog (Row 165: after a refused edit, the portal shows th
       const inputs = getInputs()
       expect(inputs.orderRef.value).toBe('ORD-RELOADED-REF')
       expect(inputs.pickupNotes.value).toBe('Current pickup instructions from backend')
-      expect(inputs.pickupDeadline.value).toBe('2026-11-25T12:00')
+      expect(inputs.pickupDeadline.value).toBe('2026-11-25T14:00')
       expect(inputs.dropoffNotes.value).toBe('Current dropoff instructions from backend')
-      expect(inputs.dropoffReady.value).toBe('2026-11-25T11:45')
-      expect(inputs.dropoffDeadline.value).toBe('2026-11-25T12:45')
+      expect(inputs.dropoffReady.value).toBe('2026-11-25T13:45')
+      expect(inputs.dropoffDeadline.value).toBe('2026-11-25T14:45')
     })
 
     it('after PARTNER_EDIT_CHANGED refusal, rereads order and fills boxes with current values, showing refusal and editReloaded in English', async () => {
@@ -245,10 +248,10 @@ describe('EditDeliveryDialog (Row 165: after a refused edit, the portal shows th
       const inputs = getInputs()
       expect(inputs.orderRef.value).toBe('ORD-RELOADED-REF')
       expect(inputs.pickupNotes.value).toBe('Current pickup instructions from backend')
-      expect(inputs.pickupDeadline.value).toBe('2026-11-25T12:00')
+      expect(inputs.pickupDeadline.value).toBe('2026-11-25T14:00')
       expect(inputs.dropoffNotes.value).toBe('Current dropoff instructions from backend')
-      expect(inputs.dropoffReady.value).toBe('2026-11-25T11:45')
-      expect(inputs.dropoffDeadline.value).toBe('2026-11-25T12:45')
+      expect(inputs.dropoffReady.value).toBe('2026-11-25T13:45')
+      expect(inputs.dropoffDeadline.value).toBe('2026-11-25T14:45')
     })
 
     it('renders the refusal message and orders.editReloaded in Greek for each refusal code', async () => {
@@ -385,18 +388,19 @@ describe('EditDeliveryDialog (Row 165: after a refused edit, the portal shows th
       // - reloaded delivery id ('del-reloaded-2')
       // - reloaded dropoff coordinates (39.385, 22.965)
       // - reloaded stored pickupReadyAt ('2026-11-25T10:45:00.000Z')
+      // - reloaded stored times unchanged because untouched ('2026-11-25T12:00:00.000Z', etc.)
       // - reloaded order reference and notes
       expect(mockUpdateDelivery).toHaveBeenNthCalledWith(2, {
         deliveryId: 'del-reloaded-2',
         orderReference: 'ORD-RELOADED-REF',
         pickupNotes: 'Current pickup instructions from backend',
         pickupReadyAt: '2026-11-25T10:45:00.000Z',
-        pickupDeadlineAt: new Date('2026-11-25T12:00').toISOString(),
+        pickupDeadlineAt: '2026-11-25T12:00:00.000Z',
         dropoffNotes: 'Current dropoff instructions from backend',
         dropoffLatitude: 39.385,
         dropoffLongitude: 22.965,
-        dropoffReadyAt: new Date('2026-11-25T11:45').toISOString(),
-        dropoffDeadlineAt: new Date('2026-11-25T12:45').toISOString(),
+        dropoffReadyAt: '2026-11-25T11:45:00.000Z',
+        dropoffDeadlineAt: '2026-11-25T12:45:00.000Z',
       })
 
       expect(onSaved).toHaveBeenCalledTimes(1)
@@ -790,6 +794,348 @@ describe('EditDeliveryDialog (Row 165: after a refused edit, the portal shows th
       ).toBeInTheDocument()
       expect(mockUpdateDelivery).not.toHaveBeenCalled()
       expect(mockFetchPartnerDelivery).not.toHaveBeenCalled()
+    })
+  })
+})
+
+describe('Row 168: toDatetimeLocal', () => {
+  const originalTz = process.env.TZ
+
+  afterEach(() => {
+    if (originalTz === undefined) delete process.env.TZ
+    else process.env.TZ = originalTz
+  })
+
+  it('returns empty string for null, undefined, or empty string', () => {
+    expect(toDatetimeLocal(null)).toBe('')
+    expect(toDatetimeLocal(undefined)).toBe('')
+    expect(toDatetimeLocal('')).toBe('')
+  })
+
+  it('returns empty string for invalid date text', () => {
+    expect(toDatetimeLocal('invalid-date')).toBe('')
+    expect(toDatetimeLocal('not a date string')).toBe('')
+  })
+
+  it('Clause 3: converts UTC ISO timestamp to browser local wall time (Europe/Athens: 19:15:47Z -> 21:15)', () => {
+    process.env.TZ = 'Europe/Athens'
+    // Stored UTC time 19:15:47 becomes local wall time 21:15 in Athens (UTC+2 in winter)
+    expect(toDatetimeLocal('2026-11-25T19:15:47Z')).toBe('2026-11-25T21:15')
+    expect(toDatetimeLocal('2026-11-25T19:15:47.000Z')).toBe('2026-11-25T21:15')
+  })
+
+  it('Clause 3: pads single-digit day, hour, and minute with leading zeros in local wall time', () => {
+    // In Athens (UTC+2 in November): 06:07 UTC is 08:07 local wall time; day 04, hour 08, min 07 are padded
+    expect(toDatetimeLocal('2026-11-04T06:07:08.000Z')).toBe('2026-11-04T08:07')
+  })
+
+  it('Clause 3: proves it uses local wall time and not slicing UTC text (shows 21:15, not 19:15)', () => {
+    const iso = '2026-11-25T19:15:47Z'
+    // The old bug did iso.slice(0, 16), which returned '2026-11-25T19:15'.
+    // In Athens, local wall time is 21:15.
+    expect(toDatetimeLocal(iso)).toBe('2026-11-25T21:15')
+    expect(toDatetimeLocal(iso)).not.toBe(iso.slice(0, 16))
+  })
+})
+
+describe('Row 168: timeToSend', () => {
+  const originalTz = process.env.TZ
+
+  afterEach(() => {
+    if (originalTz === undefined) delete process.env.TZ
+    else process.env.TZ = originalTz
+  })
+
+  describe('untouched box (box matches toDatetimeLocal(stored))', () => {
+    it('Clause 1: sends stored time exactly as stored, including seconds and milliseconds', () => {
+      process.env.TZ = 'Europe/Athens'
+      const storedWithSeconds = '2026-11-25T19:15:47.000Z'
+      const box = toDatetimeLocal(storedWithSeconds) // '2026-11-25T21:15'
+      expect(timeToSend(box, storedWithSeconds)).toBe('2026-11-25T19:15:47.000Z')
+
+      const storedWithMs = '2026-11-25T19:15:47.123Z'
+      expect(timeToSend(toDatetimeLocal(storedWithMs), storedWithMs)).toBe('2026-11-25T19:15:47.123Z')
+    })
+
+    it('Clause 1: sends null when stored time is null or undefined (empty stays null)', () => {
+      expect(timeToSend('', null)).toBeNull()
+      expect(timeToSend('', undefined)).toBeNull()
+    })
+  })
+
+  describe('changed box (box does not match toDatetimeLocal(stored))', () => {
+    it('Clause 2: sends local datetime converted to UTC ISO string (new Date(value).toISOString())', () => {
+      process.env.TZ = 'Europe/Athens'
+      const stored = '2026-11-25T19:15:47.000Z'
+      const typedLocalTime = '2026-11-25T23:30'
+
+      const result = timeToSend(typedLocalTime, stored)
+      expect(result).toBe(new Date('2026-11-25T23:30').toISOString())
+      // In Athens (UTC+2), 23:30 is 21:30 UTC
+      expect(result).toBe('2026-11-25T21:30:00.000Z')
+    })
+
+    it('Clause 2: sends null when box is cleared to empty string', () => {
+      const stored = '2026-11-25T19:15:47.000Z'
+      expect(timeToSend('', stored)).toBeNull()
+    })
+  })
+})
+
+describe('Row 168: EditDeliveryDialog - keeping order times as they are', () => {
+  const onClose = jest.fn()
+  const onSaved = jest.fn()
+
+  beforeEach(() => {
+    jest.resetAllMocks()
+    process.env.TZ = 'Europe/Athens'
+  })
+
+  function getInputs() {
+    return {
+      orderRef: document.querySelector('#edit-order-ref') as HTMLInputElement,
+      pickupNotes: document.querySelector('#edit-pickup-notes') as HTMLTextAreaElement,
+      pickupDeadline: document.querySelector('#edit-pickup-deadline') as HTMLInputElement,
+      dropoffNotes: document.querySelector('#edit-dropoff-notes') as HTMLTextAreaElement,
+      dropoffReady: document.querySelector('#edit-dropoff-ready') as HTMLInputElement,
+      dropoffDeadline: document.querySelector('#edit-dropoff-deadline') as HTMLInputElement,
+    }
+  }
+
+  describe('Clause 1: Untouched times are sent unchanged as stored, and empty stays null', () => {
+    it('sends pickupDeadlineAt, dropoffReadyAt, and dropoffDeadlineAt unchanged with seconds preserved when untouched', async () => {
+      mockUpdateDelivery.mockResolvedValueOnce({ id: 'del-168-1', status: 'ACCEPTED' })
+
+      const delivery = mockDelivery({
+        id: 'del-168-1',
+        pickupReadyAt: '2026-11-25T17:00:15.123Z',
+        pickupDeadlineAt: '2026-11-25T19:15:47.000Z',
+        dropoffReadyAt: '2026-11-25T18:30:22.456Z',
+        dropoffDeadlineAt: '2026-11-25T20:45:59.999Z',
+      })
+
+      render(<EditDeliveryDialog delivery={delivery} onClose={onClose} onSaved={onSaved} />)
+
+      // Change only the notes, leaving all times untouched
+      const inputs = getInputs()
+      fireEvent.change(inputs.pickupNotes, { target: { value: 'Updated pickup note only' } })
+      fireEvent.change(inputs.dropoffNotes, { target: { value: 'Updated dropoff note only' } })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+      await waitFor(() => {
+        expect(mockUpdateDelivery).toHaveBeenCalledTimes(1)
+      })
+
+      const sentPayload = mockUpdateDelivery.mock.calls[0][0]
+      // Times must be sent exactly as stored, not truncated or converted
+      expect(sentPayload.pickupReadyAt).toBe('2026-11-25T17:00:15.123Z')
+      expect(sentPayload.pickupDeadlineAt).toBe('2026-11-25T19:15:47.000Z')
+      expect(sentPayload.dropoffReadyAt).toBe('2026-11-25T18:30:22.456Z')
+      expect(sentPayload.dropoffDeadlineAt).toBe('2026-11-25T20:45:59.999Z')
+      expect(sentPayload.pickupNotes).toBe('Updated pickup note only')
+      expect(sentPayload.dropoffNotes).toBe('Updated dropoff note only')
+      expect(onSaved).toHaveBeenCalledTimes(1)
+    })
+
+    it('sends null for empty stored times and does not invent a "now plus one hour" deadline', async () => {
+      mockUpdateDelivery.mockResolvedValueOnce({ id: 'del-168-null', status: 'ACCEPTED' })
+
+      const delivery = mockDelivery({
+        id: 'del-168-null',
+        pickupReadyAt: null,
+        pickupDeadlineAt: null,
+        dropoffReadyAt: null,
+        dropoffDeadlineAt: null,
+      })
+
+      render(<EditDeliveryDialog delivery={delivery} onClose={onClose} onSaved={onSaved} />)
+
+      const inputs = getInputs()
+      // Boxes must be initialized empty
+      expect(inputs.pickupDeadline.value).toBe('')
+      expect(inputs.dropoffReady.value).toBe('')
+      expect(inputs.dropoffDeadline.value).toBe('')
+
+      fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+      await waitFor(() => {
+        expect(mockUpdateDelivery).toHaveBeenCalledTimes(1)
+      })
+
+      const sentPayload = mockUpdateDelivery.mock.calls[0][0]
+      expect(sentPayload.pickupReadyAt).toBeNull()
+      expect(sentPayload.pickupDeadlineAt).toBeNull()
+      expect(sentPayload.dropoffReadyAt).toBeNull()
+      expect(sentPayload.dropoffDeadlineAt).toBeNull()
+      expect(onSaved).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  describe('Clause 2: A changed box sends that local time', () => {
+    it('typing a new value into time boxes sends new Date(value).toISOString()', async () => {
+      mockUpdateDelivery.mockResolvedValueOnce({ id: 'del-168-2', status: 'ACCEPTED' })
+
+      const delivery = mockDelivery({
+        id: 'del-168-2',
+        pickupReadyAt: '2026-11-25T17:00:00.000Z',
+        pickupDeadlineAt: '2026-11-25T19:00:00.000Z',
+        dropoffReadyAt: '2026-11-25T18:00:00.000Z',
+        dropoffDeadlineAt: '2026-11-25T20:00:00.000Z',
+      })
+
+      render(<EditDeliveryDialog delivery={delivery} onClose={onClose} onSaved={onSaved} />)
+
+      const inputs = getInputs()
+      // User types new local times (Athens time)
+      fireEvent.change(inputs.pickupDeadline, { target: { value: '2026-11-25T22:30' } })
+      fireEvent.change(inputs.dropoffReady, { target: { value: '2026-11-25T21:45' } })
+      fireEvent.change(inputs.dropoffDeadline, { target: { value: '2026-11-25T23:15' } })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+      await waitFor(() => {
+        expect(mockUpdateDelivery).toHaveBeenCalledTimes(1)
+      })
+
+      const sentPayload = mockUpdateDelivery.mock.calls[0][0]
+      expect(sentPayload.pickupDeadlineAt).toBe(new Date('2026-11-25T22:30').toISOString())
+      expect(sentPayload.dropoffReadyAt).toBe(new Date('2026-11-25T21:45').toISOString())
+      expect(sentPayload.dropoffDeadlineAt).toBe(new Date('2026-11-25T23:15').toISOString())
+      // pickupReadyAt is untouched and sent as stored
+      expect(sentPayload.pickupReadyAt).toBe('2026-11-25T17:00:00.000Z')
+    })
+
+    it('clearing a time box sends null', async () => {
+      mockUpdateDelivery.mockResolvedValueOnce({ id: 'del-168-clear', status: 'ACCEPTED' })
+
+      const delivery = mockDelivery({
+        id: 'del-168-clear',
+        pickupDeadlineAt: '2026-11-25T19:00:00.000Z',
+        dropoffReadyAt: '2026-11-25T18:00:00.000Z',
+        dropoffDeadlineAt: '2026-11-25T20:00:00.000Z',
+      })
+
+      render(<EditDeliveryDialog delivery={delivery} onClose={onClose} onSaved={onSaved} />)
+
+      const inputs = getInputs()
+      fireEvent.change(inputs.pickupDeadline, { target: { value: '' } })
+      fireEvent.change(inputs.dropoffReady, { target: { value: '' } })
+      fireEvent.change(inputs.dropoffDeadline, { target: { value: '' } })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+      await waitFor(() => {
+        expect(mockUpdateDelivery).toHaveBeenCalledTimes(1)
+      })
+
+      const sentPayload = mockUpdateDelivery.mock.calls[0][0]
+      expect(sentPayload.pickupDeadlineAt).toBeNull()
+      expect(sentPayload.dropoffReadyAt).toBeNull()
+      expect(sentPayload.dropoffDeadlineAt).toBeNull()
+    })
+
+    it('changing only one time box sends that local time while untouched boxes send stored times', async () => {
+      mockUpdateDelivery.mockResolvedValueOnce({ id: 'del-168-mixed', status: 'ACCEPTED' })
+
+      const delivery = mockDelivery({
+        id: 'del-168-mixed',
+        pickupDeadlineAt: '2026-11-25T19:15:47.000Z',
+        dropoffReadyAt: '2026-11-25T18:30:00.123Z',
+        dropoffDeadlineAt: '2026-11-25T20:45:00.999Z',
+      })
+
+      render(<EditDeliveryDialog delivery={delivery} onClose={onClose} onSaved={onSaved} />)
+
+      const inputs = getInputs()
+      // Only change dropoffDeadline
+      fireEvent.change(inputs.dropoffDeadline, { target: { value: '2026-11-25T23:50' } })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+      await waitFor(() => {
+        expect(mockUpdateDelivery).toHaveBeenCalledTimes(1)
+      })
+
+      const sentPayload = mockUpdateDelivery.mock.calls[0][0]
+      // Untouched boxes stay exact
+      expect(sentPayload.pickupDeadlineAt).toBe('2026-11-25T19:15:47.000Z')
+      expect(sentPayload.dropoffReadyAt).toBe('2026-11-25T18:30:00.123Z')
+      // Changed box sends new Date(value).toISOString()
+      expect(sentPayload.dropoffDeadlineAt).toBe(new Date('2026-11-25T23:50').toISOString())
+    })
+  })
+
+  describe('Clause 3: The boxes show the stored times in local time', () => {
+    it('renders input values in local wall time to the minute (Europe/Athens: UTC+2 in winter)', () => {
+      process.env.TZ = 'Europe/Athens'
+
+      const delivery = mockDelivery({
+        pickupDeadlineAt: '2026-11-25T19:15:47Z',
+        dropoffReadyAt: '2026-11-25T18:30:00Z',
+        dropoffDeadlineAt: '2026-11-25T20:45:10Z',
+      })
+
+      render(<EditDeliveryDialog delivery={delivery} onClose={onClose} onSaved={onSaved} />)
+
+      const inputs = getInputs()
+      // 19:15 UTC -> 21:15 Athens
+      expect(inputs.pickupDeadline.value).toBe('2026-11-25T21:15')
+      // 18:30 UTC -> 20:30 Athens
+      expect(inputs.dropoffReady.value).toBe('2026-11-25T20:30')
+      // 20:45 UTC -> 22:45 Athens
+      expect(inputs.dropoffDeadline.value).toBe('2026-11-25T22:45')
+
+      // Assert they are NOT the UTC sliced strings (which would be 19:15, 18:30, 20:45)
+      expect(inputs.pickupDeadline.value).not.toBe('2026-11-25T19:15')
+      expect(inputs.dropoffReady.value).not.toBe('2026-11-25T18:30')
+      expect(inputs.dropoffDeadline.value).not.toBe('2026-11-25T20:45')
+    })
+  })
+
+  describe('Clause 4: A test fails if an untouched time moves', () => {
+    it('fails if an untouched time moves by offset or loses precision when editing non-time fields', async () => {
+      mockUpdateDelivery.mockResolvedValueOnce({ id: 'del-168-immobile', status: 'ACCEPTED' })
+
+      const storedPickupDeadline = '2026-11-25T19:15:47.654Z'
+      const storedDropoffReady = '2026-11-25T18:30:22.321Z'
+      const storedDropoffDeadline = '2026-11-25T20:45:10.111Z'
+      const storedPickupReady = '2026-11-25T17:15:00.000Z'
+
+      const delivery = mockDelivery({
+        id: 'del-168-immobile',
+        orderReference: 'ORD-ORIGINAL',
+        pickupReadyAt: storedPickupReady,
+        pickupDeadlineAt: storedPickupDeadline,
+        dropoffReadyAt: storedDropoffReady,
+        dropoffDeadlineAt: storedDropoffDeadline,
+      })
+
+      render(<EditDeliveryDialog delivery={delivery} onClose={onClose} onSaved={onSaved} />)
+
+      const inputs = getInputs()
+      // Restaurant only changes the order reference
+      fireEvent.change(inputs.orderRef, { target: { value: 'ORD-EDITED-ONLY' } })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+      await waitFor(() => {
+        expect(mockUpdateDelivery).toHaveBeenCalledTimes(1)
+      })
+
+      const sent = mockUpdateDelivery.mock.calls[0][0]
+
+      // Strict equality check: the untouched time must not move by a single second or millisecond,
+      // and must not shift by timezone offset (e.g. Athens 2-hour offset).
+      expect(sent.pickupDeadlineAt).toBe(storedPickupDeadline)
+      expect(sent.dropoffReadyAt).toBe(storedDropoffReady)
+      expect(sent.dropoffDeadlineAt).toBe(storedDropoffDeadline)
+      expect(sent.pickupReadyAt).toBe(storedPickupReady)
+
+      // Specifically prove it didn't become the local time re-serialized to UTC with 00 seconds
+      expect(sent.pickupDeadlineAt).not.toBe('2026-11-25T19:15:00.000Z')
+      // And didn't shift by 2 hours earlier (17:15 UTC)
+      expect(sent.pickupDeadlineAt).not.toBe('2026-11-25T17:15:00.000Z')
     })
   })
 })
