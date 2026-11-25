@@ -87,7 +87,7 @@ strings and attributes such as `placeholder` or `aria-label` (`jsx-only` flags a
   only against that tree.
 - The orders page's Edit dialog lives in `src/modules/edit/EditDeliveryDialog.tsx` (rows 165, 168). It reads the order again only
   on the three edit refusals, shows times in browser time, and leaves a time box the restaurant did not touch out of the request
-  (the server keeps it); it never sends the ready time.
+  (the server keeps it); it never sends the ready time, and never a tip (the server keeps a left out tip; row 169).
 - A drop off business name is only what the restaurant typed, else `''` (row 140): never copy the customer's name into it,
   or riders' offers carry it before they accept. Anything that shows it falls back to the customer's name with `||`, not `??`.
 
