@@ -30,20 +30,30 @@ interface EditDeliveryDialogProps {
   onSaved: () => void
 }
 
-function toDatetimeLocal(iso: string | null | undefined): string {
+// Row 168: a stored time (UTC text) as a date box's value, "2026-11-25T14:05", in the browser's own time, which is
+// how the box reads what is typed. Cutting the UTC text instead showed 12:05 for 14:05 in Athens, and the save then
+// moved the time by the offset.
+export function toDatetimeLocal(iso: string | null | undefined): string {
   if (!iso) return ''
-  return iso.slice(0, 16)
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  // padStart(2, '0'): 5 becomes "05", as the box expects.
+  const two = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}T${two(d.getHours())}:${two(d.getMinutes())}`
 }
 
-function defaultDeadline(): string {
-  const d = new Date()
-  d.setHours(d.getHours() + 1)
-  return toDatetimeLocal(d.toISOString())
-}
-
+// A box's value (browser time) as UTC text for the server; an empty box is no time.
 function fromDatetimeLocal(value: string): string | null {
   if (!value) return null
   return new Date(value).toISOString()
+}
+
+// Row 168: what a time box sends. A box the restaurant left as it was filled sends the stored time exactly (its
+// seconds too, or none if there was none), so a save that changes only the notes changes no time, and the rider is
+// not told the times changed (row 164). A changed box sends the time typed.
+export function timeToSend(box: string, stored: string | null | undefined): string | null {
+  if (box === toDatetimeLocal(stored)) return stored ?? null
+  return fromDatetimeLocal(box)
 }
 
 export function EditDeliveryDialog({ delivery, onClose, onSaved }: EditDeliveryDialogProps) {
@@ -56,10 +66,10 @@ export function EditDeliveryDialog({ delivery, onClose, onSaved }: EditDeliveryD
   // route still wants the field, so the stored value goes back exactly as it came, never through a
   // local date box (which would read it as browser time and move it by the time zone's offset).
   const storedPickupReadyAt = current.pickupReadyAt ?? null
-  const [pickupDeadlineAt, setPickupDeadlineAt] = useState(toDatetimeLocal(delivery.pickupDeadlineAt) || defaultDeadline())
+  const [pickupDeadlineAt, setPickupDeadlineAt] = useState(toDatetimeLocal(delivery.pickupDeadlineAt))
   const [dropoffNotes, setDropoffNotes] = useState(delivery.dropoff?.dropoffNotes ?? '')
   const [dropoffReadyAt, setDropoffReadyAt] = useState(toDatetimeLocal(delivery.dropoffReadyAt))
-  const [dropoffDeadlineAt, setDropoffDeadlineAt] = useState(toDatetimeLocal(delivery.dropoffDeadlineAt) || defaultDeadline())
+  const [dropoffDeadlineAt, setDropoffDeadlineAt] = useState(toDatetimeLocal(delivery.dropoffDeadlineAt))
   // A key or the server's words, translated where it is shown (src/i18n/shownMessage.ts).
   const [error, setError] = useState<ShownMessage | null>(null)
   // True once the boxes show the order as it is now, after the server refused a save (row 165).
@@ -72,10 +82,10 @@ export function EditDeliveryDialog({ delivery, onClose, onSaved }: EditDeliveryD
     setCurrent(d)
     setOrderReference(d.orderReference ?? '')
     setPickupNotes(d.pickup?.pickupNotes ?? '')
-    setPickupDeadlineAt(toDatetimeLocal(d.pickupDeadlineAt) || defaultDeadline())
+    setPickupDeadlineAt(toDatetimeLocal(d.pickupDeadlineAt))
     setDropoffNotes(d.dropoff?.dropoffNotes ?? '')
     setDropoffReadyAt(toDatetimeLocal(d.dropoffReadyAt))
-    setDropoffDeadlineAt(toDatetimeLocal(d.dropoffDeadlineAt) || defaultDeadline())
+    setDropoffDeadlineAt(toDatetimeLocal(d.dropoffDeadlineAt))
   }
 
   const [updateDelivery, { isLoading }] = useUpdateManualRequestDeliveryMutation()
@@ -95,12 +105,13 @@ export function EditDeliveryDialog({ delivery, onClose, onSaved }: EditDeliveryD
         orderReference,
         pickupNotes,
         pickupReadyAt: storedPickupReadyAt,
-        pickupDeadlineAt: fromDatetimeLocal(pickupDeadlineAt),
+        // Row 168: each time as stored unless its box was changed (an empty one stays empty: no invented deadline).
+        pickupDeadlineAt: timeToSend(pickupDeadlineAt, current.pickupDeadlineAt),
         dropoffNotes,
         dropoffLatitude: dropoffLat,
         dropoffLongitude: dropoffLon,
-        dropoffReadyAt: fromDatetimeLocal(dropoffReadyAt),
-        dropoffDeadlineAt: fromDatetimeLocal(dropoffDeadlineAt),
+        dropoffReadyAt: timeToSend(dropoffReadyAt, current.dropoffReadyAt),
+        dropoffDeadlineAt: timeToSend(dropoffDeadlineAt, current.dropoffDeadlineAt),
       })
       onSaved()
     } catch (err: any) {
