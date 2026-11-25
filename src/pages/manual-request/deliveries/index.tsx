@@ -256,7 +256,11 @@ export default function DeliveriesPage() {
       {editingDelivery ? (
         <EditDeliveryDialog
           delivery={editingDelivery}
-          onClose={() => setEditingDelivery(null)}
+          // Read the list again on close too: after a refusal the order's status has changed (Fable review of row 165).
+          onClose={() => {
+            setEditingDelivery(null)
+            refetch()
+          }}
           onSaved={() => {
             setEditingDelivery(null)
             setStatusMessage(keyMessage('orders.updated'))

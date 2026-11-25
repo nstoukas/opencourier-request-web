@@ -17,6 +17,11 @@ import { PartnerDeliveryDto } from '../manual-request/types'
 import { serverMessage } from '../../i18n/serverText'
 import { keyMessage, showMessage, textMessage, type ShownMessage } from '../../i18n/shownMessage'
 
+// Row 165: the server's three refusals of an edit that mean the order is not what this dialog shows (row 152's two,
+// row 161's). Only these read the order again: a timeout, a validation 400 or any other failure says nothing about
+// the order, so the restaurant's typed values stay (Fable review of row 165, major).
+const ORDER_MOVED_ON_CODES = ['PARTNER_EDIT_ORDER_ENDED', 'PARTNER_EDIT_POINT_HELD', 'PARTNER_EDIT_CHANGED']
+
 // The orders page's Edit dialog, moved out of src/pages (every file there is a route) so it can be tested.
 
 interface EditDeliveryDialogProps {
@@ -59,6 +64,8 @@ export function EditDeliveryDialog({ delivery, onClose, onSaved }: EditDeliveryD
   const [error, setError] = useState<ShownMessage | null>(null)
   // True once the boxes show the order as it is now, after the server refused a save (row 165).
   const [reloaded, setReloaded] = useState(false)
+  // True while the order is read again, so Save waits for the boxes to show it (Fable review, minor 1).
+  const [rereading, setRereading] = useState(false)
 
   // Puts the order's values into every box, the same way the dialog fills them when it opens.
   const fillFrom = (d: PartnerDeliveryDto) => {
@@ -101,13 +108,16 @@ export function EditDeliveryDialog({ delivery, onClose, onSaved }: EditDeliveryD
       setError(refusal ? textMessage(refusal) : keyMessage('orders.editFailed'))
       // Row 165: the server said no because the order is not what this dialog shows (it ended, a rider took it,
       // or it changed under the save). Read it again and show it as it is now, so a second save does not send
-      // the same stale values. Only on the server's own refusal: a network failure says nothing about the order.
-      if (refusal) {
+      // the same stale values. Only on those three refusals (see ORDER_MOVED_ON_CODES).
+      if (ORDER_MOVED_ON_CODES.includes(err?.code)) {
+        setRereading(true)
         try {
           fillFrom(await fetchPartnerDelivery(current.id))
           setReloaded(true)
         } catch {
           // The order could not be read again: the boxes keep the restaurant's values, and the refusal still shows.
+        } finally {
+          setRereading(false)
         }
       }
     }
@@ -208,7 +218,7 @@ export function EditDeliveryDialog({ delivery, onClose, onSaved }: EditDeliveryD
           <Button variant="outline" onClick={onClose} disabled={isLoading}>
             {t('common.cancel')}
           </Button>
-          <Button onClick={handleSave} disabled={isLoading}>
+          <Button onClick={handleSave} disabled={isLoading || rereading}>
             {isLoading ? t('common.saving') : t('orders.saveChanges')}
           </Button>
         </DialogFooter>
