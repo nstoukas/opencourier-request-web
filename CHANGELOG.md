@@ -9,6 +9,8 @@ Everything below sits on top of upstream `main` on the branch `fix/partial-addre
 has the full reasoning and verification notes.
 
 ---
+Scope row 161 (the partner edit's status check is a conditional write) needed only the server's new refusal here: `PARTNER_EDIT_CHANGED`, "This order just changed. Look again before you save.", is copied word for word in English and Greek (`41af3a8`, merged in on 25 November), so the edit dialog can show it in the restaurant's language. Compared with the backend's by script; translation tests pass (73).
+
 Scope row 160 (a restaurant's tip change is on the record) needed only the server's new sentence here: `TIP_CHANGED_BY_RESTAURANT` is copied word for word in English and Greek, together with rows 146 and 149's `ADD_ON_JOINED` and `ADD_ON_LEFT`, which this copy had missed, so both files match the backend's again (`53ac454`, merged in on 25 November). The portal shows no event lines yet; the copy keeps the files equal. Suite: 1232 pass.
 
 Scope rows 151, 152 and 153, built in the unattended run of 24 November and merged in that night:
