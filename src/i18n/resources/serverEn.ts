@@ -176,7 +176,7 @@ export const serverEn = {
       dispatchStopReason: { HEAT: 'heat', STORM: 'storm', OTHER: 'other reasons' },
       acceptGivenBackReason: {
         STOPPED: 'dispatch stopped',
-        FAILING: 'it kept failing',
+        FAILING: 'not completed within ten minutes',
         SOS: 'the rider is in SOS',
         DEACTIVATED: 'the rider was deactivated',
       },
