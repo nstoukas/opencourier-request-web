@@ -318,7 +318,7 @@ describe('manualRequestApi: portal edit sends only what changed on wire (Row 178
 
     const { sentBody, rawBody } = await callUpdateDelivery(input)
 
-    // Verification keys are never sent (deleted SAFE_VERIFICATION_DEFAULT)
+    // Verification keys are never sent: the hook no longer adds a default rule to the body
     expect('pickupVerification' in sentBody).toBe(false)
     expect('dropoffVerification' in sentBody).toBe(false)
     expect(rawBody).not.toMatch(/"pickupVerification"/)

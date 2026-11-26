@@ -1,6 +1,3 @@
-// Pin timezone to Europe/Athens (co-op's timezone) before tests run.
-process.env.TZ = 'Europe/Athens'
-
 import React from 'react'
 import '@testing-library/jest-dom'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
