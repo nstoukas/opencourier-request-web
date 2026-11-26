@@ -579,38 +579,31 @@ export function useListManualRequestDeliveriesQuery(options?: {
   return usePolledFetch(load, { enabled: !options?.skip, intervalMs: options?.pollMs })
 }
 
-const SAFE_VERIFICATION_DEFAULT = {
-  signature: false,
-  signatureRequirement: { enabled: false, collectSignerName: false, collectSignerRelationship: false },
-  barcodes: [],
-  identification: { minAge: 0, noSobrietyCheck: true },
-  picture: false,
-}
-
 export function useUpdateManualRequestDeliveryMutation() {
   return useStandaloneMutation<ManualRequestUpdateDeliveryInput, PartnerDeliveryDto>(
     ({ deliveryId, orderReference, pickupNotes, pickupReadyAt, pickupDeadlineAt,
-       dropoffNotes, dropoffLatitude, dropoffLongitude, dropoffReadyAt, dropoffDeadlineAt }) => {
+       dropoffNotes, dropoffReadyAt, dropoffDeadlineAt }) => {
       const apiMode = getManualRequestApiMode()
       if (apiMode !== 'partner') {
         throw new Error('Updating deliveries is only supported in partner API mode.')
       }
       return manualRequestFetch(`/deliveries/${deliveryId}`, {
         method: 'POST',
+        // JSON.stringify drops a key whose value is undefined, so a field the dialog left out never reaches the
+        // server, which keeps the stored value (rows 168, 169, 178).
         body: JSON.stringify({
           orderReference,
           pickupNotes,
           pickupReadyAt,
           pickupDeadlineAt,
           dropoffNotes,
-          dropoffLatitude,
-          dropoffLongitude,
           dropoffReadyAt,
           dropoffDeadlineAt,
           // Row 169: no tip is sent. The portal has no tip box, and the 0 it used to send reset a tip the restaurant's
           // own system had set through the API; the server keeps a left out tip as it is.
-          pickupVerification: SAFE_VERIFICATION_DEFAULT,
-          dropoffVerification: SAFE_VERIFICATION_DEFAULT,
+          // Row 178: no drop off point and no verification rule either. The dialog cannot move the point or set a
+          // rule, and sending the copy it opened with (or a fixed "no checks" rule) undid a point or rule the
+          // restaurant's own system changed through the API while the dialog was open.
         }),
       })
     },

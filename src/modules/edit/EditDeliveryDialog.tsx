@@ -58,6 +58,15 @@ export function timeToSend(box: string, stored: string | null | undefined): stri
   return fromDatetimeLocal(box)
 }
 
+// Row 178: what a text box (the order reference or a note) sends. A box the restaurant left as it opened sends nothing
+// (undefined: the field is left out, and the server keeps the stored value), so a value the restaurant's own system
+// changed through the API while the dialog was open is not undone by a save that did not touch it. A changed box
+// sends what it holds, an emptied one ''. A stored null shows as an empty box, so an empty box over null is untouched.
+export function textToSend(box: string, stored: string | null | undefined): string | undefined {
+  if (box === (stored ?? '')) return undefined
+  return box
+}
+
 export function EditDeliveryDialog({ delivery, onClose, onSaved }: EditDeliveryDialogProps) {
   const { t, i18n } = useTranslation()
   // The order as the dialog last read it: the one it opened with, or the one read again after a refusal (row 165).
@@ -105,22 +114,16 @@ export function EditDeliveryDialog({ delivery, onClose, onSaved }: EditDeliveryD
       setError(keyMessage('orders.editTimeUnfinished'))
       return
     }
-    const dropoffLat = current.dropoff?.latitude
-    const dropoffLon = current.dropoff?.longitude
-    if (dropoffLat == null || dropoffLon == null) {
-      setError(keyMessage('orders.editNoCoordinates'))
-      return
-    }
     try {
+      // Row 178: only what the restaurant changed in the dialog is sent; everything else is left out and kept as stored.
+      // The drop off point is never sent (the dialog cannot move it), so an order with no point can be edited too.
       await updateDelivery({
         deliveryId: current.id,
-        orderReference,
-        pickupNotes,
+        orderReference: textToSend(orderReference, current.orderReference),
+        pickupNotes: textToSend(pickupNotes, current.pickup?.pickupNotes),
         // Row 168: each time as stored unless its box was changed (an empty one stays empty: no invented deadline).
         pickupDeadlineAt: timeToSend(pickupDeadlineAt, current.pickupDeadlineAt),
-        dropoffNotes,
-        dropoffLatitude: dropoffLat,
-        dropoffLongitude: dropoffLon,
+        dropoffNotes: textToSend(dropoffNotes, current.dropoff?.dropoffNotes),
         dropoffReadyAt: timeToSend(dropoffReadyAt, current.dropoffReadyAt),
         dropoffDeadlineAt: timeToSend(dropoffDeadlineAt, current.dropoffDeadlineAt),
       })

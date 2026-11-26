@@ -238,14 +238,15 @@ export interface PartnerDeliveryPaginatedDto {
 
 export interface ManualRequestUpdateDeliveryInput {
   // Row 168 (decision 168.2): a time left out (undefined) keeps the stored one; null clears it.
+  // Row 178: the reference and both notes too are sent only when the restaurant changed them; a left out one keeps
+  // the stored value. The edit never sends the drop off point or a verification rule (the dialog has no control for
+  // either), so the server keeps those as stored.
   deliveryId: string
-  orderReference: string
-  pickupNotes: string
+  orderReference?: string
+  pickupNotes?: string
   pickupReadyAt?: string | null
   pickupDeadlineAt?: string | null
-  dropoffNotes: string
-  dropoffLatitude: number
-  dropoffLongitude: number
+  dropoffNotes?: string
   dropoffReadyAt?: string | null
   dropoffDeadlineAt?: string | null
 }

@@ -378,7 +378,6 @@ export const en = {
   },
   // My Orders: the restaurant's order history (spec 0017).
   orders: {
-    editNoCoordinates: 'Dropoff coordinates are missing — cannot update this delivery.',
     editFailed: 'Update failed.',
     editReloaded: 'The boxes now show the order as it is.',
     editTimeUnfinished: 'A time is not finished. Complete it or clear it.',
