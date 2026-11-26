@@ -40,8 +40,6 @@ describe('manualRequestApi: portal edit sends no tip on the wire (Row 169, decis
     pickupReadyAt: '2026-11-25T14:30:00.000Z',
     pickupDeadlineAt: '2026-11-25T15:00:00.000Z',
     dropoffNotes: 'Floor 3, doorbell Papadopoulos',
-    dropoffLatitude: 39.361,
-    dropoffLongitude: 22.942,
     dropoffReadyAt: '2026-11-25T14:45:00.000Z',
     dropoffDeadlineAt: '2026-11-25T15:15:00.000Z',
   }
@@ -98,28 +96,17 @@ describe('manualRequestApi: portal edit sends no tip on the wire (Row 169, decis
     expect(sentBody.orderReference).toBe('ORD-123')
     expect(sentBody.pickupNotes).toBe('Pickup at side entrance')
     expect(sentBody.dropoffNotes).toBe('Floor 3, doorbell Papadopoulos')
-    expect(sentBody.dropoffLatitude).toBe(39.361)
-    expect(sentBody.dropoffLongitude).toBe(22.942)
     expect(sentBody.pickupReadyAt).toBe('2026-11-25T14:30:00.000Z')
     expect(sentBody.pickupDeadlineAt).toBe('2026-11-25T15:00:00.000Z')
     expect(sentBody.dropoffReadyAt).toBe('2026-11-25T14:45:00.000Z')
     expect(sentBody.dropoffDeadlineAt).toBe('2026-11-25T15:15:00.000Z')
 
-    // Verifications defaults sent with safe verification
-    expect(sentBody.pickupVerification).toEqual({
-      signature: false,
-      signatureRequirement: { enabled: false, collectSignerName: false, collectSignerRelationship: false },
-      barcodes: [],
-      identification: { minAge: 0, noSobrietyCheck: true },
-      picture: false,
-    })
-    expect(sentBody.dropoffVerification).toEqual({
-      signature: false,
-      signatureRequirement: { enabled: false, collectSignerName: false, collectSignerRelationship: false },
-      barcodes: [],
-      identification: { minAge: 0, noSobrietyCheck: true },
-      picture: false,
-    })
+    // Row 178: no point and no verification rules sent on wire
+    expect('dropoffLatitude' in sentBody).toBe(false)
+    expect('dropoffLongitude' in sentBody).toBe(false)
+    expect('pickupVerification' in sentBody).toBe(false)
+    expect('dropoffVerification' in sentBody).toBe(false)
+    expect('tipByCustomer' in sentBody).toBe(false)
   })
 
   it('untouched times (undefined) are omitted from the wire body while tip remains absent (Row 168 / 169)', async () => {
@@ -273,5 +260,124 @@ describe('manualRequestApi: portal edit sends no tip on the wire (Row 169, decis
 
     expect(caughtError).toBeDefined()
     expect(caughtError.message).toBe('Network connection lost')
+  })
+})
+
+describe('manualRequestApi: portal edit sends only what changed on wire (Row 178)', () => {
+  const originalFetch = global.fetch
+  const originalApiMode = process.env.NEXT_PUBLIC_MANUAL_REQUEST_API_MODE
+
+  beforeEach(() => {
+    process.env.NEXT_PUBLIC_MANUAL_REQUEST_API_MODE = 'partner'
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      text: jest.fn().mockResolvedValue(
+        JSON.stringify({ result: { id: 'del-178', status: 'ACCEPTED' } }),
+      ),
+    } as any)
+  })
+
+  afterEach(() => {
+    process.env.NEXT_PUBLIC_MANUAL_REQUEST_API_MODE = originalApiMode
+    jest.resetAllMocks()
+  })
+
+  afterAll(() => {
+    global.fetch = originalFetch
+  })
+
+  async function callUpdateDelivery(input: ManualRequestUpdateDeliveryInput) {
+    const { result } = renderHook(() => useUpdateManualRequestDeliveryMutation())
+    const [updateDelivery] = result.current
+    let output!: PartnerDeliveryDto
+    await act(async () => {
+      output = await updateDelivery(input)
+    })
+    const calls = (global.fetch as jest.Mock).mock.calls
+    const lastCall = calls[calls.length - 1]
+    const rawBody = lastCall[1]?.body
+    return {
+      result: output,
+      sentUrl: lastCall[0],
+      sentMethod: lastCall[1]?.method,
+      sentBody: JSON.parse(rawBody),
+      rawBody,
+    }
+  }
+
+  it('Requirement a: wire JSON body has no pickupVerification, dropoffVerification, dropoffLatitude, dropoffLongitude or tipByCustomer key', async () => {
+    const input: ManualRequestUpdateDeliveryInput = {
+      deliveryId: 'del-178',
+      orderReference: 'ORD-999',
+      pickupNotes: 'Pickup note',
+      dropoffNotes: 'Dropoff note',
+      pickupDeadlineAt: '2026-11-26T12:00:00.000Z',
+      dropoffReadyAt: '2026-11-26T12:30:00.000Z',
+      dropoffDeadlineAt: '2026-11-26T13:00:00.000Z',
+    }
+
+    const { sentBody, rawBody } = await callUpdateDelivery(input)
+
+    // Verification keys are never sent (deleted SAFE_VERIFICATION_DEFAULT)
+    expect('pickupVerification' in sentBody).toBe(false)
+    expect('dropoffVerification' in sentBody).toBe(false)
+    expect(rawBody).not.toMatch(/"pickupVerification"/)
+    expect(rawBody).not.toMatch(/"dropoffVerification"/)
+
+    // Coordinates are never sent (deleted dropoff coordinates from edit)
+    expect('dropoffLatitude' in sentBody).toBe(false)
+    expect('dropoffLongitude' in sentBody).toBe(false)
+    expect(rawBody).not.toMatch(/"dropoffLatitude"/)
+    expect(rawBody).not.toMatch(/"dropoffLongitude"/)
+
+    // Tip is never sent (row 169)
+    expect('tipByCustomer' in sentBody).toBe(false)
+    expect(rawBody).not.toMatch(/"tipByCustomer"/)
+  })
+
+  it('Requirement a: with orderReference/pickupNotes/dropoffNotes undefined the raw body has none of those keys', async () => {
+    const input: ManualRequestUpdateDeliveryInput = {
+      deliveryId: 'del-178',
+      orderReference: undefined,
+      pickupNotes: undefined,
+      dropoffNotes: undefined,
+      pickupDeadlineAt: '2026-11-26T12:00:00.000Z',
+    }
+
+    const { sentBody, rawBody } = await callUpdateDelivery(input)
+
+    expect('orderReference' in sentBody).toBe(false)
+    expect('pickupNotes' in sentBody).toBe(false)
+    expect('dropoffNotes' in sentBody).toBe(false)
+    expect(rawBody).not.toMatch(/"orderReference"/)
+    expect(rawBody).not.toMatch(/"pickupNotes"/)
+    expect(rawBody).not.toMatch(/"dropoffNotes"/)
+
+    // Provided time still arrives
+    expect(sentBody.pickupDeadlineAt).toBe('2026-11-26T12:00:00.000Z')
+  })
+
+  it('Requirement a: a save with nothing changed sends exactly {}', async () => {
+    // Only deliveryId is required to identify the delivery; all editable fields left out / undefined
+    const input: ManualRequestUpdateDeliveryInput = {
+      deliveryId: 'del-178',
+      orderReference: undefined,
+      pickupNotes: undefined,
+      pickupReadyAt: undefined,
+      pickupDeadlineAt: undefined,
+      dropoffNotes: undefined,
+      dropoffReadyAt: undefined,
+      dropoffDeadlineAt: undefined,
+    }
+
+    const { sentBody, rawBody, sentUrl, sentMethod } = await callUpdateDelivery(input)
+
+    expect(sentUrl).toBe('/api/partner-proxy/deliveries/del-178')
+    expect(sentMethod).toBe('POST')
+
+    // Exact empty JSON object on wire: {}
+    expect(rawBody).toBe('{}')
+    expect(sentBody).toEqual({})
+    expect(Object.keys(sentBody)).toHaveLength(0)
   })
 })

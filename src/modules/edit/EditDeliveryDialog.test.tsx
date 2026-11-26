@@ -6,7 +6,7 @@ import '@testing-library/jest-dom'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { I18nextProvider } from 'react-i18next'
 import { createI18n } from '../../i18n/createI18n'
-import { EditDeliveryDialog, toDatetimeLocal, timeToSend } from './EditDeliveryDialog'
+import { EditDeliveryDialog, toDatetimeLocal, timeToSend, textToSend } from './EditDeliveryDialog'
 import { fetchPartnerDelivery, useUpdateManualRequestDeliveryMutation } from '../../api/manualRequestApi'
 import { REQUEST_TIMEOUT_CODE } from '../../i18n/serverText'
 import { PartnerDeliveryDto, PartnerDeliveryDropoffDto, PartnerDeliveryPickupDto } from '../manual-request/types'
@@ -338,8 +338,8 @@ describe('EditDeliveryDialog (Row 165: after a refused edit, the portal shows th
     })
   })
 
-  describe('Clause 2: second save after reload sends reloaded order values (id, coordinates, stored pickupReadyAt)', () => {
-    it('sends the reloaded order’s id, dropoff coordinates and stored pickupReadyAt on a second save', async () => {
+  describe('Clause 2: second save after reload sends reloaded order id with untouched fields left out (Row 165 / Row 178)', () => {
+    it('sends the reloaded order’s id on a second save, leaving untouched fields out and never sending coordinates', async () => {
       // First save fails with refusal
       mockUpdateDelivery.mockRejectedValueOnce({
         statusCode: 409,
@@ -372,36 +372,38 @@ describe('EditDeliveryDialog (Row 165: after a refused edit, the portal shows th
         expect(mockUpdateDelivery).toHaveBeenCalledTimes(2)
       })
 
-      // Check first save sent initial delivery values
-      expect(mockUpdateDelivery).toHaveBeenNthCalledWith(
-        1,
-        expect.objectContaining({
-          deliveryId: 'del-old-1',
-          dropoffLatitude: 39.361,
-          dropoffLongitude: 22.941,
-          orderReference: 'ORD-OLD-REF',
-        }),
-      )
+      // Check first save sent initial delivery id and left untouched fields out (Row 178)
+      expect(mockUpdateDelivery).toHaveBeenNthCalledWith(1, {
+        deliveryId: 'del-old-1',
+        orderReference: undefined,
+        pickupNotes: undefined,
+        pickupDeadlineAt: undefined,
+        dropoffNotes: undefined,
+        dropoffReadyAt: undefined,
+        dropoffDeadlineAt: undefined,
+      })
       expect('pickupReadyAt' in mockUpdateDelivery.mock.calls[0][0]).toBe(false)
+      expect('dropoffLatitude' in mockUpdateDelivery.mock.calls[0][0]).toBe(false)
+      expect('dropoffLongitude' in mockUpdateDelivery.mock.calls[0][0]).toBe(false)
 
       // Check second save sent RELOADED delivery values:
       // - reloaded delivery id ('del-reloaded-2')
-      // - reloaded dropoff coordinates (39.385, 22.965)
+      // - dropoff coordinates are never sent (Row 178)
       // - stored pickupReadyAt is never sent (decision 168.2)
       // - reloaded stored times left out as undefined because untouched
-      // - reloaded order reference and notes
+      // - reloaded order reference and notes left out as undefined because untouched (Row 178)
       expect(mockUpdateDelivery).toHaveBeenNthCalledWith(2, {
         deliveryId: 'del-reloaded-2',
-        orderReference: 'ORD-RELOADED-REF',
-        pickupNotes: 'Current pickup instructions from backend',
+        orderReference: undefined,
+        pickupNotes: undefined,
         pickupDeadlineAt: undefined,
-        dropoffNotes: 'Current dropoff instructions from backend',
-        dropoffLatitude: 39.385,
-        dropoffLongitude: 22.965,
+        dropoffNotes: undefined,
         dropoffReadyAt: undefined,
         dropoffDeadlineAt: undefined,
       })
       expect('pickupReadyAt' in mockUpdateDelivery.mock.calls[1][0]).toBe(false)
+      expect('dropoffLatitude' in mockUpdateDelivery.mock.calls[1][0]).toBe(false)
+      expect('dropoffLongitude' in mockUpdateDelivery.mock.calls[1][0]).toBe(false)
 
       expect(onSaved).toHaveBeenCalledTimes(1)
     })
@@ -773,9 +775,12 @@ describe('EditDeliveryDialog (Row 165: after a refused edit, the portal shows th
       expect(onSaved).not.toHaveBeenCalled()
     })
 
-    it('shows error if dropoff coordinates are missing and does not call updateDelivery', async () => {
+    it('Requirement e: an order whose dropoff has no latitude/longitude can be saved (the mutation is called; no error shown)', async () => {
+      mockUpdateDelivery.mockResolvedValueOnce({ id: 'del-no-coords', status: 'ACCEPTED' })
+
       const deliveryWithoutCoords: PartnerDeliveryDto = {
         ...initialDelivery,
+        id: 'del-no-coords',
         dropoff: mockDropoff({
           dropoffNotes: 'Notes',
           latitude: null,
@@ -789,11 +794,20 @@ describe('EditDeliveryDialog (Row 165: after a refused edit, the portal shows th
 
       fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
 
-      expect(
-        screen.getByText('Dropoff coordinates are missing — cannot update this delivery.'),
-      ).toBeInTheDocument()
-      expect(mockUpdateDelivery).not.toHaveBeenCalled()
-      expect(mockFetchPartnerDelivery).not.toHaveBeenCalled()
+      await waitFor(() => {
+        expect(mockUpdateDelivery).toHaveBeenCalledTimes(1)
+      })
+
+      // The mutation is called, no coordinates error shown, save succeeds
+      expect(screen.queryByText(/Dropoff coordinates are missing/)).not.toBeInTheDocument()
+      expect(mockUpdateDelivery).toHaveBeenCalledWith(
+        expect.objectContaining({
+          deliveryId: 'del-no-coords',
+        }),
+      )
+      expect('dropoffLatitude' in mockUpdateDelivery.mock.calls[0][0]).toBe(false)
+      expect('dropoffLongitude' in mockUpdateDelivery.mock.calls[0][0]).toBe(false)
+      expect(onSaved).toHaveBeenCalledTimes(1)
     })
   })
 })
@@ -1382,5 +1396,427 @@ describe('Row 168 (Minor 1 & Decision 168.2): Half-typed time box and unfinished
 
     expect(screen.queryByText('A time is not finished. Complete it or clear it.')).not.toBeInTheDocument()
     expect(onSaved).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('Row 178: textToSend', () => {
+  it('Requirement f: answers undefined for an untouched box matching stored value', () => {
+    expect(textToSend('ORD-123', 'ORD-123')).toBeUndefined()
+    expect(textToSend('Gate code 1234', 'Gate code 1234')).toBeUndefined()
+    expect(textToSend('', '')).toBeUndefined()
+  })
+
+  it('Requirement f: answers undefined when stored value is null and box is left empty (null stored with "")', () => {
+    // Stored null displays as '' in the text box. If left empty, it is untouched -> undefined.
+    // Proves (stored ?? '') is used: '' === (null ?? '') is true, returning undefined.
+    expect(textToSend('', null)).toBeUndefined()
+    expect(textToSend('', null)).not.toBe('')
+  })
+
+  it('Requirement f: answers undefined when stored value is undefined and box is left empty (undefined stored with "")', () => {
+    expect(textToSend('', undefined)).toBeUndefined()
+  })
+
+  it('Requirement f: answers typed string when box value is changed from stored value', () => {
+    expect(textToSend('NEW-REF', 'OLD-REF')).toBe('NEW-REF')
+    expect(textToSend('New note', 'Old note')).toBe('New note')
+    expect(textToSend('New note', null)).toBe('New note')
+    expect(textToSend('New note', undefined)).toBe('New note')
+  })
+
+  it('Requirement f: answers empty string "" when box is emptied from text that was stored', () => {
+    expect(textToSend('', 'OLD-REF')).toBe('')
+    expect(textToSend('', 'Previous instructions')).toBe('')
+  })
+})
+
+describe('Row 178: EditDeliveryDialog - sending only changed fields and keeping stored values (Done when 1, 2, 3)', () => {
+  const onClose = jest.fn()
+  const onSaved = jest.fn()
+
+  beforeEach(() => {
+    jest.resetAllMocks()
+    process.env.TZ = 'Europe/Athens'
+  })
+
+  function getInputs() {
+    return {
+      orderRef: document.querySelector('#edit-order-ref') as HTMLInputElement,
+      pickupNotes: document.querySelector('#edit-pickup-notes') as HTMLTextAreaElement,
+      pickupDeadline: document.querySelector('#edit-pickup-deadline') as HTMLInputElement,
+      dropoffNotes: document.querySelector('#edit-dropoff-notes') as HTMLTextAreaElement,
+      dropoffReady: document.querySelector('#edit-dropoff-ready') as HTMLInputElement,
+      dropoffDeadline: document.querySelector('#edit-dropoff-deadline') as HTMLInputElement,
+    }
+  }
+
+  describe('Done when 1 & Requirement b: opening and saving with nothing touched', () => {
+    it('Requirement b: opening and saving with nothing touched sends no orderReference, pickupNotes, dropoffNotes, point or verification', async () => {
+      mockUpdateDelivery.mockResolvedValueOnce({ id: 'del-untouched-178', status: 'ACCEPTED' })
+
+      const delivery = mockDelivery({
+        id: 'del-untouched-178',
+        orderReference: 'ORD-INITIAL-REF',
+        pickupReadyAt: '2026-11-25T10:00:00.000Z',
+        pickupDeadlineAt: '2026-11-25T11:00:00.000Z',
+        dropoffReadyAt: '2026-11-25T10:30:00.000Z',
+        dropoffDeadlineAt: '2026-11-25T11:30:00.000Z',
+        pickup: mockPickup({
+          pickupNotes: 'Initial pickup notes',
+        }),
+        dropoff: mockDropoff({
+          dropoffNotes: 'Initial dropoff notes',
+          latitude: 39.361,
+          longitude: 22.941,
+        }),
+      })
+
+      render(<EditDeliveryDialog delivery={delivery} onClose={onClose} onSaved={onSaved} />)
+
+      // Click Save changes immediately without touching any box
+      fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+      await waitFor(() => {
+        expect(mockUpdateDelivery).toHaveBeenCalledTimes(1)
+      })
+
+      const sentPayload = mockUpdateDelivery.mock.calls[0][0]
+
+      // deliveryId is always sent to identify the delivery
+      expect(sentPayload.deliveryId).toBe('del-untouched-178')
+
+      // All three text fields are left out as undefined
+      expect(sentPayload.orderReference).toBeUndefined()
+      expect(sentPayload.pickupNotes).toBeUndefined()
+      expect(sentPayload.dropoffNotes).toBeUndefined()
+
+      // Done when 3: A test fails if an untouched field is sent again
+      expect(sentPayload.orderReference).not.toBe('ORD-INITIAL-REF')
+      expect(sentPayload.pickupNotes).not.toBe('Initial pickup notes')
+      expect(sentPayload.dropoffNotes).not.toBe('Initial dropoff notes')
+
+      // Untouched times are left out as undefined (Row 168)
+      expect(sentPayload.pickupDeadlineAt).toBeUndefined()
+      expect(sentPayload.dropoffReadyAt).toBeUndefined()
+      expect(sentPayload.dropoffDeadlineAt).toBeUndefined()
+
+      // Dropoff point is NEVER sent (Row 178)
+      expect('dropoffLatitude' in sentPayload).toBe(false)
+      expect('dropoffLongitude' in sentPayload).toBe(false)
+
+      // Verification rules and tip are NEVER sent (Row 169 & 178)
+      expect('pickupVerification' in sentPayload).toBe(false)
+      expect('dropoffVerification' in sentPayload).toBe(false)
+      expect('tipByCustomer' in sentPayload).toBe(false)
+      expect('pickupReadyAt' in sentPayload).toBe(false)
+
+      expect(onSaved).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  describe('Done when 1 & Requirement c: changing only one box in turn, emptying boxes, and stored null', () => {
+    const baseDelivery = mockDelivery({
+      id: 'del-c-178',
+      orderReference: 'ORD-BASE',
+      pickupDeadlineAt: '2026-11-25T11:00:00.000Z',
+      dropoffReadyAt: '2026-11-25T10:30:00.000Z',
+      dropoffDeadlineAt: '2026-11-25T11:30:00.000Z',
+      pickup: mockPickup({
+        pickupNotes: 'Base pickup notes',
+      }),
+      dropoff: mockDropoff({
+        dropoffNotes: 'Base dropoff notes',
+        latitude: 39.36,
+        longitude: 22.94,
+      }),
+    })
+
+    it('Requirement c: changing only orderReference sends that one field with typed value and leaves other two out', async () => {
+      mockUpdateDelivery.mockResolvedValueOnce({ id: 'del-c-178', status: 'ACCEPTED' })
+
+      render(<EditDeliveryDialog delivery={baseDelivery} onClose={onClose} onSaved={onSaved} />)
+
+      const inputs = getInputs()
+      fireEvent.change(inputs.orderRef, { target: { value: 'ORD-NEW-REFERENCE' } })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+      await waitFor(() => {
+        expect(mockUpdateDelivery).toHaveBeenCalledTimes(1)
+      })
+
+      const sentPayload = mockUpdateDelivery.mock.calls[0][0]
+      expect(sentPayload.orderReference).toBe('ORD-NEW-REFERENCE')
+      expect(sentPayload.pickupNotes).toBeUndefined()
+      expect(sentPayload.dropoffNotes).toBeUndefined()
+      expect(sentPayload.pickupDeadlineAt).toBeUndefined()
+      expect(sentPayload.dropoffReadyAt).toBeUndefined()
+      expect(sentPayload.dropoffDeadlineAt).toBeUndefined()
+      expect('dropoffLatitude' in sentPayload).toBe(false)
+      expect('dropoffLongitude' in sentPayload).toBe(false)
+    })
+
+    it('Requirement c: changing only pickupNotes sends that one field with typed value and leaves other two out', async () => {
+      mockUpdateDelivery.mockResolvedValueOnce({ id: 'del-c-178', status: 'ACCEPTED' })
+
+      render(<EditDeliveryDialog delivery={baseDelivery} onClose={onClose} onSaved={onSaved} />)
+
+      const inputs = getInputs()
+      fireEvent.change(inputs.pickupNotes, { target: { value: 'Changed pickup notes for courier' } })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+      await waitFor(() => {
+        expect(mockUpdateDelivery).toHaveBeenCalledTimes(1)
+      })
+
+      const sentPayload = mockUpdateDelivery.mock.calls[0][0]
+      expect(sentPayload.pickupNotes).toBe('Changed pickup notes for courier')
+      expect(sentPayload.orderReference).toBeUndefined()
+      expect(sentPayload.dropoffNotes).toBeUndefined()
+      expect(sentPayload.pickupDeadlineAt).toBeUndefined()
+      expect(sentPayload.dropoffReadyAt).toBeUndefined()
+      expect(sentPayload.dropoffDeadlineAt).toBeUndefined()
+    })
+
+    it('Requirement c: changing only dropoffNotes sends that one field with typed value and leaves other two out', async () => {
+      mockUpdateDelivery.mockResolvedValueOnce({ id: 'del-c-178', status: 'ACCEPTED' })
+
+      render(<EditDeliveryDialog delivery={baseDelivery} onClose={onClose} onSaved={onSaved} />)
+
+      const inputs = getInputs()
+      fireEvent.change(inputs.dropoffNotes, { target: { value: 'Floor 4, leave by door' } })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+      await waitFor(() => {
+        expect(mockUpdateDelivery).toHaveBeenCalledTimes(1)
+      })
+
+      const sentPayload = mockUpdateDelivery.mock.calls[0][0]
+      expect(sentPayload.dropoffNotes).toBe('Floor 4, leave by door')
+      expect(sentPayload.orderReference).toBeUndefined()
+      expect(sentPayload.pickupNotes).toBeUndefined()
+      expect(sentPayload.pickupDeadlineAt).toBeUndefined()
+      expect(sentPayload.dropoffReadyAt).toBeUndefined()
+      expect(sentPayload.dropoffDeadlineAt).toBeUndefined()
+    })
+
+    it('Requirement c: emptying orderReference that held text sends empty string ""', async () => {
+      mockUpdateDelivery.mockResolvedValueOnce({ id: 'del-c-178', status: 'ACCEPTED' })
+
+      render(<EditDeliveryDialog delivery={baseDelivery} onClose={onClose} onSaved={onSaved} />)
+
+      const inputs = getInputs()
+      fireEvent.change(inputs.orderRef, { target: { value: '' } })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+      await waitFor(() => {
+        expect(mockUpdateDelivery).toHaveBeenCalledTimes(1)
+      })
+
+      const sentPayload = mockUpdateDelivery.mock.calls[0][0]
+      expect(sentPayload.orderReference).toBe('')
+      expect(sentPayload.pickupNotes).toBeUndefined()
+      expect(sentPayload.dropoffNotes).toBeUndefined()
+    })
+
+    it('Requirement c: emptying pickupNotes that held text sends empty string ""', async () => {
+      mockUpdateDelivery.mockResolvedValueOnce({ id: 'del-c-178', status: 'ACCEPTED' })
+
+      render(<EditDeliveryDialog delivery={baseDelivery} onClose={onClose} onSaved={onSaved} />)
+
+      const inputs = getInputs()
+      fireEvent.change(inputs.pickupNotes, { target: { value: '' } })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+      await waitFor(() => {
+        expect(mockUpdateDelivery).toHaveBeenCalledTimes(1)
+      })
+
+      const sentPayload = mockUpdateDelivery.mock.calls[0][0]
+      expect(sentPayload.pickupNotes).toBe('')
+      expect(sentPayload.orderReference).toBeUndefined()
+      expect(sentPayload.dropoffNotes).toBeUndefined()
+    })
+
+    it('Requirement c: emptying dropoffNotes that held text sends empty string ""', async () => {
+      mockUpdateDelivery.mockResolvedValueOnce({ id: 'del-c-178', status: 'ACCEPTED' })
+
+      render(<EditDeliveryDialog delivery={baseDelivery} onClose={onClose} onSaved={onSaved} />)
+
+      const inputs = getInputs()
+      fireEvent.change(inputs.dropoffNotes, { target: { value: '' } })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+      await waitFor(() => {
+        expect(mockUpdateDelivery).toHaveBeenCalledTimes(1)
+      })
+
+      const sentPayload = mockUpdateDelivery.mock.calls[0][0]
+      expect(sentPayload.dropoffNotes).toBe('')
+      expect(sentPayload.orderReference).toBeUndefined()
+      expect(sentPayload.pickupNotes).toBeUndefined()
+    })
+
+    it('Requirement c: a stored null with the box left empty sends nothing (undefined for all three)', async () => {
+      mockUpdateDelivery.mockResolvedValueOnce({ id: 'del-null-text', status: 'ACCEPTED' })
+
+      const deliveryWithNulls = mockDelivery({
+        id: 'del-null-text',
+        orderReference: null as any,
+        pickup: mockPickup({ pickupNotes: null as any }),
+        dropoff: mockDropoff({ dropoffNotes: null as any }),
+      })
+
+      render(<EditDeliveryDialog delivery={deliveryWithNulls} onClose={onClose} onSaved={onSaved} />)
+
+      const inputs = getInputs()
+      // Boxes render as empty string ''
+      expect(inputs.orderRef.value).toBe('')
+      expect(inputs.pickupNotes.value).toBe('')
+      expect(inputs.dropoffNotes.value).toBe('')
+
+      fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+      await waitFor(() => {
+        expect(mockUpdateDelivery).toHaveBeenCalledTimes(1)
+      })
+
+      const sentPayload = mockUpdateDelivery.mock.calls[0][0]
+      // Because (stored ?? '') is '' and box is '', box === (stored ?? '') is true -> undefined
+      expect(sentPayload.orderReference).toBeUndefined()
+      expect(sentPayload.pickupNotes).toBeUndefined()
+      expect(sentPayload.dropoffNotes).toBeUndefined()
+      // And specifically not empty strings or null
+      expect(sentPayload.orderReference).not.toBe('')
+      expect(sentPayload.pickupNotes).not.toBe('')
+      expect(sentPayload.dropoffNotes).not.toBe('')
+    })
+  })
+
+  describe('Done when 2 & Requirement d: values changed through API survive, and reread comparison', () => {
+    it('Clause 2: order opened with reference "A" and notes; API changes them meanwhile; restaurant changes only one time box and saves; request carries the time and none of the three text fields and no point and no rule so server values survive', async () => {
+      mockUpdateDelivery.mockResolvedValueOnce({ id: 'del-api-survives', status: 'ACCEPTED' })
+
+      const deliveryOpened = mockDelivery({
+        id: 'del-api-survives',
+        orderReference: 'ORD-REF-A',
+        pickupDeadlineAt: '2026-11-25T11:00:00.000Z',
+        dropoffReadyAt: '2026-11-25T10:30:00.000Z',
+        dropoffDeadlineAt: '2026-11-25T11:30:00.000Z',
+        pickup: mockPickup({
+          pickupNotes: 'Pickup notes A',
+        }),
+        dropoff: mockDropoff({
+          dropoffNotes: 'Dropoff notes A',
+          latitude: 39.361,
+          longitude: 22.941,
+        }),
+      })
+
+      render(<EditDeliveryDialog delivery={deliveryOpened} onClose={onClose} onSaved={onSaved} />)
+
+      const inputs = getInputs()
+      // Restaurant only changes one time box: dropoffDeadline
+      fireEvent.change(inputs.dropoffDeadline, { target: { value: '2026-11-25T23:45' } })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+      await waitFor(() => {
+        expect(mockUpdateDelivery).toHaveBeenCalledTimes(1)
+      })
+
+      const sentPayload = mockUpdateDelivery.mock.calls[0][0]
+
+      // Request carries only the changed time
+      expect(sentPayload.dropoffDeadlineAt).toBe(new Date('2026-11-25T23:45').toISOString())
+
+      // And NONE of the three text fields (omitted so server's API-updated values survive)
+      expect(sentPayload.orderReference).toBeUndefined()
+      expect(sentPayload.pickupNotes).toBeUndefined()
+      expect(sentPayload.dropoffNotes).toBeUndefined()
+
+      // Untouched times are also omitted
+      expect(sentPayload.pickupDeadlineAt).toBeUndefined()
+      expect(sentPayload.dropoffReadyAt).toBeUndefined()
+
+      // Drop off point and verification rules are never sent
+      expect('dropoffLatitude' in sentPayload).toBe(false)
+      expect('dropoffLongitude' in sentPayload).toBe(false)
+      expect('pickupVerification' in sentPayload).toBe(false)
+      expect('dropoffVerification' in sentPayload).toBe(false)
+      expect('tipByCustomer' in sentPayload).toBe(false)
+      expect('pickupReadyAt' in sentPayload).toBe(false)
+
+      expect(onSaved).toHaveBeenCalledTimes(1)
+    })
+
+    it('Clause 2: after a row 165 refusal and reread (fillFrom), the comparison is against the reread order: a second save with boxes untouched sends none of the three', async () => {
+      const initial = mockDelivery({
+        id: 'del-reread-comp',
+        orderReference: 'ORD-OLD',
+        pickup: mockPickup({ pickupNotes: 'Old pickup note' }),
+        dropoff: mockDropoff({ dropoffNotes: 'Old dropoff note' }),
+      })
+
+      const reloaded = mockDelivery({
+        id: 'del-reread-comp',
+        orderReference: 'ORD-REREAD-NEW',
+        pickup: mockPickup({ pickupNotes: 'Reread pickup note' }),
+        dropoff: mockDropoff({ dropoffNotes: 'Reread dropoff note' }),
+      })
+
+      // First save fails on server with 409 PARTNER_EDIT_CHANGED
+      mockUpdateDelivery.mockRejectedValueOnce({
+        statusCode: 409,
+        code: 'PARTNER_EDIT_CHANGED',
+        message: 'This order just changed. Look again before you save.',
+      })
+      mockFetchPartnerDelivery.mockResolvedValueOnce(reloaded)
+
+      render(<EditDeliveryDialog delivery={initial} onClose={onClose} onSaved={onSaved} />)
+
+      // First click -> fails and triggers reread
+      fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+      await waitFor(() => {
+        expect(mockFetchPartnerDelivery).toHaveBeenCalledWith('del-reread-comp')
+      })
+
+      // The boxes now show the reread order's values
+      const inputs = getInputs()
+      expect(inputs.orderRef.value).toBe('ORD-REREAD-NEW')
+      expect(inputs.pickupNotes.value).toBe('Reread pickup note')
+      expect(inputs.dropoffNotes.value).toBe('Reread dropoff note')
+
+      // Second save succeeds
+      mockUpdateDelivery.mockResolvedValueOnce({ id: 'del-reread-comp', status: 'ACCEPTED' })
+
+      // Second click without touching any box
+      fireEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+      await waitFor(() => {
+        expect(mockUpdateDelivery).toHaveBeenCalledTimes(2)
+      })
+
+      const secondSavePayload = mockUpdateDelivery.mock.calls[1][0]
+
+      // The comparison is against `current` (the reread order), NOT `initial`:
+      // Because boxes match `current`, all three text fields are undefined!
+      expect(secondSavePayload.orderReference).toBeUndefined()
+      expect(secondSavePayload.pickupNotes).toBeUndefined()
+      expect(secondSavePayload.dropoffNotes).toBeUndefined()
+
+      // Proves it did not send the reread strings as changes
+      expect(secondSavePayload.orderReference).not.toBe('ORD-REREAD-NEW')
+      expect(secondSavePayload.pickupNotes).not.toBe('Reread pickup note')
+      expect(secondSavePayload.dropoffNotes).not.toBe('Reread dropoff note')
+
+      expect(onSaved).toHaveBeenCalledTimes(1)
+    })
   })
 })
